@@ -17,6 +17,7 @@ We're not just an issue tracker. We're building a **complete forge alternative**
 
 - ✅ **Issue Tracking** (Done - you're using it now)
 - ✅ **Merge Request Creation** (Done - press `M`)
+- ✅ **Multi-Repo Management** (Done - manage frontend/backend/infra in ONE TUI)
 - 🚧 **Code Review in Terminal** (Coming - comment on diffs without browser)
 - 🚧 **CI/CD Pipeline Viewer** (Coming - watch builds in real-time)
 - 🚧 **Wiki/Docs Management** (Coming - markdown files, git-tracked)
@@ -24,11 +25,46 @@ We're not just an issue tracker. We're building a **complete forge alternative**
 
 Store your issues as **human-readable KDL files** directly in your git repository. Track them, diff them, review them in pull requests. Your issues are YOUR data, versioned alongside your code, accessible forever—even if GitHub shuts down tomorrow.
 
-We deliver what they gatekeep:
+## 🔥 **What Makes ProGit Different?**
+
+### **Multi-Repository Management** (GitLab/GitHub Can't Do This!)
+
+Manage issues across **multiple related repositories** in a single TUI:
+
+```
+📋 Issues (13 total) │ 📦 frontend: 5 │ backend: 3 │ infra: 2
+
+ID       Title              Status      Effort  Repo       Tags
+abc123   Fix auth bug       in-progress 5       frontend   security
+def456   API optimization   backlog     3       backend    performance
+ghi789   Deploy pipeline    done        8       infra      devops
+```
+
+**One ProGit instance. Multiple repos. Color-coded. Filterable. Synced correctly.**
+
+Perfect for:
+- **Monorepo teams** (track all services in one view)
+- **Microservices** (frontend, backend, infra issues together)
+- **Multi-project coordination** (see the big picture)
+
+Configure once, manage forever:
+```kdl
+repos {
+    repo "frontend" {
+        sync { provider "gitlab" url "https://gitlab.com" ... }
+    }
+    repo "backend" {
+        sync { provider "forgejo" url "https://git.example.com" ... }
+    }
+}
+```
+
+### **What We Deliver:**
 
   - 🎯 **Full Kanban Board** (drag-and-drop, visual status)
   - 📊 **Time Tracking** (due dates, effort estimates, velocity)
   - 🔀 **Browser-Free MR Creation** (press `M`, done)
+  - 📦 **Multi-Repo Management** (one TUI, infinite repos)
   - 🔄 **Bidirectional Sync** (GitLab, Forgejo, GitHub coming soon)
   - ⚡ **Blazing Fast TUI** (Pure Rust, 5MB binary, no Electron bloat)
   - 🎭 **Beautiful Themes** (Nord, Gruvbox, Dracula, Cyberpunk, Vibe)
