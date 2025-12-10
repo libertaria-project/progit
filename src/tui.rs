@@ -173,6 +173,13 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
     }
 
+    // Render MR creation form overlay if open
+    if app.input_mode == InputMode::MRCreate {
+        if let Some(ref mr) = app.mr_draft {
+            widget_mr_create::render(frame, mr, app.mr_field, &app.edit_buffer, &colors);
+        }
+    }
+
     areas
 }
 

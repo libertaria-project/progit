@@ -133,6 +133,40 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
         }
 
+        // Create Merge Request
+        KeyCode::Char('M') => {
+            if app.repo_info.is_some() && app.sync_provider.is_some() {
+                // Initialize MR draft with smart defaults
+                if let Some(ref repo) = app.repo_info {
+                    let source_branch = repo.branch.clone();
+                    let target_branch = crate::git::repository::suggest_target_branch(
+                        std::path::Path::new(&repo.path)
+                    ).unwrap_or_else(|_| "main".to_string());
+                    
+                    // Auto-generate title from branch name
+                    let title = source_branch
+                        .replace("feature/", "")
+                        .replace("bugfix/", "Fix: ")
+                        .replace("hotfix/", "Hotfix: ")
+                        .replace('-', " ")
+                        .replace('_', " ");
+                    
+                    app.mr_draft = Some(crate::mr::MergeRequest::new(
+                        &source_branch,
+                        &target_branch,
+                        &title,
+                    ));
+                    app.mr_field = 1; // Start on title field (0=source is readonly)
+                    app.edit_buffer = title;
+                    app.input_mode = InputMode::MRCreate;
+                }
+                KeyAction::Refresh
+            } else {
+                app.set_status("MR creation requires git repo and sync provider");
+                KeyAction::Refresh
+            }
+        }
+
         // Quit
         KeyCode::Char('q') => KeyAction::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => KeyAction::Quit,
@@ -522,14 +556,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::DetailView => handle_detail_view_key(app, key),
         InputMode::DetailEdit => handle_detail_edit_key(app, key),
         InputMode::Command => handle_command_key(app, key),
-        InputMode::MRCreate => {
-            // TODO: Implement MR creation key handling
-            if key.code == KeyCode::Esc {
-                app.input_mode = InputMode::Normal;
-                app.mr_draft = None;
-            }
-            KeyAction::Refresh
-        }
+        InputMode::MRCreate => handle_mr_create_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -537,6 +564,87 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
             KeyAction::Refresh
         }
+    }
+}
+
+/// Handle keys in MR creation form
+fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            app.mr_draft = None;
+            app.edit_buffer.clear();
+            app.set_status("MR creation cancelled");
+            KeyAction::Refresh
+        }
+        KeyCode::Tab => {
+            // Save current field and move to next
+            if let Some(ref mut mr) = app.mr_draft {
+                match app.mr_field {
+                    1 => mr.title = app.edit_buffer.clone(),
+                    2 => mr.target_branch = app.edit_buffer.clone(),
+                    3 => mr.description = app.edit_buffer.clone(),
+                    _ => {}
+                }
+            }
+            
+            // Cycle through fields: 1=title, 2=target, 3=description
+            app.mr_field = match app.mr_field {
+                1 => 2,
+                2 => 3,
+                3 => 1,
+                _ => 1,
+            };
+            
+            // Load new field into buffer
+            if let Some(ref mr) = app.mr_draft {
+                app.edit_buffer = match app.mr_field {
+                    1 => mr.title.clone(),
+                    2 => mr.target_branch.clone(),
+                    3 => mr.description.clone(),
+                    _ => String::new(),
+                };
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            // Save current field
+            if let Some(ref mut mr) = app.mr_draft {
+                match app.mr_field {
+                    1 => mr.title = app.edit_buffer.clone(),
+                    2 => mr.target_branch = app.edit_buffer.clone(),
+                    3 => mr.description = app.edit_buffer.clone(),
+                    _ => {}
+                }
+                
+                // Submit MR
+                if let Some(ref provider) = app.sync_provider {
+                    match provider.create_mr(mr) {
+                        Ok(remote_id) => {
+                            app.set_status(format!("✅ Created MR !{}", remote_id));
+                            app.input_mode = InputMode::Normal;
+                            app.mr_draft = None;
+                            app.edit_buffer.clear();
+                            return KeyAction::Refresh;
+                        }
+                        Err(e) => {
+                            app.set_status(format!("❌ MR creation failed: {}", e));
+                            return KeyAction::Refresh;
+                        }
+                    }
+                }
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Backspace => {
+            app.edit_buffer.pop();
+            KeyAction::Refresh
+        }
+        KeyCode::Char(c) => {
+            app.edit_buffer.push(c);
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
     }
 }
 
@@ -809,8 +917,8 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 pub fn help_text(app: &App) -> &'static str {
     match app.input_mode {
         InputMode::Normal => match app.view_mode {
-            ViewMode::List => "j/k:nav │ Space:status │ n:new │ S:sync │ d:del │ Tab:kanban │ /:search │ q:quit",
-            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ S:sync │ Space:status │ Tab:list │ q:quit",
+            ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ Tab:kanban │ /:search │ q:quit",
+            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ Space:status │ Tab:list │ q:quit",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",
