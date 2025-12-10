@@ -252,6 +252,46 @@ pub fn parse_git_url(url: &str) -> Option<(String, String, String)> {
     None
 }
 
+/// Check if current branch has unpushed commits
+pub fn has_unpushed_commits(path: &Path) -> Result<bool> {
+    let repo = Git2Repo::open(path)?;
+    if let Some(info) = detect_repo(path)? {
+        Ok(info.ahead > 0)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Suggest a default target branch (usually main/master)
+pub fn suggest_target_branch(path: &Path) -> Result<String> {
+    let repo = Git2Repo::open(path)?;
+    
+    // Try to find main or master
+    for branch_name in &["main", "master", "develop"] {
+        if repo.find_branch(branch_name, BranchType::Local).is_ok() {
+            return Ok(branch_name.to_string());
+        }
+    }
+    
+    // Fallback: return first branch that isn't current
+    if let Ok(head) = repo.head() {
+        if let Some(current) = head.shorthand() {
+            if let Ok(branches) = repo.branches(Some(BranchType::Local)) {
+                for branch in branches.flatten() {
+                    if let Ok(Some(name)) = branch.0.name() {
+                        if name != current {
+                            return Ok(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Ultimate fallback
+    Ok("main".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

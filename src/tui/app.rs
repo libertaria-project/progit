@@ -30,6 +30,7 @@ pub enum InputMode {
     DetailView,      // Viewing issue details
     DetailEdit,      // Editing a field in detail view
     Command,         // Command palette (: command)
+    MRCreate,        // Creating a merge request
 }
 
 /// Mouse drag state
@@ -125,6 +126,12 @@ pub struct App {
     
     /// Current sync status message
     pub sync_status: Option<String>,
+    
+    /// Draft MR being created
+    pub mr_draft: Option<crate::mr::MergeRequest>,
+    
+    /// Current field in MR creation form (0=title, 1=description, 2=target_branch)
+    pub mr_field: usize,
 }
 
 impl Default for App {
@@ -164,6 +171,8 @@ impl App {
             sync_provider: None,
             sync_provider_name: None,
             sync_status: None,
+            mr_draft: None,
+            mr_field: 0,
         }
     }
 

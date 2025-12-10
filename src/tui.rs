@@ -14,6 +14,7 @@ pub mod theme;
 pub mod widget_detail;
 pub mod widget_issues;
 pub mod widget_kanban;
+pub mod widget_mr_create;
 pub mod widget_status;
 
 // Re-export public API

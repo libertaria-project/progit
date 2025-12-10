@@ -522,6 +522,14 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::DetailView => handle_detail_view_key(app, key),
         InputMode::DetailEdit => handle_detail_edit_key(app, key),
         InputMode::Command => handle_command_key(app, key),
+        InputMode::MRCreate => {
+            // TODO: Implement MR creation key handling
+            if key.code == KeyCode::Esc {
+                app.input_mode = InputMode::Normal;
+                app.mr_draft = None;
+            }
+            KeyAction::Refresh
+        }
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -814,5 +822,6 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::DetailView => "j/k:fields │ Space:cycle │ Enter:edit │ Esc:close",
         InputMode::DetailEdit => "Type to edit │ Enter:save │ Esc:cancel",
         InputMode::Command => "Type command │ Enter:exec │ Esc:cancel",
+        InputMode::MRCreate => "Tab:next field │ Enter:submit │ Esc:cancel",
     }
 }
