@@ -564,6 +564,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::DetailEdit => handle_detail_edit_key(app, key),
         InputMode::Command => handle_command_key(app, key),
         InputMode::MRCreate => handle_mr_create_key(app, key),
+        InputMode::RepoFilter => handle_repo_filter_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -656,6 +657,41 @@ fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
         }
         KeyCode::Char(c) => {
             app.edit_buffer.push(c);
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in repo filter dropdown
+fn handle_repo_filter_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            if !app.available_repos.is_empty() {
+                app.selected_repo_filter = (app.selected_repo_filter + 1) % (app.available_repos.len() + 1);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if !app.available_repos.is_empty() {
+                let max = app.available_repos.len();
+                app.selected_repo_filter = app.selected_repo_filter.checked_sub(1).unwrap_or(max);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            // 0 = "All", 1+ = specific repos
+            app.repo_filter = if app.selected_repo_filter == 0 {
+                None
+            } else {
+                app.available_repos.get(app.selected_repo_filter - 1).cloned()
+            };
+            app.refresh_filter();
+            app.input_mode = InputMode::Normal;
             KeyAction::Refresh
         }
         _ => KeyAction::None,
@@ -945,5 +981,6 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::DetailEdit => "Type to edit │ Enter:save │ Esc:cancel",
         InputMode::Command => "Type command │ Enter:exec │ Esc:cancel",
         InputMode::MRCreate => "Tab:next field │ Enter:submit │ Esc:cancel",
+        InputMode::RepoFilter => "j/k:nav │ Enter:select │ Esc:cancel",
     }
 }

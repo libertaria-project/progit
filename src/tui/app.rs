@@ -31,6 +31,7 @@ pub enum InputMode {
     DetailEdit,      // Editing a field in detail view
     Command,         // Command palette (: command)
     MRCreate,        // Creating a merge request
+    RepoFilter,      // Filtering by repository
 }
 
 /// Mouse drag state
@@ -96,9 +97,13 @@ pub struct App {
 
     /// Selected remote in dropdown
     pub selected_remote: usize,
-
     /// Selected branch in dropdown
     pub selected_branch: usize,
+    
+    /// Repo filter state
+    pub repo_filter: Option<String>,  // None = show all, Some(repo) = filter by repo
+    pub selected_repo_filter: usize,  // Selected index in repo filter dropdown
+    pub available_repos: Vec<String>, // Cached list of unique repos
 
     /// Branch pending deletion (for confirmation)
     pub pending_branch_delete: Option<String>,
@@ -162,6 +167,9 @@ impl App {
 
             selected_remote: 0,
             selected_branch: 0,
+            repo_filter: None,
+            selected_repo_filter: 0,
+            available_repos: Vec::new(),
             pending_branch_delete: None,
             detail_issue_id: None,
             detail_field: 0,
@@ -184,26 +192,52 @@ impl App {
 
     /// Refresh the filtered list based on search query
     pub fn refresh_filter(&mut self) {
-        if self.search_query.is_empty() {
-            self.filtered = (0..self.issues.len()).collect();
+        let query = if self.search_query.is_empty() {
+            None
         } else {
-            let query = self.search_query.to_lowercase();
-            self.filtered = self
-                .issues
-                .iter()
-                .enumerate()
-                .filter(|(_, i)| {
-                    i.title.to_lowercase().contains(&query)
-                        || i.description.to_lowercase().contains(&query)
-                })
-                .map(|(idx, _)| idx)
-                .collect();
-        }
+            Some(self.search_query.to_lowercase())
+        };
+        
+        self.filtered = self
+            .issues
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| {
+                // Search filter
+                let matches_search = query.as_ref().map_or(true, |q| {
+                    i.title.to_lowercase().contains(q)
+                        || i.description.to_lowercase().contains(q)
+                });
+                
+                // Repo filter
+                let matches_repo = self.repo_filter.as_ref().map_or(true, |repo| {
+                    i.repo.as_ref().map_or(false, |r| r == repo)
+                });
+                
+                matches_search && matches_repo
+            })
+            .map(|(idx, _)| idx)
+            .collect();
 
         // Keep selection in bounds
         if !self.filtered.is_empty() && self.selected >= self.filtered.len() {
             self.selected = self.filtered.len() - 1;
         }
+    }
+    
+    /// Update available repos list from current issues
+    pub fn update_available_repos(&mut self) {
+        use std::collections::HashSet;
+        
+        let mut repos: HashSet<String> = HashSet::new();
+        for issue in &self.issues {
+            if let Some(ref repo) = issue.repo {
+                repos.insert(repo.clone());
+            }
+        }
+        
+        self.available_repos = repos.into_iter().collect();
+        self.available_repos.sort();
     }
 
     /// Get currently selected issue
