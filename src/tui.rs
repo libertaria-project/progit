@@ -84,12 +84,32 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Render view based on mode - wrapped in titled frame
     areas.kanban = match app.view_mode {
         ViewMode::List => {
+            // Calculate repo stats
+            let repo_stats = calculate_repo_stats(&app.issues);
+            
             // Create titled frame for list view
+            let mut title_spans = vec![
+                Span::styled(" 📋 Issues ", colors.accent()),
+                Span::styled(format!("({} total) ", app.issues.len()), colors.dim()),
+            ];
+            
+            // Add repo stats if multi-repo
+            if !repo_stats.is_empty() {
+                title_spans.push(Span::raw("│ "));
+                title_spans.push(Span::styled("📦 ", colors.dim()));
+                for (i, (repo, count)) in repo_stats.iter().enumerate() {
+                    if i > 0 {
+                        title_spans.push(Span::raw(" │ "));
+                    }
+                    title_spans.push(Span::styled(
+                        format!("{}: {}", repo, count),
+                        colors.accent()
+                    ));
+                }
+            }
+            
             let block = Block::default()
-                .title(Line::from(vec![
-                    Span::styled(" 📋 Issues ", colors.accent()),
-                    Span::styled(format!("({} total) ", app.issues.len()), colors.dim()),
-                ]))
+                .title(Line::from(title_spans))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .border_style(colors.border());
@@ -100,12 +120,32 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
             KanbanAreas::default()
         }
         ViewMode::Kanban => {
+            // Calculate repo stats
+            let repo_stats = calculate_repo_stats(&app.issues);
+            
             // Create titled frame for kanban view
+            let mut title_spans = vec![
+                Span::styled(" 📊 Kanban ", colors.accent()),
+                Span::styled(format!("({} issues) ", app.issues.len()), colors.dim()),
+            ];
+            
+            // Add repo stats if multi-repo
+            if !repo_stats.is_empty() {
+                title_spans.push(Span::raw("│ "));
+                title_spans.push(Span::styled("📦 ", colors.dim()));
+                for (i, (repo, count)) in repo_stats.iter().enumerate() {
+                    if i > 0 {
+                        title_spans.push(Span::raw(" │ "));
+                    }
+                    title_spans.push(Span::styled(
+                        format!("{}: {}", repo, count),
+                        colors.accent()
+                    ));
+                }
+            }
+            
             let block = Block::default()
-                .title(Line::from(vec![
-                    Span::styled(" 📊 Kanban ", colors.accent()),
-                    Span::styled(format!("({} issues) ", app.issues.len()), colors.dim()),
-                ]))
+                .title(Line::from(title_spans))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .border_style(colors.border());
@@ -181,6 +221,24 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     }
 
     areas
+}
+
+/// Calculate repository statistics from issues
+fn calculate_repo_stats(issues: &[crate::issue::Issue]) -> Vec<(String, usize)> {
+    use std::collections::HashMap;
+    
+    let mut repo_counts: HashMap<String, usize> = HashMap::new();
+    
+    for issue in issues {
+        if let Some(ref repo) = issue.repo {
+            *repo_counts.entry(repo.clone()).or_insert(0) += 1;
+        }
+    }
+    
+    // Sort by count (descending) for consistent display
+    let mut stats: Vec<(String, usize)> = repo_counts.into_iter().collect();
+    stats.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    stats
 }
 
 #[cfg(test)]
