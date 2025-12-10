@@ -461,5 +461,73 @@
     "updated": "2025-12-10T23:35:00Z",
     "remotes": {},
     "repo": null
+  },
+  {
+    "id": "test-001",
+    "title": "Storage Engine Unit Tests",
+    "description": "Ensure atomic writes and migration logic are bulletproof with comprehensive tests.",
+    "status": "backlog",
+    "effort": 6,
+    "tags": [
+      "sprint-1",
+      "quality"
+    ],
+    "sprint": 1,
+    "created": "2025-12-10T23:45:00Z"
+  },
+  {
+    "id": "phase2-005",
+    "title": "MR Dashboard View",
+    "description": "Dedicated view for Merge Requests with columns for Author, Reviewers, Pipeline.",
+    "status": "backlog",
+    "effort": 10,
+    "tags": [
+      "sprint-2",
+      "ui",
+      "code-review"
+    ],
+    "sprint": 2,
+    "created": "2025-12-10T23:45:00Z"
+  },
+  {
+    "id": "phase2-006",
+    "title": "One-click MR Checkout",
+    "description": "Switch local git branch to the MR source branch seamlessly.",
+    "status": "backlog",
+    "effort": 3,
+    "tags": [
+      "sprint-2",
+      "git",
+      "productivity"
+    ],
+    "sprint": 2,
+    "created": "2025-12-10T23:45:00Z"
+  },
+  {
+    "id": "phase3-005",
+    "title": "Run Local Verification",
+    "description": "Trigger pre-commit hooks or local test runners from TUI.",
+    "status": "backlog",
+    "effort": 6,
+    "tags": [
+      "sprint-3",
+      "ci-cd",
+      "local"
+    ],
+    "sprint": 3,
+    "created": "2025-12-10T23:45:00Z"
+  },
+  {
+    "id": "phase4-006",
+    "title": "GPG Signing Integration",
+    "description": "Ensure all commits/tags created by ProGit are GPG signed.",
+    "status": "backlog",
+    "effort": 6,
+    "tags": [
+      "sprint-4",
+      "security"
+    ],
+    "sprint": 4,
+    "created": "2025-12-10T23:45:00Z"
   }
 ]
