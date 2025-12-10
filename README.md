@@ -36,15 +36,15 @@ We deliver what they gatekeep:
 ## 🎬 Screenshots
 
 ### Kanban View
-
+![Kanban View](Kanban-View.webp)
 *Drag-and-drop cards, visual glow for blockers/active tasks*
 
 ### List View
-
+![List View](List-View.webp)
 *Table view with search, sorting, and color-coded rows*
 
 ### Detail View
-
+![Detail View](Detail-View.webp)
 *Full issue editing with due dates, assignees, and tags*
 
 -----
