@@ -146,4 +146,36 @@ styles {
         fg "red"
         bold true
     }
+
+    // Kanban Board
+    kanban.card {
+        fg "gray"
+    }
+
+    kanban.card.selected {
+        fg "white"
+        bg "black"
+        bold true
+    }
+
+    kanban.header.progress {
+        fg "blue"
+        underlined true
+    }
+
+    // Status Bar
+    status.branch.clean {
+        fg "green"
+        bold true
+    }
+
+    status.branch.dirty {
+        fg "yellow"
+        bold true
+    }
+
+    status.mode.search {
+        fg "cyan"
+        reversed true
+    }
 }

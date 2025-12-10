@@ -232,3 +232,69 @@ These enhancements transform ProGit's styling system from a basic configuration 
 ✅ **Modern TUI theming** comparable to web frameworks
 
 The system is now on par with modern terminal frameworks while maintaining ProGit's performance and simplicity.
+
+## Style Key Reference
+
+Here is a complete list of style keys you can customize:
+
+### Global / Shared
+- `base` (Recommended base style to inherit from)
+
+### Issue Table
+- `issues.header` - Table headers
+- `issues.border` - Table border
+- `issues.row` - Base row style
+- `issues.row.normal` - Normal rows
+- `issues.row.selected` - Selected row
+- `issues.row.active` - In Progress rows
+- `issues.row.done` - Done rows
+- `issues.row.error` - Blockers or Overdue issues
+- `issues.repo.<name>` - Repository overrides (e.g. `issues.repo.backend`)
+
+### Kanban Board
+- `kanban.header.backlog` - Column header
+- `kanban.header.progress` - Column header
+- `kanban.header.done` - Column header
+- `kanban.effort` - Total effort label
+- `kanban.border.normal` - Column borders
+- `kanban.border.drag` - Border when dragging
+- `kanban.button.active` - Active (+) button
+- `kanban.button.inactive` - Inactive (+) button
+- `kanban.card` - Base card style
+- `kanban.card.normal` - Normal card
+- `kanban.card.selected` - Selected card
+- `kanban.card.active` - In Progress card
+- `kanban.card.done` - Done card
+- `kanban.card.error` - Blocker/Overdue card
+
+### Git Metric Bar
+- `gitbar.border`
+- `gitbar.velocity.value` / `.label`
+- `gitbar.progress.value` / `.label`
+- `gitbar.active.value` / `.label`
+- `gitbar.sprint.value` / `.label`
+- `gitbar.blocker.value` / `.label`
+
+### Status Bar
+- `status.border`
+- `status.branch.clean` - Clean git state
+- `status.branch.dirty` - Modified/Untracked changes
+- `status.branch.icon` - The branch icon
+- `status.remote.ahead` - Commits to push
+- `status.remote.behind` - Commits to pull
+- `status.file.modified` - Modified file count
+- `status.path` - Repo path
+- `status.separator`
+- `status.norepo` - When no git repo found
+- `status.mode.search` - Search mode indicator
+- `status.mode.command` - Command mode indicator
+- `status.cursor` - Input cursor
+- `status.message` - Status messages/warnings
+- `status.clock`
+- `status.help`
+
+### Dropdowns
+- `dropdown.border`
+- `dropdown.title`
+- `dropdown.item.normal`
+- `dropdown.item.selected`
