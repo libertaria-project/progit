@@ -417,7 +417,7 @@ impl App {
                 4 => issue.assignee = if buffer.is_empty() { None } else { Some(buffer) },
                 5 => {
                     issue.tags = buffer
-                        .split(',')
+                        .split(|c| c == ',' || c == ';')
                         .map(|s| s.trim().to_string())
                         .filter(|s| !s.is_empty())
                         .collect();

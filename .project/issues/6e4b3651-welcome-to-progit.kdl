@@ -1,0 +1,11 @@
+issue id="6e4b3651-0876-4b17-bb8a-9dcf6ab00ad4" {
+    title "Welcome to ProGit!"
+    description "This is an example issue. Delete this and create your own with 'n' or ':new'"
+    status "backlog"
+    effort 3
+    remotes {
+        gitlab "11"
+    }
+    created "2025-12-10T17:06:56.764+00:00"
+    updated "2025-12-10T17:24:59.862+00:00"
+}

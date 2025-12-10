@@ -1,0 +1,13 @@
+issue id="38d16268-f581-4442-8bf0-eb3b594ce00b" {
+    title "CSV/JSON export functionality"
+    description "Add command-line export to CSV and JSON formats for reporting and data portability."
+    status "done"
+    effort 3
+    started "2025-12-06T10:00:00+00:00"
+    completed "2025-12-08T17:30:00+00:00"
+    remotes {
+        gitlab "10"
+    }
+    created "2025-12-10T17:06:56.128+00:00"
+    updated "2025-12-10T18:32:17.872+00:00"
+}

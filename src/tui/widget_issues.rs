@@ -110,13 +110,29 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
         colors.dim()
     };
 
+    // Render tags as pills: [ tag ] [ tag2 ]
+    let mut tag_spans = Vec::new();
+    for (i, tag) in issue.tags.iter().enumerate() {
+        if i > 0 {
+            tag_spans.push(Span::raw(" "));
+        }
+        tag_spans.push(Span::styled(format!("[ {} ]", tag), colors.accent()));
+    }
+    
+    // Create Cell from spans (empty if no tags)
+    let tags_cell = if tag_spans.is_empty() {
+        Cell::from("")
+    } else {
+        Cell::from(Line::from(tag_spans))
+    };
+
     let cells = [
         Cell::from(issue.short_id().to_string()).style(colors.dim()),
         Cell::from(format!("{}{}", blocker_indicator, &issue.title)),
         Cell::from(format!("{} {}", status_icon, issue.status.as_str())).style(status_style),
         Cell::from(format!("{}", issue.effort as u8)),
         Cell::from(repo_display).style(repo_style),
-        Cell::from(issue.tags.join(", ")).style(colors.dim()),
+        tags_cell,
     ];
 
     Row::new(cells).style(row_style)

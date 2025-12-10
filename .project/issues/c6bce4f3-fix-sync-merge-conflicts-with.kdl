@@ -1,0 +1,13 @@
+issue id="c6bce4f3-6e46-40eb-a376-5c1f1f954112" {
+    title "Fix sync merge conflicts with remote changes"
+    description "When local and remote issues both change, the merge logic sometimes duplicates entries. Need proper timestamp-based conflict resolution."
+    status "backlog"
+    effort 3
+    started "2025-12-05T10:00:00+00:00"
+    blocked true
+    remotes {
+        gitlab "43"
+    }
+    created "2025-12-10T18:32:16.324+00:00"
+    updated "2025-12-10T18:32:16.324+00:00"
+}

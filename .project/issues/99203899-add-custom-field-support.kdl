@@ -1,0 +1,12 @@
+issue id="99203899-a9a6-40d4-8261-61cf34995699" {
+    title "Add custom field support"
+    description "Allow users to define custom fields in config.kdl and display them in the detail view. Useful for team-specific metadata like customer ID, priority level, etc."
+    status "backlog"
+    effort 3
+    started "2025-12-08T09:00:00+00:00"
+    remotes {
+        gitlab "46"
+    }
+    created "2025-12-10T18:32:26.835+00:00"
+    updated "2025-12-10T18:32:26.835+00:00"
+}

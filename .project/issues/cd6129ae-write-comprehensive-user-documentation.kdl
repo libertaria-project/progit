@@ -1,0 +1,14 @@
+issue id="cd6129ae-ea51-44e2-a459-879e12de9132" {
+    title "Write comprehensive user documentation"
+    description "Create detailed docs covering installation, configuration, workflow, keyboard shortcuts, and sync setup for all supported forges."
+    status "backlog"
+    effort 3
+    tags {
+        - "test"
+    }
+    remotes {
+        gitlab "9"
+    }
+    created "2025-12-10T17:06:55.139+00:00"
+    updated "2025-12-10T18:32:18.952+00:00"
+}

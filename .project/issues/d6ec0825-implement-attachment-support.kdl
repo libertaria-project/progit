@@ -1,0 +1,12 @@
+issue id="d6ec0825-4884-4f7a-aad2-fa9be7b62485" {
+    title "Implement attachment support"
+    description "Allow attaching files, screenshots, and links to issues. Store in .project/attachments/ with references in KDL."
+    status "backlog"
+    effort 3
+    blocked true
+    remotes {
+        gitlab "42"
+    }
+    created "2025-12-10T18:32:15.077+00:00"
+    updated "2025-12-10T18:32:15.077+00:00"
+}

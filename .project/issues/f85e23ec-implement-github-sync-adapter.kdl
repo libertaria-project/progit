@@ -1,0 +1,11 @@
+issue id="f85e23ec-1e48-41a1-ad93-47914962cd58" {
+    title "Implement GitHub sync adapter"
+    description "Add GitHub API integration to sync issues with GitHub repositories. Should follow the same pattern as GitLab and Forgejo adapters."
+    status "backlog"
+    effort 3
+    remotes {
+        gitlab "44"
+    }
+    created "2025-12-10T18:32:24.817+00:00"
+    updated "2025-12-10T18:32:24.817+00:00"
+}
