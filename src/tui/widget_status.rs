@@ -1,9 +1,8 @@
-//! Widget Status - Status bar and sprint info
+//! Widget Status - System Status Bar
 //!
-//! Bottom bar with keybindings, search, and sprint timer.
+//! Bottom bar showing git repo info, system metrics, and search/command input.
 
 use crate::tui::app::{App, InputMode};
-use crate::tui::input::help_text;
 use crate::tui::theme::ThemeColors;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -13,64 +12,61 @@ use ratatui::{
     Frame,
 };
 
-/// Render the status bar
+/// Render the bottom system status bar
 pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let colors = app.theme.colors();
 
-    // Split into left (status/search) and right (stats)
+    // Split into left (git/path info) and right (clock/search)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
         .split(area);
 
-    // Left: Status message or help text or search input
-    let left_content = match app.input_mode {
-        InputMode::Search => {
-            Line::from(vec![
-                Span::styled(" / ", colors.accent()),
-                Span::raw(&app.search_query),
-                Span::styled("█", colors.accent()), // Cursor
-            ])
+    // LEFT: Git info + repo path
+    let left_content = if let Some(ref repo) = app.repo_info {
+        // Branch status style
+        let branch_style = if repo.modified > 0 || repo.untracked > 0 {
+            colors.warning()
+        } else {
+            colors.success()
+        };
+
+        let mut info = vec![
+            Span::styled(" ", colors.accent()),
+            Span::raw(" "),
+            Span::styled("⎇ ", colors.dim()),
+            Span::styled(&repo.branch, branch_style.add_modifier(Modifier::BOLD)),
+        ];
+
+        // Ahead/behind indicators
+        if repo.ahead > 0 {
+            info.push(Span::raw(" "));
+            info.push(Span::styled(format!("↑{}", repo.ahead), colors.success()));
         }
-        InputMode::Command => {
-             Line::from(vec![
-                Span::styled(" : ", colors.accent()),
-                Span::raw(&app.command_input),
-                Span::styled("█", colors.accent()), // Cursor
-            ])
+        if repo.behind > 0 {
+            info.push(Span::raw(" "));
+            info.push(Span::styled(format!("↓{}", repo.behind), colors.warning()));
         }
-        _ => {
-            // Check for temporary status message (auto-expires after 3s)
-            if let Some(msg) = app.get_status() {
-                Line::from(Span::styled(format!(" {} ", msg), colors.warning()))
-            } else {
-                // Default: Show useful project stats instead of just help
-                let total = app.issues.len();
-                let done = app.issues.iter().filter(|i| i.status == crate::issue::Status::Done).count();
-                let in_progress = app.issues.iter().filter(|i| i.status == crate::issue::Status::InProgress).count();
-                let blockers = app.blocker_count();
-                
-                let mut info = vec![
-                    Span::styled(" 📊 ", colors.accent()),
-                    Span::raw(format!("{}/{} done", done, total)),
-                ];
-                
-                if in_progress > 0 {
-                    info.push(Span::raw(" │ "));
-                    info.push(Span::styled(format!("{} active", in_progress), colors.success()));
-                }
-                
-                if blockers > 0 {
-                    info.push(Span::raw(" │ "));
-                    info.push(Span::styled(format!("🔥 {} blocked", blockers), colors.error()));
-                }
-                
-                info.push(Span::raw(" │ "));
-                info.push(Span::styled(help_text(app), colors.dim()));
-                
-                Line::from(info)
-            }
+        if repo.modified > 0 {
+            info.push(Span::raw(" "));
+            info.push(Span::styled(format!("●{}", repo.modified), colors.warning()));
         }
+
+        // Repo path (shortened)
+        info.push(Span::raw(" │ "));
+        let short_path = if repo.path.len() > 40 {
+            format!("…{}", &repo.path[repo.path.len()-37..])
+        } else {
+            repo.path.clone()
+        };
+        info.push(Span::styled(short_path, colors.dim()));
+
+        Line::from(info)
+    } else {
+        Line::from(vec![
+            Span::styled(" ", colors.dim()),
+            Span::styled(" No git repository", colors.dim()),
+        ])
     };
 
     let left = Paragraph::new(left_content).block(
@@ -81,53 +77,38 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
 
     frame.render_widget(left, chunks[0]);
 
-    // Right: Stats (velocity, blockers, sprint)
-    let velocity = app.velocity();
-    let blockers = app.blocker_count();
+    // RIGHT: Search/Command input OR clock + help hint
+    let right_content = match app.input_mode {
+        InputMode::Search => {
+            Line::from(vec![
+                Span::styled("/ ", colors.accent()),
+                Span::raw(&app.search_query),
+                Span::styled("█", colors.accent()),
+            ])
+        }
+        InputMode::Command => {
+            Line::from(vec![
+                Span::styled(": ", colors.accent()),
+                Span::raw(&app.command_input),
+                Span::styled("█", colors.accent()),
+            ])
+        }
+        _ => {
+            // Show temporary status OR clock
+            if let Some(msg) = app.get_status() {
+                Line::from(Span::styled(format!(" {}", msg), colors.warning()))
+            } else {
+                let now = chrono::Local::now();
+                Line::from(vec![
+                    Span::styled(now.format("%H:%M").to_string(), colors.accent()),
+                    Span::raw(" │ "),
+                    Span::styled("? help", colors.dim()),
+                ])
+            }
+        }
+    };
 
-    let mut stats = vec![
-        Span::styled(
-            format!("⚡{} pts", velocity),
-            colors.success().add_modifier(Modifier::BOLD),
-        ),
-    ];
-
-    if blockers > 0 {
-        stats.push(Span::raw(" │ "));
-        stats.push(Span::styled(
-            format!("🔥{}", blockers),
-            colors.error(),
-        ));
-    }
-
-    if let Some(sprint) = app.current_sprint {
-        stats.push(Span::raw(" │ "));
-        stats.push(Span::styled(
-            format!("Sprint {}", sprint),
-            colors.accent(),
-        ));
-    }
-
-    // Add date/time
-    let now = chrono::Local::now();
-    stats.push(Span::raw(" │ "));
-    stats.push(Span::styled(
-        now.format("%H:%M").to_string(),
-        colors.dim(),
-    ));
-
-    // Add sync indicator if we have remote links
-    if app.sync_status.is_some() {
-        stats.push(Span::raw(" │ "));
-        stats.push(Span::styled(
-            "🔄 Syncing",
-            colors.warning(),
-        ));
-    }
-
-    stats.push(Span::raw(" "));
-
-    let right = Paragraph::new(Line::from(stats))
+    let right = Paragraph::new(right_content)
         .block(
             Block::default()
                 .borders(Borders::TOP)

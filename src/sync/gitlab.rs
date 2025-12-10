@@ -296,4 +296,148 @@ impl SyncProvider for GitLabProvider {
         
         Ok(deleted)
     }
+    
+    // Merge Request operations
+    fn create_mr(&self, mr: &crate::mr::MergeRequest) -> Result<u64> {
+        let token = self.get_token()?;
+        let url = self.api_url("merge_requests");
+        
+        let mut payload = serde_json::json!({
+            "source_branch": mr.source_branch,
+            "target_branch": mr.target_branch,
+            "title": mr.title,
+            "description": mr.description,
+        });
+        
+        // Add optional fields
+        if !mr.assignees.is_empty() {
+            // GitLab wants assignee IDs, but we'll try usernames first
+            // (might need user ID lookup like in push)
+            payload["assignee_ids"] = serde_json::json!(mr.assignees);
+        }
+        if !mr.labels.is_empty() {
+            payload["labels"] = serde_json::json!(mr.labels.join(","));
+        }
+        if mr.is_draft {
+            payload["title"] = serde_json::json!(format!("Draft: {}", mr.title));
+        }
+        
+        println!("🔀 Creating MR: {} -> {}", mr.source_branch, mr.target_branch);
+        
+        let response = self.client.post(&url)
+            .header("PRIVATE-TOKEN", &token)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context("Failed to create merge request")?;
+            
+        if !response.status().is_success() {
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("MR creation failed: {}", error_text));
+        }
+        
+        let created: serde_json::Value = response.json()?;
+        let iid = created["iid"].as_u64()
+            .ok_or_else(|| anyhow!("No IID in response"))?;
+        
+        println!("✅ Created MR !{}", iid);
+        Ok(iid)
+    }
+    
+    fn list_mrs(&self) -> Result<Vec<crate::mr::MergeRequest>> {
+        let token = self.get_token()?;
+        let url = self.api_url("merge_requests?state=opened&per_page=100");
+        
+        let response = self.client.get(&url)
+            .header("PRIVATE-TOKEN", &token)
+            .send()
+            .context("Failed to list merge requests")?;
+            
+        let gl_mrs: Vec<serde_json::Value> = response.json()
+            .context("Failed to parse MR list")?;
+            
+        let mut mrs = Vec::new();
+        for gl_mr in gl_mrs {
+            let mr = crate::mr::MergeRequest {
+                id: uuid::Uuid::new_v4().to_string(),
+                remote_id: gl_mr["iid"].as_u64(),
+                source_branch: gl_mr["source_branch"].as_str().unwrap_or_default().to_string(),
+                target_branch: gl_mr["target_branch"].as_str().unwrap_or_default().to_string(),
+                title: gl_mr["title"].as_str().unwrap_or_default().to_string(),
+                description: gl_mr["description"].as_str().unwrap_or_default().to_string(),
+                state: crate::mr::MRState::Open,  // Simplified for now
+                author: gl_mr["author"]["username"].as_str().map(|s| s.to_string()),
+                assignees: vec![],  // TODO: parse assignees
+                labels: vec![],     // TODO: parse labels
+                linked_issues: vec![],
+                web_url: gl_mr["web_url"].as_str().map(|s| s.to_string()),
+                created: chrono::Utc::now(), // TODO: parse timestamp
+                updated: chrono::Utc::now(),
+                merged_at: None,
+                is_draft: gl_mr["draft"].as_bool().unwrap_or(false),
+            };
+            mrs.push(mr);
+        }
+        
+        Ok(mrs)
+    }
+    
+    fn get_mr(&self, remote_id: u64) -> Result<crate::mr::MergeRequest> {
+        let token = self.get_token()?;
+        let url = self.api_url(&format!("merge_requests/{}", remote_id));
+        
+        let response = self.client.get(&url)
+            .header("PRIVATE-TOKEN", &token)
+            .send()
+            .context("Failed to get merge request")?;
+            
+        let gl_mr: serde_json::Value = response.json()?;
+        
+        Ok(crate::mr::MergeRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            remote_id: Some(remote_id),
+            source_branch: gl_mr["source_branch"].as_str().unwrap_or_default().to_string(),
+            target_branch: gl_mr["target_branch"].as_str().unwrap_or_default().to_string(),
+            title: gl_mr["title"].as_str().unwrap_or_default().to_string(),
+            description: gl_mr["description"].as_str().unwrap_or_default().to_string(),
+            state: crate::mr::MRState::Open,
+            author: gl_mr["author"]["username"].as_str().map(|s| s.to_string()),
+            assignees: vec![],
+            labels: vec![],
+            linked_issues: vec![],
+            web_url: gl_mr["web_url"].as_str().map(|s| s.to_string()),
+            created: chrono::Utc::now(),
+            updated: chrono::Utc::now(),
+            merged_at: None,
+            is_draft: gl_mr["draft"].as_bool().unwrap_or(false),
+        })
+    }
+    
+    fn update_mr(&self, mr: &crate::mr::MergeRequest) -> Result<()> {
+        let Some(remote_id) = mr.remote_id else {
+            return Err(anyhow!("Cannot update MR without remote_id"));
+        };
+        
+        let token = self.get_token()?;
+        let url = self.api_url(&format!("merge_requests/{}", remote_id));
+        
+        let payload = serde_json::json!({
+            "title": mr.title,
+            "description": mr.description,
+        });
+        
+        let response = self.client.put(&url)
+            .header("PRIVATE-TOKEN", &token)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context("Failed to update merge request")?;
+            
+        if !response.status().is_success() {
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("MR update failed: {}", error_text));
+        }
+        
+        Ok(())
+    }
 }

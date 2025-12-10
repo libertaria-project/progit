@@ -68,15 +68,17 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         ])
         .split(size);
 
+
     areas.git_bar = chunks[0];
     areas.content = chunks[1];
     areas.status_bar = chunks[2];
 
-    // Git bar at top
-    let dropdown_open = app.input_mode == InputMode::RemoteDropdown || app.input_mode == InputMode::BranchDropdown;
-    let (branch_area, remote_area) = render_gitbar(frame, chunks[0], app.repo_info.as_ref(), &colors, dropdown_open);
+    // PO/PM Metrics bar at top
+    use crate::git::widget_gitbar::render_with_app as render_pm_bar;
+    let (branch_area, remote_area) = render_pm_bar(frame, chunks[0], app, &colors);
     areas.git_branch = branch_area;
     areas.git_remote = remote_area;
+
 
     // Render view based on mode - wrapped in titled frame
     areas.kanban = match app.view_mode {

@@ -237,4 +237,25 @@ impl SyncProvider for ForgejoProvider {
         
         Ok(deleted)
     }
+    
+    // Merge Request operations (Pull Requests in Forgejo/Gitea)
+    fn create_mr(&self, _mr: &crate::mr::MergeRequest) -> Result<u64> {
+        // TODO: Implement Forgejo PR creation
+        Err(anyhow!("MR creation not yet implemented for Forgejo"))
+    }
+    
+    fn list_mrs(&self) -> Result<Vec<crate::mr::MergeRequest>> {
+        // TODO: Implement Forgejo PR listing
+        Ok(vec![])
+    }
+    
+    fn get_mr(&self, _remote_id: u64) -> Result<crate::mr::MergeRequest> {
+        // TODO: Implement Forgejo PR fetching
+        Err(anyhow!("MR get not yet implemented for Forgejo"))
+    }
+    
+    fn update_mr(&self, _mr: &crate::mr::MergeRequest) -> Result<()> {
+        // TODO: Implement Forgejo PR update
+        Err(anyhow!("MR update not yet implemented for Forgejo"))
+    }
 }

@@ -8,15 +8,27 @@ pub mod keyring;
 
 use anyhow::Result;
 use crate::issue::Issue;
+use crate::mr::MergeRequest;
 use crate::storage::config::SyncConfig;
 
 /// Provider trait for remote issue trackers (Forgejo, GitLab, GitHub)
 pub trait SyncProvider {
+    // Issue operations
     fn login(&self) -> Result<()>;
     fn pull(&self) -> Result<Vec<Issue>>;
     fn push(&self, issues: &mut [Issue]) -> Result<()>;
     /// Delete remote issues not present in local set
     fn delete_missing(&self, local_issues: &[Issue]) -> Result<usize>;
+    
+    // Merge Request operations
+    /// Create a new merge/pull request
+    fn create_mr(&self, mr: &MergeRequest) -> Result<u64>;
+    /// List open merge requests
+    fn list_mrs(&self) -> Result<Vec<MergeRequest>>;
+    /// Get a specific MR by remote ID
+    fn get_mr(&self, remote_id: u64) -> Result<MergeRequest>;
+    /// Update MR (title, description, state)
+    fn update_mr(&self, mr: &MergeRequest) -> Result<()>;
 }
 
 pub fn create_provider(config: SyncConfig) -> Box<dyn SyncProvider> {

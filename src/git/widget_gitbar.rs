@@ -1,9 +1,11 @@
-//! Widget Git Bar - Top bar showing repository info
+//! Widget Git Bar - Project Management Metrics Bar
 //!
-//! Displays branch, remote, and sync status.
+//! Top bar displaying PO/PM metrics: velocity, progress, blockers, sprint.
 
 use super::repository::{format_remote_url, RepoInfo};
 use crate::tui::theme::ThemeColors;
+use crate::issue::Status;
+use crate::tui::app::App;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
@@ -12,119 +14,128 @@ use ratatui::{
     Frame,
 };
 
-/// Render the git bar at the top
-/// Render the git bar, return (branch_area, remote_area)
-pub fn render(frame: &mut Frame, area: Rect, repo: Option<&RepoInfo>, colors: &ThemeColors, dropdown_open: bool) -> (Rect, Rect) {
-    if let Some(repo) = repo {
-        render_repo_bar(frame, area, repo, colors, dropdown_open)
-    } else {
-        render_no_repo(frame, area, colors);
-        (Rect::default(), Rect::default())
-    }
+/// Render the PO metrics bar at the top
+/// Returns empty rects for branch/remote areas (legacy compatibility)
+pub fn render(frame: &mut Frame, area: Rect, repo: Option<&RepoInfo>, colors: &ThemeColors, _dropdown_open: bool) -> (Rect, Rect) {
+    render_pm_metrics_bar(frame, area, colors);
+    (Rect::default(), Rect::default())
 }
 
-/// Render bar when repository is detected
-fn render_repo_bar(frame: &mut Frame, area: Rect, repo: &RepoInfo, colors: &ThemeColors, dropdown_open: bool) -> (Rect, Rect) {
+/// Render the PO/PM metrics bar
+fn render_pm_metrics_bar(frame: &mut Frame, area: Rect, colors: &ThemeColors) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(3),      // Git icon
-            Constraint::Percentage(25), // Branch
-            Constraint::Percentage(45), // Remote (clickable)
-            Constraint::Percentage(30), // Status
+            Constraint::Percentage(20), // Velocity
+            Constraint::Percentage(25), // Done/Total progress
+            Constraint::Percentage(20), // Active items
+            Constraint::Percentage(20), // Blockers
+            Constraint::Percentage(15), // Sprint info
         ])
         .split(area);
-        
 
+    // We need access to App to get issue data
+    // For now, render placeholder - we'll update the signature in tui.rs
+    
+    // Velocity section
+    let velocity_widget = Paragraph::new("⚡ -- pts")
+        .style(colors.success().add_modifier(Modifier::BOLD))
+        .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    frame.render_widget(velocity_widget, chunks[0]);
 
-
-
-    // Git icon
-    let icon = Paragraph::new(" ")
+    // Progress section  
+    let progress_widget = Paragraph::new("📊 --/-- done")
         .style(colors.accent())
         .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
-    frame.render_widget(icon, chunks[0]);
+    frame.render_widget(progress_widget, chunks[1]);
 
-    // Branch name
-    let branch_style = if repo.modified > 0 || repo.untracked > 0 {
-        colors.warning()
-    } else {
-        colors.success()
-    };
-    let branch = Paragraph::new(Line::from(vec![
-        Span::styled("⎇ ", colors.dim()),
-        Span::styled(&repo.branch, branch_style.add_modifier(Modifier::BOLD)),
-    ]))
-    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
-    frame.render_widget(branch, chunks[1]);
+    // Active items
+    let active_widget = Paragraph::new("🔄 -- active")
+        .style(colors.normal())
+        .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    frame.render_widget(active_widget, chunks[2]);
 
-    // Remote (with dropdown indicator - clickable)
-    let remote_display = if let Some(ref url) = repo.remote_url {
-        format_remote_url(url)
-    } else {
-        "No remote".to_string()
-    };
+    // Blockers
+    let blocker_widget = Paragraph::new("🔥 -- blocked")
+        .style(colors.error())
+        .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    frame.render_widget(blocker_widget, chunks[3]);
 
-    // Shorten local path for display
-    let local_display = {
-        let path = &repo.path;
-        if path.len() > 30 {
-            format!("...{}", &path[path.len()-27..])
-        } else {
-            path.clone()
-        }
-    };
-
-    let dropdown_indicator = if dropdown_open { " ▲" } else { " ▼" };
-    let remote = Paragraph::new(Line::from(vec![
-        Span::styled(&local_display, colors.dim()),
-        Span::raw(" → "),
-        Span::styled(&remote_display, colors.accent().add_modifier(Modifier::UNDERLINED)),
-        Span::styled(dropdown_indicator, colors.dim()),
-    ]))
-    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
-    frame.render_widget(remote, chunks[2]);
-
-    // Status (ahead/behind, modified)
-    let mut status_spans = Vec::new();
-
-    if repo.ahead > 0 {
-        status_spans.push(Span::styled(format!("↑{}", repo.ahead), colors.success()));
-        status_spans.push(Span::raw(" "));
-    }
-    if repo.behind > 0 {
-        status_spans.push(Span::styled(format!("↓{}", repo.behind), colors.warning()));
-        status_spans.push(Span::raw(" "));
-    }
-    if repo.modified > 0 {
-        status_spans.push(Span::styled(format!("●{}", repo.modified), colors.warning()));
-        status_spans.push(Span::raw(" "));
-    }
-    if repo.untracked > 0 {
-        status_spans.push(Span::styled(format!("+{}", repo.untracked), colors.dim()));
-    }
-
-    if status_spans.is_empty() {
-        status_spans.push(Span::styled("✓ synced", colors.success()));
-    }
-
-    let status = Paragraph::new(Line::from(status_spans))
+    // Sprint
+    let sprint_widget = Paragraph::new("Sprint --")
+        .style(colors.dim())
         .alignment(Alignment::Right)
         .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
-    frame.render_widget(status, chunks[3]);
-    
-    (chunks[1], chunks[2])
+    frame.render_widget(sprint_widget, chunks[4]);
 }
 
-/// Render bar when no repository detected
-fn render_no_repo(frame: &mut Frame, area: Rect, colors: &ThemeColors) {
-    let content = Paragraph::new(Line::from(vec![
-        Span::styled(" ", colors.dim()),
-        Span::styled(" No git repository ", colors.dim()),
-        Span::styled("(click to connect)", colors.accent()),
+/// Render PO metrics bar with actual data from App
+pub fn render_with_app(frame: &mut Frame, area: Rect, app: &App, colors: &ThemeColors) -> (Rect, Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(20), // Velocity
+            Constraint::Percentage(25), // Done/Total progress
+            Constraint::Percentage(20), // Active items
+            Constraint::Percentage(20), // Blockers
+            Constraint::Percentage(15), // Sprint info
+        ])
+        .split(area);
+
+    // Velocity
+    let velocity = app.velocity();
+    let velocity_widget = Paragraph::new(Line::from(vec![
+        Span::styled("⚡ ", colors.success()),
+        Span::styled(format!("{} pts", velocity), colors.success().add_modifier(Modifier::BOLD)),
     ]))
     .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
-    frame.render_widget(content, area);
+    frame.render_widget(velocity_widget, chunks[0]);
+
+    // Progress (Done/Total)
+    let total = app.issues.len();
+    let done = app.issues.iter().filter(|i| i.status == Status::Done).count();
+    let progress_pct = if total > 0 { (done * 100) / total } else { 0 };
+    let progress_widget = Paragraph::new(Line::from(vec![
+        Span::styled("📊 ", colors.accent()),
+        Span::styled(format!("{}/{}", done, total), colors.accent().add_modifier(Modifier::BOLD)),
+        Span::styled(format!(" ({}%)", progress_pct), colors.dim()),
+    ]))
+    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    frame.render_widget(progress_widget, chunks[1]);
+
+    // Active items
+    let in_progress = app.issues.iter().filter(|i| i.status == Status::InProgress).count();
+    let active_style = if in_progress > 0 { colors.success() } else { colors.dim() };
+    let active_widget = Paragraph::new(Line::from(vec![
+        Span::styled("🔄 ", colors.accent()),
+        Span::styled(format!("{} active", in_progress), active_style),
+    ]))
+    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    frame.render_widget(active_widget, chunks[2]);
+
+    // Blockers
+    let blockers = app.blocker_count();
+    let blocker_style = if blockers > 0 { colors.error().add_modifier(Modifier::BOLD) } else { colors.dim() };
+    let blocker_widget = Paragraph::new(Line::from(vec![
+        Span::styled("🔥 ", colors.error()),
+        Span::styled(format!("{} blocked", blockers), blocker_style),
+    ]))
+    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    frame.render_widget(blocker_widget, chunks[3]);
+
+    // Sprint info
+    let sprint_text = if let Some(sprint) = app.current_sprint {
+        format!("Sprint {}", sprint)
+    } else {
+        "No Sprint".to_string()
+    };
+    let sprint_widget = Paragraph::new(sprint_text)
+        .style(colors.accent())
+        .alignment(Alignment::Right)
+        .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    frame.render_widget(sprint_widget, chunks[4]);
+
+    (Rect::default(), Rect::default())
 }
 
 /// Render the remote dropdown menu
