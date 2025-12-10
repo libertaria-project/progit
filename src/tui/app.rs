@@ -187,6 +187,7 @@ impl App {
     /// Load issues into the app
     pub fn load_issues(&mut self, issues: Vec<Issue>) {
         self.issues = issues;
+        self.update_available_repos(); // Update repo list for filtering
         self.refresh_filter();
     }
 
