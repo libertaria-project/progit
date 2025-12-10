@@ -30,9 +30,12 @@ use crate::tui::{handle_key, handle_mouse, render, App, KeyAction, UIAreas};
 use crate::sync::SyncProvider;
 use anyhow::{Context, anyhow};
 
+use colored::*;
+
 /// ProGit - Lean Git Issue Tracker
 #[derive(Parser)]
 #[command(name = "prog")]
+#[command(version)]
 #[command(about = "Terminal cockpit for developers, sync bridge to the cloud", long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -60,6 +63,43 @@ enum Commands {
         /// Due date (YYYY-MM-DD format) or "clear" to remove
         date: String,
     },
+    /// Manage git branches
+    Branch {
+        #[command(subcommand)]
+        action: Option<BranchAction>,
+    },
+    /// Manage merge requests
+    Mr {
+        #[command(subcommand)]
+        action: Option<MrAction>,
+    },
+}
+
+#[derive(Subcommand)]
+enum BranchAction {
+    /// List local branches
+    List,
+    /// Switch to a branch
+    Switch { name: String },
+    /// Create a new branch
+    Create { name: String },
+    /// Delete a branch
+    Delete { name: String },
+}
+
+#[derive(Subcommand)]
+enum MrAction {
+    /// List open merge requests (requires sync config)
+    List,
+    /// Create a new merge request (interactive or from args)
+    Create {
+        /// Target branch (default: main/master)
+        #[arg(short, long)]
+        target: Option<String>,
+        /// Title (default: from last commit or branch name)
+        #[arg(short, long)]
+        title: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -79,7 +119,7 @@ fn main() -> Result<()> {
     if !project_dir.exists() {
         // If no .project exists, we require a git repository
         if crate::git::detect_repo(&project_root)?.is_none() {
-            println!("❌ No git repository found.");
+            println!("{} No git repository found.", "❌".red());
             println!("   ProGit requires a git repository to initialize.");
             println!("   Please run 'git init' first.");
             return Ok(());
@@ -116,11 +156,14 @@ fn main() -> Result<()> {
                     let cache_path = project_root.join(paths::cache_file());
                     let mut issues = load_issues(&kdl_dir, &cache_path)?;
                     
+                    println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
                     provider.login()?;
+                    
+                    println!("{} Pushing issues...", "🔄".blue());
                     provider.push(&mut issues)?;
                     
                     // Save issues back to persist new remote IDs
-                    println!("💾 Saving {} issues with remote links...", issues.len());
+                    println!("{} Saving {} issues with remote links...", "💾".green(), issues.len());
                     for issue in &issues {
                         save_issue(issue, &kdl_dir, &cache_path)?;
                     }
@@ -128,10 +171,10 @@ fn main() -> Result<()> {
                     // Delete remote issues not in local
                     let deleted = provider.delete_missing(&issues)?;
                     if deleted > 0 {
-                        println!("🗑️  Deleted {} remote issues.", deleted);
+                        println!("{} Deleted {} remote issues.", "🗑️".red(), deleted);
                     }
                     
-                    println!("✅ Push complete - Links saved.");
+                    println!("{} Push complete - Links saved.", "✅".green());
                 }
                 Some(SyncAction::Pull) => {
                     let kdl_dir = project_root.join(paths::issues_dir());
@@ -140,29 +183,114 @@ fn main() -> Result<()> {
                     // Load local issues for deduplication matching
                     let local_issues = load_issues(&kdl_dir, &cache_path).unwrap_or_default();
                     
+                    println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
                     provider.login()?;
+                    
+                    println!("{} Pulling issues...", "🔄".blue());
                     let remote_issues = provider.pull()?;
                     
-                    println!("📥 Pulled {} issues. Merging...", remote_issues.len());
+                    println!("{} Pulled {} issues. Merging...", "📥".blue(), remote_issues.len());
                     
                     let provider_name = &sync_config.provider;
-                    println!("🔎 Using provider '{}' for basic deduplication.", provider_name);
+                    println!("{} Using provider '{}' for basic deduplication.", "🔎".cyan(), provider_name);
                     
                     let merged_issues = sync::merge_issues(&local_issues, remote_issues, provider_name);
                     
                     // Save merged set
-                    println!("💾 Saving {} merged issues...", merged_issues.len());
+                    println!("{} Saving {} merged issues...", "💾".green(), merged_issues.len());
                     for issue in merged_issues {
                         save_issue(&issue, &kdl_dir, &cache_path)?;
                     }
-                    println!("✅ Pull complete.");
+                    println!("{} Pull complete.", "✅".green());
                 }
                 None => {}
             }
         }
+        Some(Commands::Branch { action }) => {
+            let cwd = std::env::current_dir()?;
+            let repo_info = detect_repo(&cwd)?.context("Not a git repository")?;
+            
+            match action {
+                Some(BranchAction::List) | None => {
+                    println!("{} Branches in {}:", "🌿".green(), repo_info.path.blue());
+                    for branch in repo_info.branches {
+                        if branch == repo_info.branch {
+                            println!("  {} {}", "*".green(), branch.green().bold());
+                        } else {
+                            println!("    {}", branch);
+                        }
+                    }
+                }
+                Some(BranchAction::Switch { name }) => {
+                    crate::git::switch_branch(&cwd, &name)?;
+                    println!("{} Switched to branch {}", "✅".green(), name.green().bold());
+                }
+                Some(BranchAction::Create { name }) => {
+                    crate::git::create_branch(&cwd, &name)?;
+                    println!("{} Created and switched to branch {}", "✅".green(), name.green().bold());
+                }
+                Some(BranchAction::Delete { name }) => {
+                    crate::git::delete_branch(&cwd, &name)?;
+                    println!("{} Deleted branch {}", "🗑️".red(), name.red());
+                }
+            }
+        }
+        Some(Commands::Mr { action }) => {
+            // Load config for provider
+            let project_root = find_project_root()?;
+            let config_path = project_root.join(paths::config_file());
+            let config = storage::config::load_config(&config_path)?;
+            let cwd = std::env::current_dir()?;
+            let repo_info = detect_repo(&cwd)?.context("Not a git repository")?;
+
+            let sync_config = config.sync.context(
+                "No sync configuration found. MR commands require a configured provider."
+            )?;
+            let provider = sync::create_provider(sync_config.clone());
+            provider.login()?;
+
+            match action {
+                Some(MrAction::List) | None => {
+                    println!("{} Fetching open Merge Requests...", "🔄".blue());
+                    let mrs = provider.list_mrs()?;
+                    if mrs.is_empty() {
+                         println!("No open MRs found.");
+                    } else {
+                        println!("{} Open Merge Requests:", "🔀".green());
+                        for mr in mrs {
+                            println!("  {} {} {}", 
+                                format!("!{}", mr.id).cyan(), 
+                                mr.title.bold(), 
+                                format!("({} -> {})", mr.source_branch, mr.target_branch).dimmed()
+                            );
+                        }
+                    }
+                }
+                Some(MrAction::Create { target, title }) => {
+                    let source_branch = repo_info.branch.clone();
+                    let target_branch = target.unwrap_or_else(|| "main".to_string());
+                    
+                    let mr_title = if let Some(t) = title {
+                        t
+                    } else {
+                        // TODO: Use last commit message if possible, or branch name
+                        source_branch.clone()
+                    };
+
+                    println!("{} Creating MR: {} -> {}", "🔄".blue(), source_branch.cyan(), target_branch.cyan());
+                    
+                    let mr = crate::mr::MergeRequest::new(&source_branch, &target_branch, &mr_title);
+                    match provider.create_mr(&mr) {
+                        Ok(id) => println!("{} Created MR !{}", "✅".green(), id),
+                        Err(e) => println!("{} Failed to create MR: {}", "❌".red(), e),
+                    }
+                }
+            }
+        }
         Some(Commands::Clean) => {
-            println!("🧹 Starting emergency cleanup...");
+            println!("{} Starting emergency cleanup...", "🧹".yellow());
             storage::cleanup_duplicates(&find_project_root()?)?;
+            println!("{} Cleanup complete.", "✅".green());
         }
         Some(Commands::Block { id }) => {
             let project_root = find_project_root()?;
@@ -175,8 +303,8 @@ fn main() -> Result<()> {
             if let Some(issue) = issues.iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
                 issue.blocked = !issue.blocked;
                 issue.updated = chrono::Utc::now();
-                let blocked_str = if issue.blocked { "BLOCKED" } else { "UNBLOCKED" };
-                println!("🔥 Issue {} marked as {}", issue.short_id(), blocked_str);
+                let blocked_str = if issue.blocked { "BLOCKED".red().bold() } else { "UNBLOCKED".green().bold() };
+                println!("{} Issue {} marked as {}", "🔥".yellow(), issue.short_id().bold(), blocked_str);
                 save_issue(issue, &kdl_dir, &cache_path)?;
             } else {
                 return Err(anyhow!("Issue '{}' not found", id));
@@ -193,7 +321,7 @@ fn main() -> Result<()> {
             if let Some(issue) = issues.iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
                 if date.to_lowercase() == "clear" {
                     issue.due = None;
-                    println!("⏰ Due date cleared for issue {}", issue.short_id());
+                    println!("{} Due date cleared for issue {}", "⏰".green(), issue.short_id().bold());
                 } else {
                     // Parse date (YYYY-MM-DD format)
                     let parsed_date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d")
@@ -201,7 +329,7 @@ fn main() -> Result<()> {
                     let due_datetime = parsed_date.and_hms_opt(23, 59, 59)
                         .context("Invalid time")?;
                     issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(due_datetime, chrono::Utc));
-                    println!("⏰ Due date set to {} for issue {}", date, issue.short_id());
+                    println!("{} Due date set to {} for issue {}", "⏰".green(), date.cyan(), issue.short_id().bold());
                 }
                 issue.updated = chrono::Utc::now();
                 save_issue(issue, &kdl_dir, &cache_path)?;

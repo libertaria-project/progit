@@ -13,7 +13,7 @@ use ratatui::{
 };
 
 /// Render the bottom system status bar
-pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
+pub fn render(frame: &mut Frame, area: Rect, app: &mut App) -> Option<Rect> {
     // Get status message first (requires mutable borrow) to avoid conflict later
     let status_msg = app.get_status();
     
@@ -113,7 +113,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         }
         _ => {
             // Show temporary status OR clock
-            if let Some(msg) = status_msg {
+            if let Some(ref msg) = status_msg {
                 Line::from(Span::styled(format!(" {}", msg), engine.get("status.message", colors.warning())))
             } else {
                 let now = chrono::Local::now();
@@ -135,4 +135,21 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .alignment(ratatui::layout::Alignment::Right);
 
     frame.render_widget(right, chunks[1]);
+    
+    // Calculate help icon area if visible
+    // "HH:MM | ? help" is shown when not searching/commanding and no status msg
+    if !matches!(app.input_mode, InputMode::Search | InputMode::Command) && status_msg.is_none() {
+        // Approximate area: last 6 chars of the right chunk
+        let help_width: u16 = 6;
+        if chunks[1].width >= help_width + 2 {
+            return Some(Rect {
+                x: chunks[1].x + chunks[1].width - help_width - 1,
+                y: chunks[1].y + 1, // +1 for border
+                width: help_width,
+                height: 1,
+            });
+        }
+    }
+    
+    None
 }

@@ -888,6 +888,14 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 return KeyAction::None;
             }
 
+            // Click on help icon (? help)
+            if let Some(help_area) = ui_areas.help_icon {
+                if point_in_rect(mouse.column, mouse.row, help_area) {
+                    app.set_status(help_text(app));
+                    return KeyAction::Refresh;
+                }
+            }
+
             // Ignore clicks in status bar
             if point_in_rect(mouse.column, mouse.row, ui_areas.status_bar) {
                 return KeyAction::None;

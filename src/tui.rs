@@ -52,6 +52,8 @@ pub struct UIAreas {
     pub detail_pane: Option<Rect>,
     /// Detail pane close button [X]
     pub detail_close_btn: Option<Rect>,
+    /// Help icon area in status bar
+    pub help_icon: Option<Rect>,
 }
 
 /// Render the entire UI, returns UI areas for mouse handling
@@ -158,7 +160,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     };
 
     // Status bar at bottom - now with &mut App
-    widget_status::render(frame, chunks[2], app);
+    areas.help_icon = widget_status::render(frame, chunks[2], app);
 
     // Render dropdown overlay if open
     if app.input_mode == InputMode::RemoteDropdown {
