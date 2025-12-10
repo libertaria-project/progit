@@ -27,7 +27,7 @@ use crate::git::{render_gitbar, render_remote_dropdown};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, Borders},
+    widgets::{Block, Borders, BorderType},
     Frame,
 };
 
@@ -88,6 +88,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
                     Span::styled(format!("({} total) ", app.issues.len()), colors.dim()),
                 ]))
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(colors.border());
 
             let inner = block.inner(chunks[1]);
@@ -103,6 +104,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
                     Span::styled(format!("({} issues) ", app.issues.len()), colors.dim()),
                 ]))
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(colors.border());
 
             let inner = block.inner(chunks[1]);

@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, BorderType, Clear, Paragraph, Wrap},
     Frame,
 };
 
@@ -109,6 +109,7 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
             Span::raw(":close "),
         ]))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(colors.accent());
 
     let inner = block.inner(detail_area);
@@ -277,6 +278,7 @@ fn render_field(
         Block::default()
             .title(Span::styled(format!(" {} ", label), colors.dim()))
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(border_style),
     );
 
@@ -312,6 +314,7 @@ fn render_multiline_field(
             Block::default()
                 .title(Span::styled(format!(" {} ", label), colors.dim()))
                 .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(border_style),
         );
 
@@ -352,6 +355,7 @@ fn render_status_field(
         Block::default()
             .title(Span::styled(format!(" {} ", label), colors.dim()))
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(border_style),
     );
 
@@ -398,6 +402,7 @@ fn render_effort_field(
         Block::default()
             .title(Span::styled(format!(" {} ", label), colors.dim()))
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(border_style),
     );
 

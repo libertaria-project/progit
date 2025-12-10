@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, BorderType, List, ListItem, Paragraph},
     Frame,
 };
 
@@ -176,6 +176,7 @@ fn render_column(
             ),
         ]))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(border_style);
 
     let list = List::new(items).block(block);

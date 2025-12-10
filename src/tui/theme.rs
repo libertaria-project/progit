@@ -12,6 +12,7 @@ pub enum Theme {
     Gruvbox,
     Dracula,
     Cyberpunk,
+    Vibe,
 }
 
 /// Theme colors
@@ -88,6 +89,21 @@ impl Theme {
                 header_fg: Color::Rgb(255, 105, 180), // hot pink
                 selected_bg: Color::Rgb(75, 0, 130), // indigo
                 selected_fg: Color::Rgb(0, 255, 255), // cyan glow
+            },
+            Theme::Vibe => ThemeColors {
+                // Mistral Vibe inspired: Deep void black, cream text, sharp neon orange
+                bg: Color::Rgb(10, 10, 10),           // Void Black
+                fg: Color::Rgb(240, 238, 225),        // Cream / Off-white
+                accent: Color::Rgb(255, 90, 0),       // Neon Vibe Orange
+                accent_dim: Color::Rgb(120, 60, 20),  // Dimmed orange/brown
+                success: Color::Rgb(100, 255, 100),   // Sharp Green
+                warning: Color::Rgb(255, 200, 50),    // Sharp Yellow
+                error: Color::Rgb(255, 50, 50),       // Sharp Red
+                border: Color::Rgb(40, 40, 40),       // Subtle grey border
+                header_bg: Color::Rgb(20, 20, 20),    // Slightly lighter black
+                header_fg: Color::Rgb(255, 255, 255), // Pure white
+                selected_bg: Color::Rgb(40, 20, 10),  // Very subtle orange tint
+                selected_fg: Color::Rgb(255, 120, 0), // Orange text for selection
             },
         }
     }

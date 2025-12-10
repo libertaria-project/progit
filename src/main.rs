@@ -267,6 +267,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                 "gruvbox" => tui::Theme::Gruvbox,
                 "dracula" => tui::Theme::Dracula,
                 "cyberpunk" => tui::Theme::Cyberpunk,
+                "vibe" => tui::Theme::Vibe,
                 _ => tui::Theme::Nord,
             };
         }
@@ -311,6 +312,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                         tui::Theme::Gruvbox => "gruvbox",
                         tui::Theme::Dracula => "dracula",
                         tui::Theme::Cyberpunk => "cyberpunk",
+                        tui::Theme::Vibe => "vibe",
                     };
                     let _ = storage::save_theme(&config_path, theme_name);
                     app.set_status(format!("Theme: {}", theme_name));

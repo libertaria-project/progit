@@ -245,7 +245,8 @@ impl App {
             Theme::Nord => Theme::Gruvbox,
             Theme::Gruvbox => Theme::Dracula,
             Theme::Dracula => Theme::Cyberpunk,
-            Theme::Cyberpunk => Theme::Nord,
+            Theme::Cyberpunk => Theme::Vibe,
+            Theme::Vibe => Theme::Nord,
         };
     }
 
