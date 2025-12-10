@@ -77,33 +77,34 @@ impl Theme {
                 selected_fg: Color::Rgb(80, 250, 123), // green
             },
             Theme::Cyberpunk => ThemeColors {
-                bg: Color::Rgb(13, 2, 33),           // deep purple-black
-                fg: Color::Rgb(224, 210, 255),       // soft lavender
-                accent: Color::Rgb(199, 36, 177),    // neon magenta
-                accent_dim: Color::Rgb(106, 90, 205), // slate blue
-                success: Color::Rgb(0, 255, 159),    // neon green
-                warning: Color::Rgb(255, 215, 0),    // gold
-                error: Color::Rgb(255, 56, 100),     // hot pink
-                border: Color::Rgb(138, 43, 226),    // blue-violet glow
-                header_bg: Color::Rgb(30, 10, 60),   // dark violet
-                header_fg: Color::Rgb(255, 105, 180), // hot pink
-                selected_bg: Color::Rgb(75, 0, 130), // indigo
-                selected_fg: Color::Rgb(0, 255, 255), // cyan glow
+                // Cyberpunk 2077 inspired: Dark "Void" Grid + Neon Yellow/Blue/Pink
+                bg: Color::Rgb(5, 5, 10),            // Deep dark void
+                fg: Color::Rgb(0, 240, 255),         // Neon Cyan (Text default)
+                accent: Color::Rgb(254, 254, 84),    // Cyber Yellow (Accent)
+                accent_dim: Color::Rgb(80, 80, 0),   // Dim Yellow
+                success: Color::Rgb(0, 255, 159),    // Neon Green
+                warning: Color::Rgb(255, 215, 0),    // Gold/Yellow
+                error: Color::Rgb(255, 42, 109),     // Neon Red/Pink
+                border: Color::Rgb(60, 20, 80),      // Dark Purple border
+                header_bg: Color::Rgb(20, 5, 30),    // Darker header
+                header_fg: Color::Rgb(254, 254, 84), // Yellow Header
+                selected_bg: Color::Rgb(255, 0, 60), // Hot Pink Selection bg
+                selected_fg: Color::Rgb(255, 255, 255), // White text on pink
             },
             Theme::Vibe => ThemeColors {
-                // Mistral Vibe inspired: Deep void black, cream text, sharp neon orange
-                bg: Color::Rgb(10, 10, 10),           // Void Black
-                fg: Color::Rgb(240, 238, 225),        // Cream / Off-white
-                accent: Color::Rgb(255, 90, 0),       // Neon Vibe Orange
-                accent_dim: Color::Rgb(120, 60, 20),  // Dimmed orange/brown
-                success: Color::Rgb(100, 255, 100),   // Sharp Green
-                warning: Color::Rgb(255, 200, 50),    // Sharp Yellow
-                error: Color::Rgb(255, 50, 50),       // Sharp Red
-                border: Color::Rgb(40, 40, 40),       // Subtle grey border
-                header_bg: Color::Rgb(20, 20, 20),    // Slightly lighter black
-                header_fg: Color::Rgb(255, 255, 255), // Pure white
-                selected_bg: Color::Rgb(40, 20, 10),  // Very subtle orange tint
-                selected_fg: Color::Rgb(255, 120, 0), // Orange text for selection
+                // User Request: Rich Black, True Black, Clear Bright Colors
+                bg: Color::Rgb(0, 0, 0),              // Pure Black
+                fg: Color::Rgb(255, 255, 255),        // Pure White
+                accent: Color::Rgb(0, 190, 255),      // Bright Blue
+                accent_dim: Color::Rgb(100, 100, 100),// Grey
+                success: Color::Rgb(0, 255, 0),       // Pure Green
+                warning: Color::Rgb(255, 255, 0),     // Pure Yellow
+                error: Color::Rgb(255, 0, 0),         // Pure Red
+                border: Color::Rgb(60, 60, 60),       // Grey Border
+                header_bg: Color::Rgb(20, 20, 20),    // Slightly lighter black header
+                header_fg: Color::Rgb(255, 255, 255), // White Header
+                selected_bg: Color::Rgb(50, 50, 50),  // Dark Grey Selection
+                selected_fg: Color::Rgb(255, 255, 255), // White text
             },
         }
     }
@@ -153,26 +154,18 @@ impl ThemeColors {
         Style::default().fg(self.accent_dim)
     }
 
-    /// Success with background (for in-progress items)
+    // DEPRECATED: Background styles removed for cleaner look
+    // Falling back to foreground colors to prevent "Green on Green" issues.
+    
     pub fn success_bg(&self) -> Style {
-        Style::default()
-            .fg(self.bg)
-            .bg(self.success)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.success) // No BG
     }
 
-    /// Error with background (for blockers/overdue)
     pub fn error_bg(&self) -> Style {
-        Style::default()
-            .fg(self.bg)
-            .bg(self.error)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.error) // No BG
     }
 
-    /// Dim with subtle background (for completed items)
     pub fn done_bg(&self) -> Style {
-        Style::default()
-            .fg(self.fg)
-            .bg(self.border)
+        Style::default().fg(self.accent_dim) // No BG, just dim
     }
 }

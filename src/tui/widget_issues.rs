@@ -67,23 +67,21 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 
 /// Create a row for an issue
 fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) -> Row<'a> {
-    // Determine row style based on status and blocking state
-    // Determine row style based on status and blocking state
-    let row_style = if issue.is_blocker() || issue.is_overdue() {
-        // "issue.row.error" or base "issue.row"
-        engine.get_conditional("issues.row", "error", colors.error_bg())
-    } else {
-        match issue.status {
-            Status::InProgress => engine.get_conditional("issues.row", "active", colors.success_bg()),
-            Status::Done => engine.get_conditional("issues.row", "done", colors.done_bg()),
-            _ => engine.get("issues.row.normal", colors.normal()),
-        }
-    };
+    // Determine row style based on SELECTION ONLY
+    // Status does not color the whole row anymore, to avoid "Green on Green" mess.
+    let row_style = engine.get("issues.row.normal", colors.normal());
 
     let status_style = match issue.status {
         Status::Backlog => colors.dim(),
-        Status::InProgress => colors.success(),
-        Status::Done => colors.accent(),
+        Status::InProgress => colors.success(), // Neon Green text
+        Status::Done => colors.dim(),           // Dimmed text
+    };
+    
+    // Status Icon
+    let status_icon = match issue.status {
+        Status::Backlog => "○",
+        Status::InProgress => "▶",
+        Status::Done => "✔",
     };
 
     let blocker_indicator = if issue.is_blocker() { 
@@ -113,12 +111,12 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
     };
 
     let cells = [
-        Cell::from(issue.short_id().to_string()),
+        Cell::from(issue.short_id().to_string()).style(colors.dim()),
         Cell::from(format!("{}{}", blocker_indicator, &issue.title)),
-        Cell::from(issue.status.as_str()).style(status_style),
+        Cell::from(format!("{} {}", status_icon, issue.status.as_str())).style(status_style),
         Cell::from(format!("{}", issue.effort as u8)),
         Cell::from(repo_display).style(repo_style),
-        Cell::from(issue.tags.join(", ")),
+        Cell::from(issue.tags.join(", ")).style(colors.dim()),
     ];
 
     Row::new(cells).style(row_style)
