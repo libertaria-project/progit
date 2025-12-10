@@ -10,8 +10,20 @@ use std::io::{self, Write};
 
 const SERVICE_NAME: &str = "progit";
 
-/// Get token from keyring
+/// Get token from keyring or environment
 pub fn get_token(server: &str, username: &str) -> Result<String> {
+    // 1. Check Env Vars (Override)
+    if let Ok(token) = std::env::var("PROGIT_TOKEN") {
+        return Ok(token);
+    }
+    if let Ok(token) = std::env::var("GITLAB_TOKEN") {
+        return Ok(token);
+    }
+    if let Ok(token) = std::env::var("FORGEJO_TOKEN") {
+        return Ok(token);
+    }
+
+    // 2. Check Keyring
     let entry = Entry::new(SERVICE_NAME, &format!("{}@{}", username, server))?;
     entry.get_password().map_err(|e| anyhow!("Failed to get token: {}", e))
 }

@@ -135,8 +135,15 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
         }
         
+        // Help
+        KeyCode::Char('?') => {
+            use crate::tui::widget_status::help_text;
+            app.set_status(help_text(app));
+            KeyAction::Refresh
+        }
+        
         // Debug Console
-        KeyCode::F(12) => KeyAction::ToggleDebug,
+        KeyCode::F(8) => KeyAction::ToggleDebug,
 
         // Create Merge Request
         KeyCode::Char('M') => {
