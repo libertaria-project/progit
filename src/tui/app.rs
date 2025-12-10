@@ -141,6 +141,9 @@ pub struct App {
 
     /// Style engine
     pub theme_engine: ThemeEngine,
+    
+    /// Show debug console overlay
+    pub show_debug_console: bool,
 }
 
 impl Default for App {
@@ -186,6 +189,7 @@ impl App {
             sync_status: None,
             mr_draft: None,
             mr_field: 0,
+            show_debug_console: false,
         }
     }
 

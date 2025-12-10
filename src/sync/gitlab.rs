@@ -121,14 +121,14 @@ impl SyncProvider for GitLabProvider {
         if !response.status().is_success() {
             // If unauthorized, delete token and retry
             if response.status().as_u16() == 401 {
-                println!("⚠️  Token invalid or expired.");
+                log::warn!("⚠️  Token invalid or expired.");
                 keyring::delete_token(&self.config.url, &self.config.owner)?;
                 return self.login(); // Recursive retry with prompt
             }
             return Err(anyhow!("GitLab authentication failed: {}", response.status()));
         }
         
-        // println!("✅ Authenticated with GitLab");
+        // log::info!("✅ Authenticated with GitLab");
         Ok(())
     }
 
@@ -136,7 +136,7 @@ impl SyncProvider for GitLabProvider {
         let token = self.get_token()?;
         let url = self.api_url("issues?state=all&per_page=100"); // Fetch all issues
         
-        // println!("📥 Fetching issues from GitLab...");
+        // log::info!("📥 Fetching issues from GitLab...");
         
         let response = self.client.get(&url)
             .header("PRIVATE-TOKEN", &token)
@@ -191,7 +191,7 @@ impl SyncProvider for GitLabProvider {
         let token = self.get_token()?;
         let url_base = self.api_url("issues");
         
-        // println!("📤 Synching {} issues with GitLab...", issues.len());
+        // log::info!("📤 Synching {} issues with GitLab...", issues.len());
         
         for issue in issues {
             // GitLab expects specific state_event to close/reopen
@@ -225,7 +225,7 @@ impl SyncProvider for GitLabProvider {
             if let Some(remote_id) = issue.remotes.get(&self.config.provider) {
                 // UPDATE
                 let url = format!("{}/{}", url_base, remote_id);
-                // println!("   Updating #{}: title='{}'", remote_id, issue.title);
+                log::debug!("   Updating #{}: title='{}'", remote_id, issue.title);
                 
                 let response = self.client.put(&url)
                     .header("PRIVATE-TOKEN", &token)
@@ -235,11 +235,11 @@ impl SyncProvider for GitLabProvider {
                     .context(format!("Failed to update issue #{}", remote_id))?;
                     
                 if !response.status().is_success() {
-                    eprintln!("   ⚠️ Update failed: {}", response.text().unwrap_or_default());
+                    log::error!("   ⚠️ Update failed: {}", response.text().unwrap_or_default());
                 }
             } else {
                 // CREATE
-                // println!("   Creating '{}'...", issue.title);
+                // log::info!("   Creating '{}'...", issue.title);
                 
                 let response = self.client.post(&url_base)
                     .header("PRIVATE-TOKEN", &token)
@@ -252,7 +252,7 @@ impl SyncProvider for GitLabProvider {
                     let created: GitLabIssue = response.json()?;
                     issue.remotes.insert(self.config.provider.clone(), created.iid.to_string());
                 } else {
-                    eprintln!("   ⚠️ Create failed: {}", response.text().unwrap_or_default());
+                    log::error!("   ⚠️ Create failed: {}", response.text().unwrap_or_default());
                 }
             }
         }
@@ -281,7 +281,7 @@ impl SyncProvider for GitLabProvider {
         let mut deleted = 0;
         for iid in to_delete {
             let url = format!("{}/{}", url_base, iid);
-            // println!("   🗑️  Deleting remote issue #{}", iid);
+            // log::info!("   🗑️  Deleting remote issue #{}", iid);
             
             let response = self.client.delete(&url)
                 .header("PRIVATE-TOKEN", &token)
@@ -291,7 +291,7 @@ impl SyncProvider for GitLabProvider {
             if response.status().is_success() {
                 deleted += 1;
             } else {
-                eprintln!("   ⚠️ Delete failed: {}", response.text().unwrap_or_default());
+                log::error!("   ⚠️ Delete failed: {}", response.text().unwrap_or_default());
             }
         }
         
@@ -323,7 +323,7 @@ impl SyncProvider for GitLabProvider {
             payload["title"] = serde_json::json!(format!("Draft: {}", mr.title));
         }
         
-        println!("🔀 Creating MR: {} -> {}", mr.source_branch, mr.target_branch);
+        log::info!("🔀 Creating MR: {} -> {}", mr.source_branch, mr.target_branch);
         
         let response = self.client.post(&url)
             .header("PRIVATE-TOKEN", &token)
@@ -341,7 +341,7 @@ impl SyncProvider for GitLabProvider {
         let iid = created["iid"].as_u64()
             .ok_or_else(|| anyhow!("No IID in response"))?;
         
-        println!("✅ Created MR !{}", iid);
+        log::info!("✅ Created MR !{}", iid);
         Ok(iid)
     }
     

@@ -84,7 +84,7 @@ struct CreateIssuePayload {
 impl SyncProvider for ForgejoProvider {
     fn login(&self) -> Result<()> {
         let _ = self.get_token()?;
-        println!("✅ Authenticated with Forgejo");
+        log::info!("✅ Authenticated with Forgejo");
         Ok(())
     }
 
@@ -140,7 +140,7 @@ impl SyncProvider for ForgejoProvider {
         let token = self.get_token()?;
         let base_url = format!("{}/issues", self.base_url());
         
-        // println!("📤 Synching {} issues with Forgejo...", issues.len());
+        // log::info!("📤 Synching {} issues with Forgejo...", issues.len());
         
         for issue in issues {
             let payload = serde_json::json!({
@@ -154,7 +154,7 @@ impl SyncProvider for ForgejoProvider {
             if let Some(remote_id) = issue.remotes.get(&self.config.provider) {
                 // UPDATE existing issue
                 let url = format!("{}/{}", base_url, remote_id);
-                // println!("   Updating #{}: title='{}', body='{}'", remote_id, issue.title, &issue.description[..issue.description.len().min(50)]);
+                // log::info!("   Updating #{}: title='{}'", remote_id, issue.title);
                 
                 // Forgejo API: PATCH to update
                 let response = self.client.patch(&url)
@@ -170,14 +170,14 @@ impl SyncProvider for ForgejoProvider {
                     // Parse response to verify body was updated
                     if let Ok(updated) = serde_json::from_str::<serde_json::Value>(&resp_body) {
                         let body_str = updated["body"].as_str().unwrap_or("");
-                        // println!("DEBUG: Response Body='{}'", body_str);[..body_str.len().min(50)]);
+                        // log::debug!("DEBUG: Response Body='{}'", body_str);
                     }
                 } else {
-                    eprintln!("   ⚠️ Update failed ({}): {}", status, resp_body);
+                    log::error!("   ⚠️ Update failed ({}): {}", status, resp_body);
                 }
             } else {
                 // CREATE new issue
-                // println!("   Creating '{}'...", issue.title); // verbose
+                // log::info!("   Creating '{}'...", issue.title); // verbose
                 
                 let response = self.client.post(&base_url)
                     .header("Authorization", format!("token {}", token))
@@ -189,7 +189,7 @@ impl SyncProvider for ForgejoProvider {
                     let created_issue: ForgejoIssue = response.json()?;
                     // Link local issue to remote
                     issue.remotes.insert(self.config.provider.clone(), created_issue.number.to_string());
-                    // println!("   Linked to #{}", created_issue.number);
+                    // log::info!("   Linked to #{}", created_issue.number);
                 }
             }
         }
@@ -222,7 +222,7 @@ impl SyncProvider for ForgejoProvider {
         let mut deleted = 0;
         for iid in to_delete {
             let url = format!("{}/{}", url_base, iid);
-            // println!("   🗑️  Deleting remote issue #{}", iid);
+            // log::info!("   🗑️  Deleting remote issue #{}", iid);
             
             let response = self.client.delete(&url)
                 .header("Authorization", format!("token {}", token))
@@ -232,7 +232,7 @@ impl SyncProvider for ForgejoProvider {
             if response.status().is_success() {
                 deleted += 1;
             } else {
-                eprintln!("   ⚠️ Delete failed: {}", response.text().unwrap_or_default());
+                log::error!("   ⚠️ Delete failed: {}", response.text().unwrap_or_default());
             }
         }
         

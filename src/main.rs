@@ -111,6 +111,10 @@ enum SyncAction {
 }
 
 fn main() -> Result<()> {
+    // Initialize Logger
+    tui_logger::init_logger(log::LevelFilter::Trace).unwrap();
+    tui_logger::set_default_level(log::LevelFilter::Info);
+
     // 1. Detect Root
     let project_root = find_project_root()?;
 
@@ -578,6 +582,9 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     }
                 }
                 KeyAction::Refresh | KeyAction::None => {}
+                KeyAction::ToggleDebug => {
+                    app.show_debug_console = !app.show_debug_console;
+                }
             }
         }
 

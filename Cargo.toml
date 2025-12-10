@@ -44,6 +44,8 @@ keyring = "2"
 rpassword = "7"
 regex = "1"
 colored = "3.0.0"
+log = "0.4.29"
+tui-logger = { version = "0.17.4", features = ["crossterm"] }
 
 [features]
 default = []

@@ -17,6 +17,7 @@ pub mod widget_issues;
 pub mod widget_kanban;
 pub mod widget_mr_create;
 pub mod widget_status;
+pub mod widget_debug;
 
 // Re-export public API
 pub use app::{App, DragState, InputMode, ViewMode};
@@ -239,7 +240,36 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
     }
 
+    // Render debug console overlay if enabled
+    if app.show_debug_console {
+        let area = centered_rect(size, 80, 50);
+        // Clear background for overlay
+        frame.render_widget(ratatui::widgets::Clear, area);
+        widget_debug::render(frame, area, app);
+    }
+    
     areas
+}
+
+/// Helper function to create a centered rect using up certain percentage of the available rect `r`
+fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }
 
 /// Calculate repository statistics from issues

@@ -54,7 +54,7 @@ pub fn merge_issues(local_issues: &[Issue], remote_issues: Vec<Issue>, provider_
                 
                 if remote_issue.updated > local_updated {
                     // Remote is newer - update but preserve local ID and other remotes
-                    println!("   ⬇ Updating local issue '{}' from remote #{} (remote newer)", local_title, remote_id);
+                    log::info!("⬇ Updating local issue '{}' from remote #{} (remote newer)", local_title, remote_id);
                     let local_id = merged[existing_idx].id.clone();
                     let local_remotes = merged[existing_idx].remotes.clone();
                     
@@ -74,17 +74,17 @@ pub fn merge_issues(local_issues: &[Issue], remote_issues: Vec<Issue>, provider_
                     if !merged[existing_idx].remotes.contains_key(provider_name) {
                         merged[existing_idx].remotes.insert(provider_name.to_string(), remote_id.clone());
                     }
-                    println!("   ⬆ Keeping local changes for '{}' (local newer or equal)", local_title);
+                    log::debug!("⬆ Keeping local changes for '{}' (local newer or equal)", local_title);
                 }
             } else if let Some(title_match_idx) = merged.iter().position(|i| i.title.trim().eq_ignore_ascii_case(remote_issue.title.trim())) {
                  // Match by Title (loose) - link them
-                println!("   🔗 Linking local '{}' to remote #{} by title match", merged[title_match_idx].title, remote_id);
+                log::info!("🔗 Linking local '{}' to remote #{} by title match", merged[title_match_idx].title, remote_id);
                  
                 // Add remote link to local issue
                 merged[title_match_idx].remotes.insert(provider_name.to_string(), remote_id.clone());
             } else {
                 // Really new issue from remote
-                println!("   ➕ Adding new remote issue: '{}'", remote_issue.title);
+                log::info!("➕ Adding new remote issue: '{}'", remote_issue.title);
                 merged.push(remote_issue);
             }
         } else {

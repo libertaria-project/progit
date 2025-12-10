@@ -33,6 +33,8 @@ pub enum KeyAction {
     DeleteIssue,
     /// Trigger sync
     Sync,
+    /// Toggle debug console
+    ToggleDebug,
     /// Quit the application
     Quit,
 }
@@ -132,6 +134,9 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 KeyAction::None
             }
         }
+        
+        // Debug Console
+        KeyCode::F(12) => KeyAction::ToggleDebug,
 
         // Create Merge Request
         KeyCode::Char('M') => {
