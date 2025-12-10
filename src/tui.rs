@@ -84,12 +84,32 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Render view based on mode - wrapped in titled frame
     areas.kanban = match app.view_mode {
         ViewMode::List => {
+            // Calculate repo stats
+            let repo_stats = calculate_repo_stats(&app.issues);
+            
             // Create titled frame for list view
+            let mut title_spans = vec![
+                Span::styled(" 📋 Issues ", colors.accent()),
+                Span::styled(format!("({} total) ", app.issues.len()), colors.dim()),
+            ];
+            
+            // Add repo stats if multi-repo
+            if !repo_stats.is_empty() {
+                title_spans.push(Span::raw("│ "));
+                title_spans.push(Span::styled("📦 ", colors.dim()));
+                for (i, (repo, count)) in repo_stats.iter().enumerate() {
+                    if i > 0 {
+                        title_spans.push(Span::raw(" │ "));
+                    }
+                    title_spans.push(Span::styled(
+                        format!("{}: {}", repo, count),
+                        colors.accent()
+                    ));
+                }
+            }
+            
             let block = Block::default()
-                .title(Line::from(vec![
-                    Span::styled(" 📋 Issues ", colors.accent()),
-                    Span::styled(format!("({} total) ", app.issues.len()), colors.dim()),
-                ]))
+                .title(Line::from(title_spans))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .border_style(colors.border());
@@ -100,12 +120,32 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
             KanbanAreas::default()
         }
         ViewMode::Kanban => {
+            // Calculate repo stats
+            let repo_stats = calculate_repo_stats(&app.issues);
+            
             // Create titled frame for kanban view
+            let mut title_spans = vec![
+                Span::styled(" 📊 Kanban ", colors.accent()),
+                Span::styled(format!("({} issues) ", app.issues.len()), colors.dim()),
+            ];
+            
+            // Add repo stats if multi-repo
+            if !repo_stats.is_empty() {
+                title_spans.push(Span::raw("│ "));
+                title_spans.push(Span::styled("📦 ", colors.dim()));
+                for (i, (repo, count)) in repo_stats.iter().enumerate() {
+                    if i > 0 {
+                        title_spans.push(Span::raw(" │ "));
+                    }
+                    title_spans.push(Span::styled(
+                        format!("{}: {}", repo, count),
+                        colors.accent()
+                    ));
+                }
+            }
+            
             let block = Block::default()
-                .title(Line::from(vec![
-                    Span::styled(" 📊 Kanban ", colors.accent()),
-                    Span::styled(format!("({} issues) ", app.issues.len()), colors.dim()),
-                ]))
+                .title(Line::from(title_spans))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .border_style(colors.border());
@@ -163,6 +203,22 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         render_branch_input(frame, input_area, &app.edit_buffer, &colors);
     }
 
+    // Render repository filter dropdown overlay if open
+    if app.input_mode == InputMode::RepoFilter {
+        if !app.available_repos.is_empty() {
+            // Position dropdown below git bar
+            // Height = repos + 1 ("All") + 2 (border)
+            let dropdown_height = (app.available_repos.len() + 3) as u16;
+            let dropdown_area = Rect {
+                x: chunks[0].x + 5,
+                y: chunks[0].y + chunks[0].height,
+                width: 40,
+                height: dropdown_height.min(15),
+            };
+            render_repo_filter_dropdown(frame, dropdown_area, app, &colors);
+        }
+    }
+
     // Render detail pane overlay if open
     if matches!(app.input_mode, InputMode::DetailView | InputMode::DetailEdit) {
         if let Some(issue) = app.detail_issue() {
@@ -181,6 +237,100 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     }
 
     areas
+}
+
+/// Calculate repository statistics from issues
+fn calculate_repo_stats(issues: &[crate::issue::Issue]) -> Vec<(String, usize)> {
+    use std::collections::HashMap;
+    
+    let mut repo_counts: HashMap<String, usize> = HashMap::new();
+    
+    for issue in issues {
+        if let Some(ref repo) = issue.repo {
+            *repo_counts.entry(repo.clone()).or_insert(0) += 1;
+        }
+    }
+    
+    // Sort by count (descending) for consistent display
+    let mut stats: Vec<(String, usize)> = repo_counts.into_iter().collect();
+    stats.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    stats
+}
+
+/// Render the repository filter dropdown menu
+fn render_repo_filter_dropdown(frame: &mut Frame, area: Rect, app: &App, colors: &ThemeColors) {
+    use ratatui::widgets::{Clear, Paragraph};
+    use ratatui::style::Modifier;
+    
+    // Clear background first to prevent bleed-through
+    frame.render_widget(Clear, area);
+    
+    let mut items: Vec<Line> = Vec::new();
+    
+    // First item: "All Repositories" (index 0)
+    let all_prefix = if app.selected_repo_filter == 0 { "▶ " } else { "  " };
+    let all_style = if app.selected_repo_filter == 0 {
+        colors.selected()
+    } else {
+        colors.normal()
+    };
+    items.push(Line::from(vec![
+        Span::styled(all_prefix, all_style),
+        Span::styled("All Repositories", all_style.add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!(" ({})", app.issues.len()),
+            colors.dim()
+        ),
+    ]));
+    
+    // Add each repository with issue count
+    for (i, repo) in app.available_repos.iter().enumerate() {
+        let idx = i + 1; // Offset by 1 since 0 is "All"
+        let prefix = if app.selected_repo_filter == idx { "▶ " } else { "  " };
+        let style = if app.selected_repo_filter == idx {
+            colors.selected()
+        } else {
+            colors.normal()
+        };
+        
+        // Count issues for this repo
+        let count = app.issues.iter().filter(|issue| {
+            issue.repo.as_ref().map_or(false, |r| r == repo)
+        }).count();
+        
+        // Color-code by repo name (same logic as issue table)
+        let hash = repo.bytes().fold(0u8, |acc, b| acc.wrapping_add(b));
+        let repo_color = match hash % 6 {
+            0 => ratatui::style::Color::Cyan,
+            1 => ratatui::style::Color::Magenta,
+            2 => ratatui::style::Color::Yellow,
+            3 => ratatui::style::Color::Green,
+            4 => ratatui::style::Color::Blue,
+            _ => ratatui::style::Color::Red,
+        };
+        
+        let repo_style = if app.selected_repo_filter == idx {
+            colors.selected()
+        } else {
+            ratatui::style::Style::default().fg(repo_color)
+        };
+        
+        items.push(Line::from(vec![
+            Span::styled(prefix, style),
+            Span::styled(repo, repo_style.add_modifier(Modifier::BOLD)),
+            Span::styled(format!(" ({})", count), colors.dim()),
+        ]));
+    }
+    
+    let dropdown = Paragraph::new(items)
+        .block(
+            Block::default()
+                .title(" Filter by Repository ")
+                .borders(Borders::ALL)
+                .border_style(colors.accent()),
+        );
+
+    frame.render_widget(dropdown, area);
 }
 
 #[cfg(test)]

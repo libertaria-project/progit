@@ -179,6 +179,7 @@ impl SyncProvider for GitLabProvider {
                 created: gl_issue.created_at,
                 updated: gl_issue.updated_at,
                 remotes,
+                repo: None,  // Will be set by multi-repo logic
             };
             issues.push(issue);
         }

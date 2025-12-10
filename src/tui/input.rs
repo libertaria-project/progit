@@ -135,36 +135,43 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
         // Create Merge Request
         KeyCode::Char('M') => {
-            if app.repo_info.is_some() && app.sync_provider.is_some() {
-                // Initialize MR draft with smart defaults
-                if let Some(ref repo) = app.repo_info {
-                    let source_branch = repo.branch.clone();
-                    let target_branch = crate::git::repository::suggest_target_branch(
-                        std::path::Path::new(&repo.path)
-                    ).unwrap_or_else(|_| "main".to_string());
-                    
-                    // Auto-generate title from branch name
-                    let title = source_branch
-                        .replace("feature/", "")
-                        .replace("bugfix/", "Fix: ")
-                        .replace("hotfix/", "Hotfix: ")
-                        .replace('-', " ")
-                        .replace('_', " ");
-                    
-                    app.mr_draft = Some(crate::mr::MergeRequest::new(
-                        &source_branch,
-                        &target_branch,
-                        &title,
-                    ));
-                    app.mr_field = 1; // Start on title field (0=source is readonly)
-                    app.edit_buffer = title;
-                    app.input_mode = InputMode::MRCreate;
-                }
-                KeyAction::Refresh
-            } else {
-                app.set_status("MR creation requires git repo and sync provider");
-                KeyAction::Refresh
+            // Check for git repo first
+            if app.repo_info.is_none() {
+                app.set_status("⚠️  MR creation requires a git repository");
+                return KeyAction::Refresh;
             }
+            
+            // Check for sync provider
+            if app.sync_provider.is_none() {
+                app.set_status("⚠️  No sync provider configured. Run 'prog sync' first or add sync config to .project/config.kdl");
+                return KeyAction::Refresh;
+            }
+            
+            // Initialize MR draft with smart defaults
+            if let Some(ref repo) = app.repo_info {
+                let source_branch = repo.branch.clone();
+                let target_branch = crate::git::repository::suggest_target_branch(
+                    std::path::Path::new(&repo.path)
+                ).unwrap_or_else(|_| "main".to_string());
+                
+                // Auto-generate title from branch name
+                let title = source_branch
+                    .replace("feature/", "")
+                    .replace("bugfix/", "Fix: ")
+                    .replace("hotfix/", "Hotfix: ")
+                    .replace('-', " ")
+                    .replace('_', " ");
+                
+                app.mr_draft = Some(crate::mr::MergeRequest::new(
+                    &source_branch,
+                    &target_branch,
+                    &title,
+                ));
+                app.mr_field = 1; // Start on title field (0=source is readonly)
+                app.edit_buffer = title;
+                app.input_mode = InputMode::MRCreate;
+            }
+            KeyAction::Refresh
         }
 
         // Quit
@@ -289,6 +296,16 @@ fn handle_kanban_key(app: &mut App, key: KeyEvent) -> KeyAction {
         KeyCode::Char('b') => {
             if app.repo_info.is_some() {
                 app.input_mode = InputMode::BranchDropdown;
+                KeyAction::Refresh
+            } else {
+                KeyAction::None
+            }
+        }
+
+        // Repository filter dropdown
+        KeyCode::Char('f') => {
+            if !app.available_repos.is_empty() {
+                app.input_mode = InputMode::RepoFilter;
                 KeyAction::Refresh
             } else {
                 KeyAction::None
@@ -557,6 +574,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::DetailEdit => handle_detail_edit_key(app, key),
         InputMode::Command => handle_command_key(app, key),
         InputMode::MRCreate => handle_mr_create_key(app, key),
+        InputMode::RepoFilter => handle_repo_filter_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -628,7 +646,14 @@ fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             return KeyAction::Refresh;
                         }
                         Err(e) => {
-                            app.set_status(format!("❌ MR creation failed: {}", e));
+                            // Log full error to stderr for debugging
+                            eprintln!("❌ MR Creation Error: {:?}", e);
+                            eprintln!("   MR Details: source={}, target={}, title={}", 
+                                mr.source_branch, mr.target_branch, mr.title);
+                            
+                            // Show error in status bar (truncated if needed)
+                            let error_msg = format!("❌ MR failed: {}", e);
+                            app.set_status(error_msg);
                             return KeyAction::Refresh;
                         }
                     }
@@ -642,6 +667,62 @@ fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
         }
         KeyCode::Char(c) => {
             app.edit_buffer.push(c);
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in repo filter dropdown
+fn handle_repo_filter_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            if !app.available_repos.is_empty() {
+                // Wraparound navigation: 0 (All) + N repos
+                app.selected_repo_filter = (app.selected_repo_filter + 1) % (app.available_repos.len() + 1);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if !app.available_repos.is_empty() {
+                // Wraparound navigation upward
+                let max = app.available_repos.len();
+                app.selected_repo_filter = app.selected_repo_filter.checked_sub(1).unwrap_or(max);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            // Apply filter selection
+            // Index 0 = "All Repositories", 1+ = specific repos
+            let filter_msg = if app.selected_repo_filter == 0 {
+                app.repo_filter = None;
+                "Showing all repositories".to_string()
+            } else {
+                if let Some(repo) = app.available_repos.get(app.selected_repo_filter - 1).cloned() {
+                    app.repo_filter = Some(repo.clone());
+                    format!("Filtered to: {}", repo)
+                } else {
+                    app.repo_filter = None;
+                    "Filter cleared".to_string()
+                }
+            };
+            
+            app.refresh_filter();
+            app.set_status(filter_msg);
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('c') => {
+            // Quick shortcut to clear filter
+            app.repo_filter = None;
+            app.selected_repo_filter = 0;
+            app.refresh_filter();
+            app.set_status("Filter cleared");
+            app.input_mode = InputMode::Normal;
             KeyAction::Refresh
         }
         _ => KeyAction::None,
@@ -917,8 +998,8 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 pub fn help_text(app: &App) -> &'static str {
     match app.input_mode {
         InputMode::Normal => match app.view_mode {
-            ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ Tab:kanban │ /:search │ q:quit",
-            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ Space:status │ Tab:list │ q:quit",
+            ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
+            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",
@@ -931,5 +1012,6 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::DetailEdit => "Type to edit │ Enter:save │ Esc:cancel",
         InputMode::Command => "Type command │ Enter:exec │ Esc:cancel",
         InputMode::MRCreate => "Tab:next field │ Enter:submit │ Esc:cancel",
+        InputMode::RepoFilter => "j/k:nav │ Enter:select │ c:clear │ Esc:cancel",
     }
 }
