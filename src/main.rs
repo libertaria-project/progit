@@ -392,11 +392,11 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     }
                 }
                 KeyAction::SwitchBranch(branch) => {
-                     match crate::git::switch_branch(&project_root, &branch) {
+                     match crate::git::switch_branch(&cwd, &branch) {
                          Ok(_) => {
                              app.set_status(format!("Switched to branch: {}", branch));
                              // Refresh repo info
-                             app.repo_info = detect_repo(&project_root)?;
+                             app.repo_info = detect_repo(&cwd)?;
                          },
                          Err(e) => app.set_status(format!("Failed to switch: {}", e)),
                      }
@@ -415,28 +415,28 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     // For now, let's create "new-branch-<timestamp>"
                     
                     let new_name = format!("branch-{}", chrono::Utc::now().timestamp());
-                    match crate::git::create_branch(&project_root, &new_name) {
+                    match crate::git::create_branch(&cwd, &new_name) {
                         Ok(_) => {
                             app.set_status(format!("Created {}", new_name));
-                            app.repo_info = detect_repo(&project_root)?;
+                            app.repo_info = detect_repo(&cwd)?;
                         },
                          Err(e) => app.set_status(format!("Failed to create: {}", e)),
                     }
                 }
                 KeyAction::CreateBranchNamed(name) => {
-                    match crate::git::create_branch(&project_root, &name) {
+                    match crate::git::create_branch(&cwd, &name) {
                         Ok(_) => {
                             app.set_status(format!("Created & switched to: {}", name));
-                            app.repo_info = detect_repo(&project_root)?;
+                            app.repo_info = detect_repo(&cwd)?;
                         },
                         Err(e) => app.set_status(format!("Failed to create '{}': {}", name, e)),
                     }
                 }
                 KeyAction::DeleteBranch(name) => {
-                    match crate::git::delete_branch(&project_root, &name) {
+                    match crate::git::delete_branch(&cwd, &name) {
                         Ok(_) => {
                             app.set_status(format!("Deleted branch: {}", name));
-                            app.repo_info = detect_repo(&project_root)?;
+                            app.repo_info = detect_repo(&cwd)?;
                         },
                         Err(e) => app.set_status(format!("Failed to delete '{}': {}", name, e)),
                     }
