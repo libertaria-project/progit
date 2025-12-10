@@ -71,6 +71,8 @@ fn render_pm_metrics_bar(frame: &mut Frame, area: Rect, colors: &ThemeColors) {
 
 /// Render PO metrics bar with actual data from App
 pub fn render_with_app(frame: &mut Frame, area: Rect, app: &App, colors: &ThemeColors) -> (Rect, Rect) {
+    let engine = &app.theme_engine;
+    
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -82,45 +84,60 @@ pub fn render_with_app(frame: &mut Frame, area: Rect, app: &App, colors: &ThemeC
         ])
         .split(area);
 
+    let border_style = engine.get("gitbar.border", colors.border());
+
     // Velocity
     let velocity = app.velocity();
+    let velocity_style = engine.get("gitbar.velocity", colors.success());
+    let velocity_val_style = engine.get("gitbar.velocity.value", colors.success().add_modifier(Modifier::BOLD));
+    
     let velocity_widget = Paragraph::new(Line::from(vec![
-        Span::styled("⚡ ", colors.success()),
-        Span::styled(format!("{} pts", velocity), colors.success().add_modifier(Modifier::BOLD)),
+        Span::styled("⚡ ", velocity_style),
+        Span::styled(format!("{} pts", velocity), velocity_val_style),
     ]))
-    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    .block(Block::default().borders(Borders::BOTTOM).border_style(border_style));
     frame.render_widget(velocity_widget, chunks[0]);
 
     // Progress (Done/Total)
     let total = app.issues.len();
     let done = app.issues.iter().filter(|i| i.status == Status::Done).count();
     let progress_pct = if total > 0 { (done * 100) / total } else { 0 };
+    
+    let progress_style = engine.get("gitbar.progress", colors.accent());
+    let progress_val_style = engine.get("gitbar.progress.value", colors.accent().add_modifier(Modifier::BOLD));
+    let progress_dim_style = engine.get("gitbar.progress.dim", colors.dim());
+    
     let progress_widget = Paragraph::new(Line::from(vec![
-        Span::styled("📊 ", colors.accent()),
-        Span::styled(format!("{}/{}", done, total), colors.accent().add_modifier(Modifier::BOLD)),
-        Span::styled(format!(" ({}%)", progress_pct), colors.dim()),
+        Span::styled("📊 ", progress_style),
+        Span::styled(format!("{}/{}", done, total), progress_val_style),
+        Span::styled(format!(" ({}%)", progress_pct), progress_dim_style),
     ]))
-    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    .block(Block::default().borders(Borders::BOTTOM).border_style(border_style));
     frame.render_widget(progress_widget, chunks[1]);
 
     // Active items
     let in_progress = app.issues.iter().filter(|i| i.status == Status::InProgress).count();
-    let active_style = if in_progress > 0 { colors.success() } else { colors.dim() };
+    let active_base_style = if in_progress > 0 { colors.success() } else { colors.dim() };
+    let active_style = engine.get("gitbar.active", active_base_style);
+    
     let active_widget = Paragraph::new(Line::from(vec![
-        Span::styled("🔄 ", colors.accent()),
+        Span::styled("🔄 ", engine.get("gitbar.active.icon", colors.accent())),
         Span::styled(format!("{} active", in_progress), active_style),
     ]))
-    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    .block(Block::default().borders(Borders::BOTTOM).border_style(border_style));
     frame.render_widget(active_widget, chunks[2]);
 
     // Blockers
     let blockers = app.blocker_count();
-    let blocker_style = if blockers > 0 { colors.error().add_modifier(Modifier::BOLD) } else { colors.dim() };
+    let blocker_base_style = if blockers > 0 { colors.error().add_modifier(Modifier::BOLD) } else { colors.dim() };
+    let blocker_style = engine.get("gitbar.blocker", blocker_base_style);
+    let blocker_icon_style = engine.get("gitbar.blocker.icon", colors.error());
+
     let blocker_widget = Paragraph::new(Line::from(vec![
-        Span::styled("🔥 ", colors.error()),
+        Span::styled("🔥 ", blocker_icon_style),
         Span::styled(format!("{} blocked", blockers), blocker_style),
     ]))
-    .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+    .block(Block::default().borders(Borders::BOTTOM).border_style(border_style));
     frame.render_widget(blocker_widget, chunks[3]);
 
     // Sprint info
@@ -129,17 +146,20 @@ pub fn render_with_app(frame: &mut Frame, area: Rect, app: &App, colors: &ThemeC
     } else {
         "No Sprint".to_string()
     };
+    
+    let sprint_style = engine.get("gitbar.sprint", colors.accent());
+    
     let sprint_widget = Paragraph::new(sprint_text)
-        .style(colors.accent())
+        .style(sprint_style)
         .alignment(Alignment::Right)
-        .block(Block::default().borders(Borders::BOTTOM).border_style(colors.border()));
+        .block(Block::default().borders(Borders::BOTTOM).border_style(border_style));
     frame.render_widget(sprint_widget, chunks[4]);
 
     (Rect::default(), Rect::default())
 }
 
 /// Render the remote dropdown menu
-pub fn render_dropdown(frame: &mut Frame, area: Rect, repo: &RepoInfo, selected: usize, colors: &ThemeColors) {
+pub fn render_dropdown(frame: &mut Frame, area: Rect, repo: &RepoInfo, selected: usize, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) {
     use ratatui::widgets::Clear;
     frame.render_widget(Clear, area);
     
@@ -149,15 +169,18 @@ pub fn render_dropdown(frame: &mut Frame, area: Rect, repo: &RepoInfo, selected:
         .enumerate()
         .map(|(i, remote)| {
             let prefix = if i == selected { "▶ " } else { "  " };
-            let style = if i == selected {
-                colors.selected()
-            } else {
-                colors.normal()
-            };
+            
+            let normal_style = engine.get("dropdown.remote.normal", colors.normal());
+            let selected_style = engine.get("dropdown.remote.selected", colors.selected());
+            
+            let style = if i == selected { selected_style } else { normal_style };
+            
+            // Highlight current branch/remote logic could be added here
+            
             Line::from(vec![
                 Span::styled(prefix, style),
                 Span::styled(&remote.name, style.add_modifier(Modifier::BOLD)),
-                Span::styled(" → ", colors.dim()),
+                Span::styled(" → ", engine.get("dropdown.remote.arrow", colors.dim())),
                 Span::styled(format_remote_url(&remote.url), style),
             ])
         })
@@ -166,38 +189,41 @@ pub fn render_dropdown(frame: &mut Frame, area: Rect, repo: &RepoInfo, selected:
     // Add "Add new remote" option
     let mut all_items = items;
     all_items.push(Line::from(vec![
-        Span::styled("  ", colors.normal()),
-        Span::styled("+ Add new remote...", colors.accent()),
+        Span::styled("  ", engine.get("dropdown.remote.normal", colors.normal())),
+        Span::styled("+ Add new remote...", engine.get("dropdown.remote.add", colors.accent())),
     ]));
+
+    let border_style = engine.get("dropdown.border", colors.accent());
+    let title_style = engine.get("dropdown.title", colors.header());
 
     let dropdown = Paragraph::new(all_items)
         .block(
             Block::default()
-                .title(" Remotes ")
+                .title(Span::styled(" Remotes ", title_style))
                 .borders(Borders::ALL)
-                .border_style(colors.accent()),
+                .border_style(border_style),
         );
 
     frame.render_widget(dropdown, area);
 }
 
 /// Render the branch dropdown menu
-pub fn render_branch_dropdown(frame: &mut Frame, area: Rect, repo: &RepoInfo, selected: usize, colors: &ThemeColors) {
+pub fn render_branch_dropdown(frame: &mut Frame, area: Rect, repo: &RepoInfo, selected: usize, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) {
     // Clear background first to prevent bleed-through
     use ratatui::widgets::Clear;
     frame.render_widget(Clear, area);
     
+    let normal_style = engine.get("dropdown.branch.normal", colors.normal());
+    let selected_style = engine.get("dropdown.branch.selected", colors.selected());
+
     let items: Vec<Line> = repo
         .branches
         .iter()
         .enumerate()
         .map(|(i, branch)| {
             let prefix = if i == selected { "▶ " } else { "  " };
-            let style = if i == selected {
-                colors.selected()
-            } else {
-                colors.normal()
-            };
+            let style = if i == selected { selected_style } else { normal_style };
+            
             // Highlight current branch
             let name_style = if branch == &repo.branch {
                 style.add_modifier(Modifier::BOLD).add_modifier(Modifier::UNDERLINED)
@@ -215,38 +241,44 @@ pub fn render_branch_dropdown(frame: &mut Frame, area: Rect, repo: &RepoInfo, se
     let mut all_items = items;
     let new_idx = repo.branches.len();
     let prefix = if selected == new_idx { "▶ " } else { "  " };
-    let style = if selected == new_idx { colors.selected() } else { colors.normal() };
+    let style = if selected == new_idx { selected_style } else { normal_style };
     
     all_items.push(Line::from(vec![
         Span::styled(prefix, style),
-        Span::styled("+ New Branch...", colors.accent()),
+        Span::styled("+ New Branch...", engine.get("dropdown.branch.add", colors.accent())),
     ]));
 
+    let border_style = engine.get("dropdown.border", colors.accent());
+    let title_style = engine.get("dropdown.title", colors.header());
+    
     let dropdown = Paragraph::new(all_items)
         .block(
             Block::default()
-                .title(" Branches ")
+                .title(Span::styled(" Branches ", title_style))
                 .borders(Borders::ALL)
-                .border_style(colors.accent()),
+                .border_style(border_style),
         );
 
     frame.render_widget(dropdown, area);
 }
 
 /// Render the branch name input field
-pub fn render_branch_input(frame: &mut Frame, area: Rect, input: &str, colors: &ThemeColors) {
+pub fn render_branch_input(frame: &mut Frame, area: Rect, input: &str, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) {
     let content = Line::from(vec![
-        Span::styled("New branch: ", colors.dim()),
-        Span::styled(input, colors.accent().add_modifier(Modifier::BOLD)),
-        Span::styled("▌", colors.accent()), // Cursor
+        Span::styled("New branch: ", engine.get("input.label", colors.dim())),
+        Span::styled(input, engine.get("input.text", colors.accent().add_modifier(Modifier::BOLD))),
+        Span::styled("▌", engine.get("input.cursor", colors.accent())), // Cursor
     ]);
     
+    let border_style = engine.get("input.border", colors.success());
+    let title_style = engine.get("input.title", colors.header());
+
     let input_box = Paragraph::new(content)
         .block(
             Block::default()
-                .title(" Create Branch ")
+                .title(Span::styled(" Create Branch ", title_style))
                 .borders(Borders::ALL)
-                .border_style(colors.success()),
+                .border_style(border_style),
         );
 
     frame.render_widget(input_box, area);

@@ -10,6 +10,7 @@
 
 pub mod app;
 pub mod input;
+pub mod style;
 pub mod theme;
 pub mod widget_detail;
 pub mod widget_issues;
@@ -170,7 +171,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
                 width: 50.min(size.width - 20),
                 height: dropdown_height.min(10),
             };
-            render_remote_dropdown(frame, dropdown_area, repo, app.selected_remote, &colors);
+            render_remote_dropdown(frame, dropdown_area, repo, app.selected_remote, &colors, &app.theme_engine);
         }
     }
 
@@ -187,7 +188,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
                  height: dropdown_height.min(15),
              };
              use crate::git::render_branch_dropdown;
-             render_branch_dropdown(frame, dropdown_area, repo, app.selected_branch, &colors);
+             render_branch_dropdown(frame, dropdown_area, repo, app.selected_branch, &colors, &app.theme_engine);
         }
     }
 
@@ -200,7 +201,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
             height: 3,
         };
         use crate::git::render_branch_input;
-        render_branch_input(frame, input_area, &app.edit_buffer, &colors);
+        render_branch_input(frame, input_area, &app.edit_buffer, &colors, &app.theme_engine);
     }
 
     // Render repository filter dropdown overlay if open
@@ -262,24 +263,28 @@ fn render_repo_filter_dropdown(frame: &mut Frame, area: Rect, app: &App, colors:
     use ratatui::widgets::{Clear, Paragraph};
     use ratatui::style::Modifier;
     
+    let engine = &app.theme_engine;
+
     // Clear background first to prevent bleed-through
     frame.render_widget(Clear, area);
     
     let mut items: Vec<Line> = Vec::new();
     
+    // Styles
+    let normal_style = engine.get("dropdown.filter.normal", colors.normal());
+    let selected_style = engine.get("dropdown.filter.selected", colors.selected());
+    let dim_style = engine.get("dropdown.filter.dim", colors.dim());
+    
     // First item: "All Repositories" (index 0)
     let all_prefix = if app.selected_repo_filter == 0 { "▶ " } else { "  " };
-    let all_style = if app.selected_repo_filter == 0 {
-        colors.selected()
-    } else {
-        colors.normal()
-    };
+    let all_style = if app.selected_repo_filter == 0 { selected_style } else { normal_style };
+    
     items.push(Line::from(vec![
         Span::styled(all_prefix, all_style),
         Span::styled("All Repositories", all_style.add_modifier(Modifier::BOLD)),
         Span::styled(
             format!(" ({})", app.issues.len()),
-            colors.dim()
+            dim_style
         ),
     ]));
     
@@ -287,11 +292,7 @@ fn render_repo_filter_dropdown(frame: &mut Frame, area: Rect, app: &App, colors:
     for (i, repo) in app.available_repos.iter().enumerate() {
         let idx = i + 1; // Offset by 1 since 0 is "All"
         let prefix = if app.selected_repo_filter == idx { "▶ " } else { "  " };
-        let style = if app.selected_repo_filter == idx {
-            colors.selected()
-        } else {
-            colors.normal()
-        };
+        let style = if app.selected_repo_filter == idx { selected_style } else { normal_style };
         
         // Count issues for this repo
         let count = app.issues.iter().filter(|issue| {
@@ -299,35 +300,41 @@ fn render_repo_filter_dropdown(frame: &mut Frame, area: Rect, app: &App, colors:
         }).count();
         
         // Color-code by repo name (same logic as issue table)
-        let hash = repo.bytes().fold(0u8, |acc, b| acc.wrapping_add(b));
-        let repo_color = match hash % 6 {
-            0 => ratatui::style::Color::Cyan,
-            1 => ratatui::style::Color::Magenta,
-            2 => ratatui::style::Color::Yellow,
-            3 => ratatui::style::Color::Green,
-            4 => ratatui::style::Color::Blue,
-            _ => ratatui::style::Color::Red,
-        };
+        // Allow override via config: "repo.color.frontend"
+        let repo_config_key = format!("repo.color.{}", repo);
         
         let repo_style = if app.selected_repo_filter == idx {
-            colors.selected()
+            style // Keep selection style if selected
         } else {
-            ratatui::style::Style::default().fg(repo_color)
+             // Check if specific repo color is configured, otherwise use hash
+            let hash = repo.bytes().fold(0u8, |acc, b| acc.wrapping_add(b));
+            let default_color = match hash % 6 {
+                0 => ratatui::style::Color::Cyan,
+                1 => ratatui::style::Color::Magenta,
+                2 => ratatui::style::Color::Yellow,
+                3 => ratatui::style::Color::Green,
+                4 => ratatui::style::Color::Blue,
+                _ => ratatui::style::Color::Red,
+            };
+            engine.get(&repo_config_key, ratatui::style::Style::default().fg(default_color))
         };
         
         items.push(Line::from(vec![
             Span::styled(prefix, style),
             Span::styled(repo, repo_style.add_modifier(Modifier::BOLD)),
-            Span::styled(format!(" ({})", count), colors.dim()),
+            Span::styled(format!(" ({})", count), dim_style),
         ]));
     }
     
+    let border_style = engine.get("dropdown.border", colors.accent());
+    let title_style = engine.get("dropdown.title", colors.header());
+
     let dropdown = Paragraph::new(items)
         .block(
             Block::default()
-                .title(" Filter by Repository ")
+                .title(Span::styled(" Filter by Repository ", title_style))
                 .borders(Borders::ALL)
-                .border_style(colors.accent()),
+                .border_style(border_style),
         );
 
     frame.render_widget(dropdown, area);

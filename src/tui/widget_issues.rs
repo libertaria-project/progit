@@ -16,11 +16,13 @@ use ratatui::{
 /// Render the issues table
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let colors = app.theme.colors();
+    let engine = &app.theme_engine;
 
     // Table header
+    let header_style = engine.get("issues.header", colors.header());
     let header_cells = ["ID", "Title", "Status", "Effort", "Repo", "Tags"]
         .iter()
-        .map(|h| Cell::from(*h).style(colors.header()));
+        .map(|h| Cell::from(*h).style(header_style));
     let header = Row::new(header_cells).height(1);
 
     // Table rows
@@ -28,7 +30,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .filtered
         .iter()
         .filter_map(|&idx| app.issues.get(idx))
-        .map(|issue| issue_row(issue, &colors))
+        .map(|issue| issue_row(issue, &colors, engine))
         .collect();
 
     // Column widths
@@ -42,15 +44,18 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     ];
 
     // Create table
+    let border_style = engine.get("issues.border", colors.border());
+    let selected_style = engine.get("issues.row.selected", colors.selected());
+    
     let table = Table::new(rows, widths)
         .header(header)
         .block(
             Block::default()
                 .title(table_title(app))
                 .borders(Borders::ALL)
-                .border_style(colors.border()),
+                .border_style(border_style),
         )
-        .row_highlight_style(colors.selected())
+        .row_highlight_style(selected_style)
         .highlight_symbol("▶ ");
 
     // Render with selection state
@@ -61,16 +66,18 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Create a row for an issue
-fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors) -> Row<'a> {
+fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) -> Row<'a> {
+    // Determine row style based on status and blocking state
     // Determine row style based on status and blocking state
     let row_style = if issue.is_blocker() || issue.is_overdue() {
-        colors.error_bg()
-    } else if issue.status == Status::InProgress {
-        colors.success_bg()
-    } else if issue.status == Status::Done {
-        colors.done_bg()
+        // "issue.row.error" or base "issue.row"
+        engine.get_conditional("issues.row", "error", colors.error_bg())
     } else {
-        colors.normal()
+        match issue.status {
+            Status::InProgress => engine.get_conditional("issues.row", "active", colors.success_bg()),
+            Status::Done => engine.get_conditional("issues.row", "done", colors.done_bg()),
+            _ => engine.get("issues.row.normal", colors.normal()),
+        }
     };
 
     let status_style = match issue.status {

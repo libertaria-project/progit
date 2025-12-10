@@ -6,6 +6,7 @@ use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
 use crate::tui::theme::Theme;
 use crate::sync::SyncProvider;
+use crate::tui::style::ThemeEngine;
 
 /// Current view mode
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -137,6 +138,9 @@ pub struct App {
     
     /// Current field in MR creation form (0=title, 1=description, 2=target_branch)
     pub mr_field: usize,
+
+    /// Style engine
+    pub theme_engine: ThemeEngine,
 }
 
 impl Default for App {
@@ -162,6 +166,7 @@ impl App {
             should_quit: false,
             repo_info: None,
             drag_state: DragState::default(),
+            theme_engine: ThemeEngine::new(&std::collections::HashMap::new()), // Initialize with empty config
             kanban_column: 0,
             kanban_row: 0,
 

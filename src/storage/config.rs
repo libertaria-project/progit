@@ -21,6 +21,18 @@ pub struct Config {
     
     /// Web app settings (future commercial feature)
     pub web: Option<WebConfig>,
+    
+    /// Custom styles (key = component/name, value = StyleConfig)
+    pub styles: std::collections::HashMap<String, StyleConfig>,
+}
+
+/// Style configuration
+#[derive(Debug, Clone)]
+pub struct StyleConfig {
+    pub fg: Option<String>,
+    pub bg: Option<String>,
+    pub modifiers: Vec<String>, // "bold", "italic", "dim", "underlined"
+    pub inherits: Option<String>, // Name of style to inherit from
 }
 
 /// Repository configuration (multi-repo support)
@@ -101,6 +113,14 @@ pub fn parse_config(content: &str) -> Result<Config> {
                 .map(|s| s.to_string())
         });
     
+    // Parse styles
+    let styles = doc
+        .nodes()
+        .iter()
+        .find(|n| n.name().value() == "styles")
+        .map(parse_styles_node)
+        .unwrap_or_default();
+    
     // Parse web config (future feature)
     let web = doc
         .nodes()
@@ -108,7 +128,45 @@ pub fn parse_config(content: &str) -> Result<Config> {
         .find(|n| n.name().value() == "web")
         .map(parse_web_node);
 
-    Ok(Config { sync, repos, theme, web })
+    Ok(Config { sync, repos, theme, web, styles })
+}
+
+fn parse_styles_node(node: &KdlNode) -> std::collections::HashMap<String, StyleConfig> {
+    let mut styles = std::collections::HashMap::new();
+    let children = node.children().map(|c| c.nodes()).unwrap_or(&[]);
+    
+    for child in children {
+        if child.name().value() == "style" {
+            if let Some(name) = child.entries().first().and_then(|e| e.value().as_string()) {
+                let style_children = child.children().map(|c| c.nodes()).unwrap_or(&[]);
+                
+                let fg = get_string_value(style_children, "fg");
+                let bg = get_string_value(style_children, "bg");
+                
+                // Handle inheritance
+                let inherits = get_string_value(style_children, "inherits");
+                
+                // Collect modifiers
+                let mut modifiers = Vec::new();
+                for modifier_node in style_children {
+                    let name = modifier_node.name().value();
+                    if ["bold", "italic", "dim", "underlined", "reversed"].contains(&name) {
+                         let is_true = modifier_node.entries().first()
+                             .and_then(|e| e.value().as_bool())
+                             .unwrap_or(true);
+                        
+                         if is_true {
+                             modifiers.push(name.to_string());
+                         }
+                    }
+                }
+                
+                styles.insert(name.to_string(), StyleConfig { fg, bg, modifiers, inherits });
+            }
+        }
+    }
+    
+    styles
 }
 
 fn parse_repos_node(node: &KdlNode) -> Vec<RepoConfig> {

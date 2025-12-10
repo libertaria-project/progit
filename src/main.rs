@@ -272,6 +272,14 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                 _ => tui::Theme::Nord,
             };
         }
+
+        // Initialize style engine with configured styles
+        app.theme_engine = crate::tui::style::ThemeEngine::new(&config.styles);
+        
+        // Validate styles and warn if needed
+        if let Err(e) = app.theme_engine.validate() {
+            app.set_status(format!("Style Config Error: {}", e));
+        }
     }
 
     // Load issues
