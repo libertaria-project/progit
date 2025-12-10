@@ -128,6 +128,7 @@ impl SyncProvider for ForgejoProvider {
                 created: api_issue.created_at,
                 updated: api_issue.updated_at,
                 remotes,
+                repo: None,  // Will be set by multi-repo logic
             };
             issues.push(issue);
         }

@@ -143,6 +143,11 @@ pub struct Issue {
     /// External references (e.g. "forgejo" -> "42")
     #[serde(default)]
     pub remotes: std::collections::HashMap<String, String>,
+    
+    /// Repository ownership (for multi-repo setups)
+    /// e.g., "frontend", "backend", "infra"
+    #[serde(default)]
+    pub repo: Option<String>,
 }
 
 impl Issue {
@@ -165,6 +170,7 @@ impl Issue {
             created: now,
             updated: now,
             remotes: std::collections::HashMap::new(),
+            repo: None,
         }
     }
 
@@ -213,6 +219,12 @@ impl Issue {
     /// Builder: set blocked status
     pub fn with_blocked(mut self, blocked: bool) -> Self {
         self.blocked = blocked;
+        self
+    }
+    
+    /// Builder: set repository
+    pub fn with_repo(mut self, repo: impl Into<String>) -> Self {
+        self.repo = Some(repo.into());
         self
     }
 

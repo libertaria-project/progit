@@ -75,6 +75,7 @@ pub fn parse_kdl(content: &str) -> Result<Issue> {
     let created = get_datetime_value(children, "created").unwrap_or_else(Utc::now);
     let updated = get_datetime_value(children, "updated").unwrap_or_else(Utc::now);
     let remotes = get_remotes(children);
+    let repo = get_string_value(children, "repo");
 
     Ok(Issue {
         id,
@@ -92,6 +93,7 @@ pub fn parse_kdl(content: &str) -> Result<Issue> {
         created,
         updated,
         remotes,
+        repo,
     })
 }
 
@@ -163,6 +165,10 @@ pub fn serialize_kdl(issue: &Issue) -> String {
             lines.push(format!("        {} \"{}\"", provider, remote_id));
         }
         lines.push("    }".to_string());
+    }
+    
+    if let Some(ref repo) = issue.repo {
+        lines.push(format!("    repo \"{}\"", repo));
     }
 
     lines.push(format!("    created \"{}\"", issue.created.to_rfc3339()));
