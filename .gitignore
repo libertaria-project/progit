@@ -1,0 +1,72 @@
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb
+
+# IDE - VSCode
+.vscode/
+*.code-workspace
+
+# IDE - JetBrains
+.idea/
+*.iml
+*.iws
+
+# IDE - Vim
+*.swp
+*.swo
+*~
+.*.sw[a-z]
+*.un~
+Session.vim
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Project specific
+.projects/.cache/
+.agent/
+
+# Archives
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.7z
+*.rar
+
+# Build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Package managers
+node_modules/
+
+# Progit
+.progit/
+.project/config.kdl
+

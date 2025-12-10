@@ -1,0 +1,11 @@
+issue {
+    id "feature-007"
+    title "Implement attachment support"
+    description "Allow attaching files, screenshots, and links to issues. Store in .project/attachments/ with references in KDL."
+    status "Backlog"
+    effort "Large"
+    blocked true
+    due "2025-12-02T23:59:59Z"
+    created "2025-11-25T13:45:00Z"
+    updated "2025-12-09T12:00:00Z"
+}

@@ -1,0 +1,62 @@
+[package]
+name = "progit"
+version = "0.2.0"
+edition = "2021"
+authors = ["Markus Maiwald"]
+description = "⚡ Blazing-fast terminal issue tracker with Kanban, GitLab/Forgejo sync, and intelligent time tracking"
+license = "EUPL-1.2"
+repository = "https://github.com/yourusername/progit"
+keywords = ["git", "issue-tracker", "tui", "kanban", "project-management"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+[dependencies]
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Storage
+kdl = "4.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Time & IDs
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Async (for web layer)
+tokio = { version = "1.0", features = ["full"], optional = true }
+axum = { version = "0.7", optional = true }
+askama = { version = "0.12", optional = true }
+git2 = { version = "0.20.3", features = ["vendored-openssl"] }
+
+# Sync & Security
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+urlencoding = "2.1"
+keyring = "2"
+rpassword = "7"
+regex = "1"
+
+[features]
+default = []
+web = ["tokio", "axum", "askama"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[[bin]]
+name = "prog"
+path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3.23.0"

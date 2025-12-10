@@ -1,0 +1,240 @@
+//! Forgejo Sync Adapter
+//!
+//! Implements synchronization with Forgejo/Gitea instances.
+
+use anyhow::{Result, Context, anyhow};
+use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
+use crate::issue::{Issue, Status, Effort};
+use crate::sync::{SyncProvider, keyring};
+use crate::storage::config::SyncConfig;
+use chrono::{DateTime, Utc};
+
+pub struct ForgejoProvider {
+    config: SyncConfig,
+    client: Client,
+}
+
+impl ForgejoProvider {
+    pub fn new(config: SyncConfig) -> Self {
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap_or_else(|_| Client::new());
+            
+        Self {
+            config,
+            client,
+        }
+    }
+
+    fn get_token(&self) -> Result<String> {
+        keyring::get_token(&self.config.url, &self.config.owner)
+            .or_else(|_| self.login_interactive())
+    }
+
+    fn login_interactive(&self) -> Result<String> {
+        println!("🔒 Authentication required for {}", self.config.url);
+        let token = keyring::prompt_for_token(&self.config.url)?;
+        keyring::set_token(&self.config.url, &self.config.owner, &token)?;
+        Ok(token)
+    }
+    
+    // API Models
+    
+    fn base_url(&self) -> String {
+        format!("{}/api/v1/repos/{}/{}", self.config.url, self.config.owner, self.config.repo)
+    }
+}
+
+// Forgejo API Models
+#[derive(Debug, Serialize, Deserialize)]
+struct ForgejoIssue {
+    number: i64,
+    title: String,
+    body: Option<String>,
+    state: String, // "open" or "closed"
+    labels: Vec<ForgejoLabel>,
+    assignee: Option<ForgejoUser>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ForgejoLabel {
+    name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ForgejoUser {
+    username: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CreateIssuePayload {
+    title: String,
+    body: String,
+    labels: Option<Vec<i64>>, // Label IDs needed? Or can we create by name? Forgejo usually needs IDs. 
+    // For MVP, we might skip labels or try to use names if API supports it (sometimes it does via specialized endpoints or just ignores unknown)
+    // Actually Forgejo/Gitea API for creating issue takes `labels` as []int64.
+    // Simplifying: We will put tags in the body for now or ignore them to start simple.
+}
+
+impl SyncProvider for ForgejoProvider {
+    fn login(&self) -> Result<()> {
+        let _ = self.get_token()?;
+        println!("✅ Authenticated with Forgejo");
+        Ok(())
+    }
+
+    fn pull(&self) -> Result<Vec<Issue>> {
+        let token = self.get_token()?;
+        let url = format!("{}/issues", self.base_url());
+        
+        // Fetch open issues
+        let response = self.client.get(&url)
+            .header("Authorization", format!("token {}", token))
+            .query(&[("state", "all")])
+            .send()
+            .context("Failed to fetch issues from Forgejo")?;
+            
+        if !response.status().is_success() {
+            return Err(anyhow!("API Error: {}", response.status()));
+        }
+        
+        let api_issues: Vec<ForgejoIssue> = response.json()?;
+        let mut issues = Vec::new();
+        
+        for api_issue in api_issues {
+            let status = if api_issue.state == "closed" { Status::Done } else { Status::Backlog };
+            
+            let mut remotes = std::collections::HashMap::new();
+            remotes.insert(self.config.provider.clone(), api_issue.number.to_string());
+
+            let issue = Issue {
+                id: uuid::Uuid::new_v4().to_string(), // New ID for imported issue (dedup logic in main.rs needed)
+                title: api_issue.title,
+                description: api_issue.body.unwrap_or_default(),
+                status,
+                effort: Effort::default(),
+                tags: api_issue.labels.into_iter().map(|l| l.name).collect(),
+                assignee: api_issue.assignee.map(|u| u.username),
+                sprint: None,
+                due: None,
+                started: None,
+                completed: None,
+                blocked: false,
+                created: api_issue.created_at,
+                updated: api_issue.updated_at,
+                remotes,
+            };
+            issues.push(issue);
+        }
+        
+        Ok(issues)
+    }
+
+    fn push(&self, issues: &mut [Issue]) -> Result<()> {
+        let token = self.get_token()?;
+        let base_url = format!("{}/issues", self.base_url());
+        
+        // println!("📤 Synching {} issues with Forgejo...", issues.len());
+        
+        for issue in issues {
+            let payload = serde_json::json!({
+                "title": issue.title,
+                "body": issue.description,
+                "closed": matches!(issue.status, Status::Done),
+                "assignee": issue.assignee.as_deref().unwrap_or(""),
+            });
+
+            // Check if issue is already linked
+            if let Some(remote_id) = issue.remotes.get(&self.config.provider) {
+                // UPDATE existing issue
+                let url = format!("{}/{}", base_url, remote_id);
+                // println!("   Updating #{}: title='{}', body='{}'", remote_id, issue.title, &issue.description[..issue.description.len().min(50)]);
+                
+                // Forgejo API: PATCH to update
+                let response = self.client.patch(&url)
+                    .header("Authorization", format!("token {}", token))
+                    .header("Content-Type", "application/json")
+                    .json(&payload)
+                    .send()
+                    .context(format!("Failed to update issue #{}", remote_id))?;
+                
+                let status = response.status();
+                let resp_body = response.text().unwrap_or_default();
+                if status.is_success() {
+                    // Parse response to verify body was updated
+                    if let Ok(updated) = serde_json::from_str::<serde_json::Value>(&resp_body) {
+                        let body_str = updated["body"].as_str().unwrap_or("");
+                        // println!("DEBUG: Response Body='{}'", body_str);[..body_str.len().min(50)]);
+                    }
+                } else {
+                    eprintln!("   ⚠️ Update failed ({}): {}", status, resp_body);
+                }
+            } else {
+                // CREATE new issue
+                // println!("   Creating '{}'...", issue.title); // verbose
+                
+                let response = self.client.post(&base_url)
+                    .header("Authorization", format!("token {}", token))
+                    .json(&payload)
+                    .send()
+                    .context(format!("Failed to create issue: {}", issue.title))?;
+
+                if response.status().is_success() {
+                    let created_issue: ForgejoIssue = response.json()?;
+                    // Link local issue to remote
+                    issue.remotes.insert(self.config.provider.clone(), created_issue.number.to_string());
+                    // println!("   Linked to #{}", created_issue.number);
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    fn delete_missing(&self, local_issues: &[Issue]) -> Result<usize> {
+        let token = self.get_token()?;
+        // specific to Forgejo/Gitea: delete is at /repos/{owner}/{repo}/issues/{index}
+        // base_url() returns .../api/v1/repos/{owner}/{repo}
+        // so we need to construct the url correctly.
+        // The pull() used .../issues, so deletion is .../issues/{index}
+        let url_base = format!("{}/issues", self.base_url());
+        
+        // Get all remote issue IIDs
+        let remote_issues = self.pull()?;
+        let remote_ids: std::collections::HashSet<String> = remote_issues.iter()
+            .filter_map(|i| i.remotes.get(&self.config.provider).cloned())
+            .collect();
+        
+        // Get local issue IIDs (for this provider)
+        let local_ids: std::collections::HashSet<String> = local_issues.iter()
+            .filter_map(|i| i.remotes.get(&self.config.provider).cloned())
+            .collect();
+        
+        // IDs to delete = remote - local
+        let to_delete: Vec<_> = remote_ids.difference(&local_ids).collect();
+        
+        let mut deleted = 0;
+        for iid in to_delete {
+            let url = format!("{}/{}", url_base, iid);
+            // println!("   🗑️  Deleting remote issue #{}", iid);
+            
+            let response = self.client.delete(&url)
+                .header("Authorization", format!("token {}", token))
+                .send()
+                .context(format!("Failed to delete issue #{}", iid))?;
+                
+            if response.status().is_success() {
+                deleted += 1;
+            } else {
+                eprintln!("   ⚠️ Delete failed: {}", response.text().unwrap_or_default());
+            }
+        }
+        
+        Ok(deleted)
+    }
+}

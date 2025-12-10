@@ -1,0 +1,9 @@
+issue {
+    id "docs-006"
+    title "Write comprehensive user documentation"
+    description "Create detailed docs covering installation, configuration, workflow, keyboard shortcuts, and sync setup for all supported forges."
+    status "Backlog"
+    effort "Medium"
+    created "2025-12-09T08:00:00Z"
+    updated "2025-12-09T08:00:00Z"
+}

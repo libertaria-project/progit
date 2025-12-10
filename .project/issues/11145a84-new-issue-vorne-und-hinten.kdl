@@ -1,0 +1,14 @@
+issue id="11145a84-115c-4ea2-84db-831714835b69" {
+    title "New Issue vorne und hinten"
+    description "dazu unten und oben"
+    status "backlog"
+    effort 3
+    tags {
+        - "test"
+    }
+    remotes {
+        gitlab "6"
+    }
+    created "2025-12-09T20:20:30.175+00:00"
+    updated "2025-12-09T20:45:32.007+00:00"
+}

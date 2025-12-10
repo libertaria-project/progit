@@ -1,0 +1,18 @@
+issue id="557a70c3-f91e-41f1-b385-d3451e736a05" {
+    title "Welcome to Projects"
+    description "This is a sample issue to get you started."
+    status "in-progress"
+    effort 13
+    assignee "markus.maiwald"
+    due "2025-12-08T23:59:59+00:00"
+    started "2025-12-03T00:00:00+00:00"
+    tags {
+        - "rabe"
+        - "name"
+    }
+    remotes {
+        gitlab "4"
+    }
+    created "2025-12-09T19:11:27.424+00:00"
+    updated "2025-12-09T22:00:01.007053766+00:00"
+}

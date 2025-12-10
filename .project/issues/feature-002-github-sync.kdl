@@ -1,0 +1,9 @@
+issue {
+    id "feature-002"
+    title "Implement GitHub sync adapter"
+    description "Add GitHub API integration to sync issues with GitHub repositories. Should follow the same pattern as GitLab and Forgejo adapters."
+    status "Backlog"
+    effort "Large"
+    created "2025-12-08T10:30:00Z"
+    updated "2025-12-08T10:30:00Z"
+}

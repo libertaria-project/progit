@@ -1,0 +1,14 @@
+issue id="409e6d9c-c733-46bd-8a43-cd0f90eade39" {
+    title "Willkommen - Welcome"
+    description "This is a sample issue to get you started. Press 'n' to create new issues, Space to cycle status."
+    status "in-progress"
+    effort 3
+    tags {
+        - "test"
+    }
+    remotes {
+        gitlab "2"
+    }
+    created "2025-12-09T19:11:25.834+00:00"
+    updated "2025-12-09T21:48:24.283+00:00"
+}

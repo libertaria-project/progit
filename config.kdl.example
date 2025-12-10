@@ -1,0 +1,30 @@
+// ProGit Configuration Example
+// Copy this to .project/config.kdl and customize for your project
+
+config {
+    // Sprint duration in days
+    sprint-duration-days 14
+    
+    // Team members (for assignee dropdown/autocomplete)
+    team {
+        - "alice"
+        - "bob"
+        - "charlie"
+    }
+    
+    // Default effort estimate for new issues (1-5)
+    default-effort 3
+}
+
+// Sync configuration (optional)
+// Uncomment and configure if you want to sync with a forge:
+//
+// sync {
+//     provider "gitlab"              // or "forgejo", "github"
+//     url "https://gitlab.com"       // Your GitLab/Forgejo instance URL
+//     owner "your-username"          // Repository owner/group
+//     repo "your-repo"               // Repository name
+// }
+
+// Theme: nord, gruvbox, dracula, cyberpunk
+theme "nord"
