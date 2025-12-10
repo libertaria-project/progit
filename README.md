@@ -1,9 +1,11 @@
 # 🚀 ProGit
 
 > **"Your Code. Your Repository. Your Rules. Your Issues."**  
-> *Decentralized Issue Tracking for the Ungovernable.*
+> *The Terminal-First Forge Alternative.*
 
-## **We Unfuck GitHub & GitLab.**
+## **We're Rivaling GitLab, GitHub, and Forgejo.**
+
+### **With a Single Binary. And a Plugin Ecosystem.**
 
 **Your issues belong in YOUR repository. Not their database.**
 
@@ -11,25 +13,35 @@ For too long, GitHub and GitLab have held your project's issues hostage. They se
 
 **ProGit breaks the chains.**
 
+We're not just an issue tracker. We're building a **complete forge alternative** that runs in your terminal:
+
+- ✅ **Issue Tracking** (Done - you're using it now)
+- ✅ **Merge Request Creation** (Done - press `M`)
+- 🚧 **Code Review in Terminal** (Coming - comment on diffs without browser)
+- 🚧 **CI/CD Pipeline Viewer** (Coming - watch builds in real-time)
+- 🚧 **Wiki/Docs Management** (Coming - markdown files, git-tracked)
+- 🚧 **Plugin System** (Coming - extend with Lua/WASM)
+
 Store your issues as **human-readable KDL files** directly in your git repository. Track them, diff them, review them in pull requests. Your issues are YOUR data, versioned alongside your code, accessible forever—even if GitHub shuts down tomorrow.
 
 We deliver what they gatekeep:
 
   - 🎯 **Full Kanban Board** (drag-and-drop, visual status)
   - 📊 **Time Tracking** (due dates, effort estimates, velocity)
+  - 🔀 **Browser-Free MR Creation** (press `M`, done)
   - 🔄 **Bidirectional Sync** (GitLab, Forgejo, GitHub coming soon)
   - ⚡ **Blazing Fast TUI** (Pure Rust, 5MB binary, no Electron bloat)
-  - 🎭 **Beautiful Themes** (Nord, Gruvbox, Dracula, Cyberpunk)
+  - 🎭 **Beautiful Themes** (Nord, Gruvbox, Dracula, Cyberpunk, Vibe)
   - 💾 **Git-Native Storage** (`.project/issues/*.kdl` — transparent, diffable files)
   - 🔒 **100% Local-First** (work offline, sync when YOU decide)
   - ⌨️ **Keyboard-Driven** (Vim-style navigation, command palette)
   - 🆓 **Zero Subscriptions** (EUPL-1.2 license, free forever)
 
-**This is issue tracking, democratized.**
+**This is the forge, democratized.**
 
-> *"What GitLab sells, we give away. What GitHub hides, we expose. Your code, your issues, your repository."*
+> *"What GitLab sells, we give away. What GitHub hides, we expose. Your code, your issues, your repository. One binary. Infinite sovereignty."*
 
-📊 **[See how ProGit compares to Jira, Linear, and GitHub Issues →](https://www.google.com/search?q=COMPARISON.md)**
+📊 **[See how ProGit compares to Jira, Linear, and GitHub Issues →](COMPARISON.md)**
 
 -----
 
@@ -197,14 +209,40 @@ src/
 
 -----
 
-## 🛣️ Roadmap
+## 🛣️ Roadmap: The Terminal Forge
 
-  - [ ] GitHub Sync Adapter
-  - [ ] Bulk Operations (Tagging, Status)
-  - [ ] Command Palette (`:`)
-  - [ ] CSV/JSON Export
-  - [ ] Custom Fields
-  - [ ] Attachments Support
+### **Phase 1: Issue Sovereignty** ✅ DONE
+  - [x] Kanban Board with drag-and-drop
+  - [x] List view with search/filter
+  - [x] Detail editing (all fields)
+  - [x] GitLab/Forgejo bidirectional sync
+  - [x] Browser-free MR creation (press `M`)
+  - [x] Beautiful themes (Vibe, Nord, Gruvbox, etc.)
+
+### **Phase 2: Code Review Liberation** 🚧 IN PROGRESS
+  - [ ] MR list view (see all open MRs)
+  - [ ] Diff viewer in TUI
+  - [ ] Comment on code lines (without browser)
+  - [ ] Approve/reject MRs from terminal
+  - [ ] Multi-provider sync (GitLab + Forgejo simultaneously)
+
+### **Phase 3: CI/CD Visibility** 🔜 NEXT
+  - [ ] Pipeline status in status bar
+  - [ ] Live build logs in TUI
+  - [ ] Job retry/cancel from terminal
+  - [ ] Artifact browser
+
+### **Phase 4: Complete Forge** 🎯 VISION
+  - [ ] Wiki/Docs management (markdown, git-tracked)
+  - [ ] Release management
+  - [ ] Container registry browser
+  - [ ] Plugin system (Lua/WASM)
+  - [ ] Custom workflows
+
+### **The Goal:**
+**Replace GitLab/GitHub/Forgejo with a single 5MB binary.**
+
+No web UI. No Electron. No vendor lock-in. Just pure terminal power.
 
 -----
 

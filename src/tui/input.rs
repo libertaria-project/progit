@@ -135,36 +135,43 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
         // Create Merge Request
         KeyCode::Char('M') => {
-            if app.repo_info.is_some() && app.sync_provider.is_some() {
-                // Initialize MR draft with smart defaults
-                if let Some(ref repo) = app.repo_info {
-                    let source_branch = repo.branch.clone();
-                    let target_branch = crate::git::repository::suggest_target_branch(
-                        std::path::Path::new(&repo.path)
-                    ).unwrap_or_else(|_| "main".to_string());
-                    
-                    // Auto-generate title from branch name
-                    let title = source_branch
-                        .replace("feature/", "")
-                        .replace("bugfix/", "Fix: ")
-                        .replace("hotfix/", "Hotfix: ")
-                        .replace('-', " ")
-                        .replace('_', " ");
-                    
-                    app.mr_draft = Some(crate::mr::MergeRequest::new(
-                        &source_branch,
-                        &target_branch,
-                        &title,
-                    ));
-                    app.mr_field = 1; // Start on title field (0=source is readonly)
-                    app.edit_buffer = title;
-                    app.input_mode = InputMode::MRCreate;
-                }
-                KeyAction::Refresh
-            } else {
-                app.set_status("MR creation requires git repo and sync provider");
-                KeyAction::Refresh
+            // Check for git repo first
+            if app.repo_info.is_none() {
+                app.set_status("⚠️  MR creation requires a git repository");
+                return KeyAction::Refresh;
             }
+            
+            // Check for sync provider
+            if app.sync_provider.is_none() {
+                app.set_status("⚠️  No sync provider configured. Run 'prog sync' first or add sync config to .project/config.kdl");
+                return KeyAction::Refresh;
+            }
+            
+            // Initialize MR draft with smart defaults
+            if let Some(ref repo) = app.repo_info {
+                let source_branch = repo.branch.clone();
+                let target_branch = crate::git::repository::suggest_target_branch(
+                    std::path::Path::new(&repo.path)
+                ).unwrap_or_else(|_| "main".to_string());
+                
+                // Auto-generate title from branch name
+                let title = source_branch
+                    .replace("feature/", "")
+                    .replace("bugfix/", "Fix: ")
+                    .replace("hotfix/", "Hotfix: ")
+                    .replace('-', " ")
+                    .replace('_', " ");
+                
+                app.mr_draft = Some(crate::mr::MergeRequest::new(
+                    &source_branch,
+                    &target_branch,
+                    &title,
+                ));
+                app.mr_field = 1; // Start on title field (0=source is readonly)
+                app.edit_buffer = title;
+                app.input_mode = InputMode::MRCreate;
+            }
+            KeyAction::Refresh
         }
 
         // Quit
@@ -628,7 +635,14 @@ fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             return KeyAction::Refresh;
                         }
                         Err(e) => {
-                            app.set_status(format!("❌ MR creation failed: {}", e));
+                            // Log full error to stderr for debugging
+                            eprintln!("❌ MR Creation Error: {:?}", e);
+                            eprintln!("   MR Details: source={}, target={}, title={}", 
+                                mr.source_branch, mr.target_branch, mr.title);
+                            
+                            // Show error in status bar (truncated if needed)
+                            let error_msg = format!("❌ MR failed: {}", e);
+                            app.set_status(error_msg);
                             return KeyAction::Refresh;
                         }
                     }
