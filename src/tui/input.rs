@@ -144,6 +144,12 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
         
         // Debug Console
         KeyCode::F(8) => KeyAction::ToggleDebug,
+        
+        // Settings pane
+        KeyCode::Char('O') => {
+            app.input_mode = InputMode::Settings;
+            KeyAction::Refresh
+        }
 
         // Create Merge Request
         KeyCode::Char('M') => {
@@ -587,6 +593,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::Command => handle_command_key(app, key),
         InputMode::MRCreate => handle_mr_create_key(app, key),
         InputMode::RepoFilter => handle_repo_filter_key(app, key),
+        InputMode::Settings => handle_settings_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -831,6 +838,22 @@ fn handle_detail_edit_key(app: &mut App, key: KeyEvent) -> KeyAction {
     }
 }
 
+/// Handle keys in settings pane
+fn handle_settings_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('O') | KeyCode::Char('o') => {
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('t') => {
+            // Cycle theme
+            app.cycle_theme();
+            KeyAction::SaveTheme
+        }
+        _ => KeyAction::None,
+    }
+}
+
 /// Handle mouse events
 pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> KeyAction {
     // Get current time for double-click detection
@@ -900,6 +923,38 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 return KeyAction::None;
             }
 
+            // Click on Issues tab
+            if let Some(tab_area) = ui_areas.tab_issues {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.view_mode != ViewMode::List {
+                        app.view_mode = ViewMode::List;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
+            // Click on Kanban tab
+            if let Some(tab_area) = ui_areas.tab_kanban {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.view_mode != ViewMode::Kanban {
+                        app.view_mode = ViewMode::Kanban;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
+            // Click on Settings tab
+            if let Some(tab_area) = ui_areas.tab_settings {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.input_mode == InputMode::Settings {
+                        app.input_mode = InputMode::Normal; // Toggle off
+                    } else {
+                        app.input_mode = InputMode::Settings;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
             // Click on help icon (? help)
             if let Some(help_area) = ui_areas.help_icon {
                 if point_in_rect(mouse.column, mouse.row, help_area) {
@@ -953,19 +1008,36 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 
             // Handle list view
             if app.view_mode == ViewMode::List {
-                if let Some(issue) = app.selected_issue() {
-                    let issue_id = issue.id.clone();
-
-                    let is_double_click = app.last_click_issue.as_ref() == Some(&issue_id)
-                        && now.saturating_sub(app.last_click_time) < 400;
-
-                    if is_double_click {
-                        app.open_detail(&issue_id);
-                        app.last_click_issue = None;
+                // Calculate which row was clicked (offset for header/border)
+                // The list content starts at content.y + 3 (border + header row + separator)
+                let list_start_y = ui_areas.content.y + 3;
+                
+                if mouse.row >= list_start_y {
+                    let clicked_row = (mouse.row - list_start_y) as usize;
+                    
+                    // Check if valid row in filtered list
+                    if clicked_row < app.filtered.len() {
+                        // Get the issue index and then the ID
+                        let issue_idx = app.filtered[clicked_row];
+                        let issue_id = app.issues[issue_idx].id.clone();
+                        
+                        // Select this row
+                        app.selected = clicked_row;
+                        
+                        // Check for double-click
+                        let is_double_click = app.last_click_issue.as_ref() == Some(&issue_id)
+                            && now.saturating_sub(app.last_click_time) < 400;
+                        
+                        if is_double_click {
+                            app.open_detail(&issue_id);
+                            app.last_click_issue = None;
+                            return KeyAction::Refresh;
+                        } else {
+                            app.last_click_time = now;
+                            app.last_click_issue = Some(issue_id);
+                        }
+                        
                         return KeyAction::Refresh;
-                    } else {
-                        app.last_click_time = now;
-                        app.last_click_issue = Some(issue_id);
                     }
                 }
             }
@@ -1033,5 +1105,6 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::Command => "Type command │ Enter:exec │ Esc:cancel",
         InputMode::MRCreate => "Tab:next field │ Enter:submit │ Esc:cancel",
         InputMode::RepoFilter => "j/k:nav │ Enter:select │ c:clear │ Esc:cancel",
+        InputMode::Settings => "t:theme │ O/Esc:close",
     }
 }

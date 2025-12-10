@@ -18,6 +18,7 @@ pub mod widget_kanban;
 pub mod widget_mr_create;
 pub mod widget_status;
 pub mod widget_debug;
+pub mod widget_settings;
 
 // Re-export public API
 pub use app::{App, DragState, InputMode, ViewMode};
@@ -55,6 +56,12 @@ pub struct UIAreas {
     pub detail_close_btn: Option<Rect>,
     /// Help icon area in status bar
     pub help_icon: Option<Rect>,
+    /// Tab: Issues (clickable)
+    pub tab_issues: Option<Rect>,
+    /// Tab: Kanban (clickable)
+    pub tab_kanban: Option<Rect>,
+    /// Tab: Settings (clickable, right-aligned)
+    pub tab_settings: Option<Rect>,
 }
 
 /// Render the entire UI, returns UI areas for mouse handling
@@ -85,77 +92,94 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     areas.git_remote = remote_area;
 
 
-    // Render view based on mode - wrapped in titled frame
+    // Render view based on mode - with clickable tab title bar
+    // Create the tabbed title: [📋 Issues] [📊 Kanban] ... [⚙ Settings]
+    let issues_label = " 📋 Issues ";
+    let kanban_label = " 📊 Kanban ";
+    let settings_label = " ⚙ Settings ";
+    
+    // Calculate tab widths for click detection
+    let tab_start_x = areas.content.x + 1; // After border
+    let issues_tab_width = issues_label.chars().count() as u16 + 2;
+    let kanban_tab_width = kanban_label.chars().count() as u16 + 2;
+    let settings_tab_width = settings_label.chars().count() as u16 + 2;
+    
+    // Store tab areas for mouse hit detection
+    areas.tab_issues = Some(Rect {
+        x: tab_start_x,
+        y: areas.content.y,
+        width: issues_tab_width,
+        height: 1,
+    });
+    areas.tab_kanban = Some(Rect {
+        x: tab_start_x + issues_tab_width + 1, // +1 for separator
+        y: areas.content.y,
+        width: kanban_tab_width,
+        height: 1,
+    });
+    
+    // Settings tab (right-aligned)
+    let settings_x = areas.content.x + areas.content.width - settings_tab_width - 2;
+    areas.tab_settings = Some(Rect {
+        x: settings_x,
+        y: areas.content.y,
+        width: settings_tab_width,
+        height: 1,
+    });
+
+    // Build title spans with active/inactive styling
+    let (issues_style, kanban_style) = match app.view_mode {
+        ViewMode::List => (
+            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
+        ),
+        ViewMode::Kanban => (
+            colors.dim(),
+            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+        ),
+    };
+    
+    // Settings style (highlighted if in settings mode)
+    let settings_style = if app.input_mode == InputMode::Settings {
+        colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED)
+    } else {
+        colors.dim()
+    };
+
+    // Calculate padding for right-alignment
+    let left_content_len = issues_label.len() + 1 + kanban_label.len() + format!(" ({} total) ", app.issues.len()).len();
+    let total_width = areas.content.width as usize - 2; // Minus borders
+    let padding = if total_width > left_content_len + settings_label.len() {
+        total_width - left_content_len - settings_label.len()
+    } else {
+        1
+    };
+
+    let title_spans = vec![
+        Span::styled(issues_label, issues_style),
+        Span::raw("│"),
+        Span::styled(kanban_label, kanban_style),
+        Span::styled(format!(" ({} total) ", app.issues.len()), colors.dim()),
+        Span::raw(" ".repeat(padding)),
+        Span::styled(settings_label, settings_style),
+    ];
+
+    let block = Block::default()
+        .title(Line::from(title_spans))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(colors.border());
+
+    let inner = block.inner(chunks[1]);
+    frame.render_widget(block, chunks[1]);
+
+    // Render the actual view content
     areas.kanban = match app.view_mode {
         ViewMode::List => {
-            // Calculate repo stats
-            let repo_stats = calculate_repo_stats(&app.issues);
-            
-            // Create titled frame for list view
-            let mut title_spans = vec![
-                Span::styled(" 📋 Issues ", colors.accent()),
-                Span::styled(format!("({} total) ", app.issues.len()), colors.dim()),
-            ];
-            
-            // Add repo stats if multi-repo
-            if !repo_stats.is_empty() {
-                title_spans.push(Span::raw("│ "));
-                title_spans.push(Span::styled("📦 ", colors.dim()));
-                for (i, (repo, count)) in repo_stats.iter().enumerate() {
-                    if i > 0 {
-                        title_spans.push(Span::raw(" │ "));
-                    }
-                    title_spans.push(Span::styled(
-                        format!("{}: {}", repo, count),
-                        colors.accent()
-                    ));
-                }
-            }
-            
-            let block = Block::default()
-                .title(Line::from(title_spans))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(colors.border());
-
-            let inner = block.inner(chunks[1]);
-            frame.render_widget(block, chunks[1]);
             widget_issues::render(frame, inner, app);
             KanbanAreas::default()
         }
         ViewMode::Kanban => {
-            // Calculate repo stats
-            let repo_stats = calculate_repo_stats(&app.issues);
-            
-            // Create titled frame for kanban view
-            let mut title_spans = vec![
-                Span::styled(" 📊 Kanban ", colors.accent()),
-                Span::styled(format!("({} issues) ", app.issues.len()), colors.dim()),
-            ];
-            
-            // Add repo stats if multi-repo
-            if !repo_stats.is_empty() {
-                title_spans.push(Span::raw("│ "));
-                title_spans.push(Span::styled("📦 ", colors.dim()));
-                for (i, (repo, count)) in repo_stats.iter().enumerate() {
-                    if i > 0 {
-                        title_spans.push(Span::raw(" │ "));
-                    }
-                    title_spans.push(Span::styled(
-                        format!("{}: {}", repo, count),
-                        colors.accent()
-                    ));
-                }
-            }
-            
-            let block = Block::default()
-                .title(Line::from(title_spans))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(colors.border());
-
-            let inner = block.inner(chunks[1]);
-            frame.render_widget(block, chunks[1]);
             widget_kanban::render(frame, inner, app)
         }
     };
@@ -246,6 +270,11 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         // Clear background for overlay
         frame.render_widget(ratatui::widgets::Clear, area);
         widget_debug::render(frame, area, app);
+    }
+    
+    // Render settings pane overlay if open
+    if app.input_mode == InputMode::Settings {
+        widget_settings::render(frame, app, 0);
     }
     
     areas

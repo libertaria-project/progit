@@ -27,10 +27,40 @@ pub fn load_issues(kdl_dir: &Path, cache_path: &Path) -> Result<Vec<Issue>> {
 
 /// Save a single issue (writes KDL, updates cache)
 pub fn save_issue(issue: &Issue, kdl_dir: &Path, cache_path: &Path) -> Result<()> {
+    let new_filename = kdl::issue_filename(issue);
+    let new_path = kdl_dir.join(&new_filename);
+
+    // Clean up any old files for this issue (renames/duplicates)
+    // We do this BEFORE writing the new one to avoid deleting what we just wrote
+    // if the filenames happen to collide in some weird way (unlikely)
+    // or to ensure we don't leave ghosts.
+    if kdl_dir.exists() {
+        for entry in std::fs::read_dir(kdl_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            // Skip non-kdl files
+            if path.extension().map_or(true, |ext| ext != "kdl") {
+                continue;
+            }
+
+            // Skip if it's exactly the file we are about to write
+            if path.file_name() == Some(std::ffi::OsStr::new(&new_filename)) {
+                continue;
+            }
+
+            // Read to check ID
+            if let Ok(existing) = kdl::read_kdl(&path) {
+                if existing.id == issue.id {
+                    // Found an old file for this ID with a different name -> Delete it
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+    }
+
     // Write KDL file
-    let filename = kdl::issue_filename(issue);
-    let kdl_path = kdl_dir.join(&filename);
-    kdl::write_kdl(issue, &kdl_path)?;
+    kdl::write_kdl(issue, &new_path)?;
 
     // Reload and update cache
     sync_kdl_to_json(kdl_dir, cache_path)?;
@@ -40,7 +70,9 @@ pub fn save_issue(issue: &Issue, kdl_dir: &Path, cache_path: &Path) -> Result<()
 
 /// Delete an issue
 pub fn delete_issue(issue_id: &str, kdl_dir: &Path, cache_path: &Path) -> Result<bool> {
-    // Find and delete the KDL file
+    let mut deleted = false;
+
+    // Find and delete the KDL file(s)
     if kdl_dir.exists() {
         for entry in std::fs::read_dir(kdl_dir)? {
             let entry = entry?;
@@ -50,16 +82,20 @@ pub fn delete_issue(issue_id: &str, kdl_dir: &Path, cache_path: &Path) -> Result
                 if let Ok(issue) = kdl::read_kdl(&path) {
                     if issue.id == issue_id {
                         std::fs::remove_file(&path)?;
-                        // Resync cache
-                        sync_kdl_to_json(kdl_dir, cache_path)?;
-                        return Ok(true);
+                        deleted = true;
+                        // Continue loop to clean up any duplicates
                     }
                 }
             }
         }
     }
 
-    Ok(false)
+    if deleted {
+        // Resync cache
+        sync_kdl_to_json(kdl_dir, cache_path)?;
+    }
+
+    Ok(deleted)
 }
 
 #[cfg(test)]

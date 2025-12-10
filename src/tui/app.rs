@@ -33,6 +33,7 @@ pub enum InputMode {
     Command,         // Command palette (: command)
     MRCreate,        // Creating a merge request
     RepoFilter,      // Filtering by repository
+    Settings,        // Settings pane
 }
 
 /// Mouse drag state
@@ -638,7 +639,7 @@ mod tests {
             Issue::new("In Progress").with_status(Status::InProgress),
         ]);
 
-        assert_eq!(app.velocity(), 7);
+        assert_eq!(app.velocity(), 13);
     }
 
     #[test]

@@ -57,6 +57,10 @@ codegen-units = 1
 strip = true
 panic = "abort"
 
+[lib]
+name = "progit"
+path = "src/lib.rs"
+
 [[bin]]
 name = "prog"
 path = "src/main.rs"

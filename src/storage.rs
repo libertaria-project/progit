@@ -9,6 +9,8 @@ pub mod sync;
 pub mod config;
 pub mod migration;
 pub mod cleaner;
+pub mod engine;
+pub mod migrate;
 
 // Re-export public API
 pub use json::{read_cache, write_cache, IssueCache};

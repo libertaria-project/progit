@@ -33,11 +33,20 @@ pub fn read_all_kdl(dir: &Path) -> Result<Vec<Issue>> {
 /// Read a single issue from a KDL file
 pub fn read_kdl(path: &Path) -> Result<Issue> {
     let content = fs::read_to_string(path).context("Failed to read KDL file")?;
-    parse_kdl(&content)
+    let (issue, generated_id) = parse_kdl(&content)?;
+
+    // If ID was generated (missing in file), persist it immediately
+    // This prevents "ghost" issues that get a new ID on every read
+    if generated_id {
+        write_kdl(&issue, path)?;
+    }
+
+    Ok(issue)
 }
 
 /// Parse KDL content into an Issue
-pub fn parse_kdl(content: &str) -> Result<Issue> {
+/// Returns (Issue, was_id_generated)
+pub fn parse_kdl(content: &str) -> Result<(Issue, bool)> {
     let doc: KdlDocument = content.parse().context("Failed to parse KDL")?;
 
     // Find the issue node
@@ -47,14 +56,46 @@ pub fn parse_kdl(content: &str) -> Result<Issue> {
         .find(|n| n.name().value() == "issue")
         .context("No 'issue' node found")?;
 
-    // Extract ID from entry
-    let id = issue_node
-        .get("id")
-        .and_then(|e| e.value().as_string())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    // Extract ID
+    // 1. Try property: issue id="123"
+    // 2. Try entry (argument): issue "123" (unlikely but possible legacy)
+    // 3. Try child: issue { id "123" }
+    
+    let mut id = None;
+    let mut generated = false;
 
-    // Parse children
+    // Check property 'id="X"'
+    if let Some(val) = issue_node.get("id") {
+        if let Some(s) = val.value().as_string() {
+            id = Some(s.to_string());
+        }
+    }
+
+    // Check children if not found
+    if id.is_none() {
+        if let Some(children) = issue_node.children() {
+             for node in children.nodes() {
+                 if node.name().value() == "id" {
+                     if let Some(entry) = node.entries().first() {
+                         if let Some(s) = entry.value().as_string() {
+                             id = Some(s.to_string());
+                             break;
+                         }
+                     }
+                 }
+             }
+        }
+    }
+
+    let final_id = match id {
+        Some(s) => s,
+        None => {
+            generated = true;
+            uuid::Uuid::new_v4().to_string()
+        }
+    };
+
+    // Parse children for other fields
     let children = issue_node.children().map(|c| c.nodes()).unwrap_or(&[]);
 
     let title = get_string_value(children, "title").unwrap_or_default();
@@ -77,8 +118,8 @@ pub fn parse_kdl(content: &str) -> Result<Issue> {
     let remotes = get_remotes(children);
     let repo = get_string_value(children, "repo");
 
-    Ok(Issue {
-        id,
+    Ok((Issue {
+        id: final_id,
         title,
         description,
         status,
@@ -94,7 +135,7 @@ pub fn parse_kdl(content: &str) -> Result<Issue> {
         updated,
         remotes,
         repo,
-    })
+    }, generated))
 }
 
 /// Write an issue to a KDL file
@@ -285,19 +326,18 @@ mod tests {
 issue id="test-123" {
     title "Fix the bug"
     status "in-progress"
-    effort 5
+    effort 10
     tags {
         - "backend"
         - "blocker"
     }
     blocked true
 }
-}
 "#;
-        let issue = parse_kdl(content).unwrap();
+        let (issue, generated) = parse_kdl(content).unwrap();
+        assert!(!generated);
         assert_eq!(issue.id, "test-123");
         assert_eq!(issue.title, "Fix the bug");
-        assert_eq!(issue.status, Status::InProgress);
         assert_eq!(issue.status, Status::InProgress);
         assert_eq!(issue.effort, Effort::Large);
         assert_eq!(issue.tags, vec!["backend", "blocker"]);
@@ -313,8 +353,9 @@ issue id="test-123" {
             .with_blocked(true);
 
         let kdl = serialize_kdl(&issue);
-        let parsed = parse_kdl(&kdl).unwrap();
-
+        let (parsed, generated) = parse_kdl(&kdl).unwrap();
+        
+        assert!(!generated);
         assert_eq!(parsed.title, issue.title);
         assert_eq!(parsed.status, issue.status);
         assert_eq!(parsed.effort, issue.effort);

@@ -384,8 +384,21 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
     // Determine paths
     let project_root = find_project_root()?;
     let config_path = project_root.join(paths::config_file());
-    let kdl_dir = project_root.join(paths::issues_dir());
-    let cache_path = project_root.join(paths::cache_file());
+
+    // Run migration from KDL to JSON if needed
+    match storage::migrate::migrate_kdl_to_json(&project_root) {
+        Ok(count) if count > 0 => {
+            log::info!("✅ Migrated {} issues from KDL to JSON", count);
+        }
+        Err(e) => {
+            log::warn!("⚠️ Migration failed: {}", e);
+        }
+        _ => {}
+    }
+
+    // Initialize storage engine
+    let mut engine = storage::engine::StorageEngine::new(&project_root);
+    engine.load()?;
 
     // Load config & init provider
     if let Ok(config) = storage::config::load_config(&config_path) {
@@ -414,12 +427,10 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
         }
     }
 
-    // Load issues
-    let issues = load_issues(&kdl_dir, &cache_path)?;
-    app.load_issues(issues);
+    // Load issues from engine
+    app.load_issues(engine.issues().to_vec());
 
     // Detect git repository from current working directory
-    // (not project_root which is .project/)
     let cwd = std::env::current_dir()?;
     app.repo_info = detect_repo(&cwd)?;
 
@@ -443,8 +454,9 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
             match action {
                 KeyAction::Quit => break,
                 KeyAction::Save => {
-                    // Save all issues that might have changed
-                    save_all_issues(&app.issues, &kdl_dir, &cache_path)?;
+                    // Sync app issues to engine and save
+                    *engine.issues_mut() = app.issues.clone();
+                    engine.save()?;
                 }
                 KeyAction::SaveTheme => {
                     // Save theme preference to config
@@ -464,11 +476,8 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     if let Some(s) = status {
                         new_issue.status = s;
                     }
-                    save_issue(&new_issue, &kdl_dir, &cache_path)?;
-
-                    // Reload issues
-                    let issues = sync_kdl_to_json(&kdl_dir, &cache_path)?;
-                    app.load_issues(issues);
+                    engine.upsert(new_issue)?;
+                    app.load_issues(engine.issues().to_vec());
                     app.set_status("Created new issue");
                 }
                 KeyAction::DeleteIssue => {
@@ -479,12 +488,12 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     };
 
                     if let Some(id) = issue_id {
-                        delete_issue(&id, &kdl_dir, &cache_path)?;
-
-                        // Reload issues
-                        let issues = sync_kdl_to_json(&kdl_dir, &cache_path)?;
-                        app.load_issues(issues);
-                        app.set_status("Issue deleted");
+                        if engine.delete(&id)? {
+                            app.load_issues(engine.issues().to_vec());
+                            app.set_status("Issue deleted");
+                        } else {
+                            app.set_status("Failed to delete issue");
+                        }
                     }
                 }
                 KeyAction::Sync => {
@@ -501,7 +510,8 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                             app.set_status(format!("Push failed: {}", e));
                         } else {
                             // Persist links after push
-                            if let Err(e) = save_all_issues(&app.issues, &kdl_dir, &cache_path) {
+                            *engine.issues_mut() = app.issues.clone();
+                            if let Err(e) = engine.save() {
                                 app.set_status(format!("Save failed: {}", e));
                             } else {
                                 // 2. DELETE MISSING
@@ -513,9 +523,10 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                                         // Merge using actual provider name
                                         let provider_name = app.sync_provider_name.as_deref().unwrap_or("gitlab");
                                         let merged = sync::merge_issues(&app.issues, remote_issues, provider_name);
-                                        app.load_issues(merged);
+                                        app.load_issues(merged.clone());
                                         
-                                        if let Err(e) = save_all_issues(&app.issues, &kdl_dir, &cache_path) {
+                                        *engine.issues_mut() = merged;
+                                        if let Err(e) = engine.save() {
                                             app.set_status(format!("Save failed: {}", e));
                                         } else {
                                             app.set_status("Sync Complete!");

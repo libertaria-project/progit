@@ -132,14 +132,14 @@ mod tests {
     #[test]
     fn test_total_effort() {
         let issues = sample_issues();
-        // 5 (Large) + 8 (XLarge) + 2 (Small) = 15
-        assert_eq!(total_effort(&issues), 15);
+        // 10 (Large) + 15 (XLarge) + 3 (Small) = 28
+        assert_eq!(total_effort(&issues), 28);
     }
 
     #[test]
     fn test_completed_effort() {
         let issues = sample_issues();
-        // Only "Write docs" (Small=2) is Done
-        assert_eq!(completed_effort(&issues), 2);
+        // Only "Write docs" (Small=3) is Done
+        assert_eq!(completed_effort(&issues), 3);
     }
 }

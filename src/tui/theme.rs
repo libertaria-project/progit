@@ -77,18 +77,19 @@ impl Theme {
                 selected_fg: Color::Rgb(80, 250, 123), // green
             },
             Theme::Cyberpunk => ThemeColors {
-                // Cyberpunk 2077 inspired: Dark "Void" Grid + Neon Yellow/Blue/Pink
-                bg: Color::Rgb(5, 5, 10),            // Deep dark void
-                fg: Color::Rgb(0, 240, 255),         // Neon Cyan (Text default)
-                accent: Color::Rgb(254, 254, 84),    // Cyber Yellow (Accent)
-                accent_dim: Color::Rgb(80, 80, 0),   // Dim Yellow
-                success: Color::Rgb(0, 255, 159),    // Neon Green
-                warning: Color::Rgb(255, 215, 0),    // Gold/Yellow
-                error: Color::Rgb(255, 42, 109),     // Neon Red/Pink
-                border: Color::Rgb(60, 20, 80),      // Dark Purple border
-                header_bg: Color::Rgb(20, 5, 30),    // Darker header
-                header_fg: Color::Rgb(254, 254, 84), // Yellow Header
-                selected_bg: Color::Rgb(255, 0, 60), // Hot Pink Selection bg
+                // Cyberpunk 2077 inspired: Neon on ANY background
+                // Tweaked for visibility on both black and Nord-like backgrounds
+                bg: Color::Rgb(10, 10, 15),           // Deep dark void
+                fg: Color::Rgb(0, 255, 255),          // Bright Neon Cyan (more visible)
+                accent: Color::Rgb(255, 255, 0),      // Pure Neon Yellow (max bright)
+                accent_dim: Color::Rgb(255, 0, 255),  // Hot Magenta (visible on any bg!)
+                success: Color::Rgb(0, 255, 128),     // Neon Green
+                warning: Color::Rgb(255, 200, 0),     // Amber/Orange
+                error: Color::Rgb(255, 50, 100),      // Neon Red/Pink
+                border: Color::Rgb(180, 0, 255),      // Bright Purple border (was too dark)
+                header_bg: Color::Rgb(30, 10, 40),    // Subtle purple header
+                header_fg: Color::Rgb(255, 255, 0),   // Yellow Header
+                selected_bg: Color::Rgb(255, 0, 100), // Hot Pink Selection bg
                 selected_fg: Color::Rgb(255, 255, 255), // White text on pink
             },
             Theme::Vibe => ThemeColors {

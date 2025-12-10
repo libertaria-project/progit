@@ -33,14 +33,32 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .map(|issue| issue_row(issue, &colors, engine))
         .collect();
 
-    // Column widths
+    // Calculate dynamic column widths based on content
+    // ID: min 8, max 15 based on actual IDs
+    let max_id_len = app.filtered.iter()
+        .filter_map(|&idx| app.issues.get(idx))
+        .map(|i| i.short_id().len())
+        .max()
+        .unwrap_or(8)
+        .clamp(8, 15) as u16;
+    
+    // Repo: min 4, max 12 based on actual repo names
+    let max_repo_len = app.filtered.iter()
+        .filter_map(|&idx| app.issues.get(idx))
+        .filter_map(|i| i.repo.as_ref())
+        .map(|r| r.len())
+        .max()
+        .unwrap_or(4)
+        .clamp(4, 12) as u16;
+
+    // Column widths - dynamic where sensible
     let widths = [
-        Constraint::Length(10),     // ID
-        Constraint::Percentage(35), // Title (reduced to make room)
-        Constraint::Length(12),     // Status
-        Constraint::Length(8),      // Effort
-        Constraint::Length(12),     // Repo
-        Constraint::Percentage(20), // Tags
+        Constraint::Length(max_id_len + 2),  // ID (dynamic)
+        Constraint::Percentage(35),          // Title (flex)
+        Constraint::Length(12),              // Status (fixed)
+        Constraint::Length(6),               // Effort (fixed)
+        Constraint::Length(max_repo_len + 2),// Repo (dynamic)
+        Constraint::Fill(1),                 // Tags (fill remaining)
     ];
 
     // Create table
