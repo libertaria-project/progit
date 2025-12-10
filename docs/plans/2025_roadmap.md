@@ -7,7 +7,7 @@
 **Goal**: Unbreakable local storage and lightning-fast issue management.
 **Status**: Near Completion.
 
-- [x] **Storage Engine**: JSON-based, atomic, local-first.
+- [x] **Storage Engine**: JSON-based (Optimized for Web App Sync & CRUD), atomic, local-first.
 - [x] **TUI Core**: Interactivity, settings, themes, dynamic layouts.
 - [x] **Project Management**: Issues, Kanban, Sprints (Dogfooding).
 - [ ] **Reliability**: Unit test coverage for storage & sync logic.
