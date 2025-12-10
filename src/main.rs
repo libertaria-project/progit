@@ -185,7 +185,7 @@ fn main() -> Result<()> {
                     let cache_path = project_root.join(paths::cache_file());
                     
                     // Load local issues for deduplication matching
-                    let local_issues = load_issues(&kdl_dir, &cache_path).unwrap_or_default();
+                    let local_issues = load_issues(&kdl_dir, &cache_path)?;
                     
                     println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
                     provider.login()?;
