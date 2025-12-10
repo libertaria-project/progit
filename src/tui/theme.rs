@@ -96,7 +96,7 @@ impl Theme {
                 bg: Color::Rgb(0, 0, 0),              // Pure Black
                 fg: Color::Rgb(255, 255, 255),        // Pure White
                 accent: Color::Rgb(0, 190, 255),      // Bright Blue
-                accent_dim: Color::Rgb(100, 100, 100),// Grey
+                accent_dim: Color::Rgb(160, 160, 160),// Lighter Grey for readability
                 success: Color::Rgb(0, 255, 0),       // Pure Green
                 warning: Color::Rgb(255, 255, 0),     // Pure Yellow
                 error: Color::Rgb(255, 0, 0),         // Pure Red
