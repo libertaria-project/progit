@@ -89,10 +89,12 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
     // Status does not color the whole row anymore, to avoid "Green on Green" mess.
     let row_style = engine.get("issues.row.normal", colors.normal());
 
+    // Status colors - ALWAYS visible!
+    // Backlog = Yellow/Amber, InProgress = Green, Done = Cyan
     let status_style = match issue.status {
-        Status::Backlog => colors.dim(),
-        Status::InProgress => colors.success(), // Neon Green text
-        Status::Done => colors.dim(),           // Dimmed text
+        Status::Backlog => colors.warning(),     // Yellow - visible!
+        Status::InProgress => colors.success(),  // Green - active
+        Status::Done => Style::default().fg(ratatui::style::Color::Cyan), // Cyan - completed but visible!
     };
     
     // Status Icon

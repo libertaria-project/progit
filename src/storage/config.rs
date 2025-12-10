@@ -99,8 +99,8 @@ pub fn parse_config(content: &str) -> Result<Config> {
         .map(|n| parse_repos_node(n))
         .unwrap_or_default();
 
-    // Parse theme from config node
-    let theme = doc
+    // Parse theme from config node OR top-level
+    let mut theme = doc
         .nodes()
         .iter()
         .find(|n| n.name().value() == "config")
@@ -112,6 +112,17 @@ pub fn parse_config(content: &str) -> Result<Config> {
                 .and_then(|e| e.value().as_string())
                 .map(|s| s.to_string())
         });
+
+    if theme.is_none() {
+        // Fallback: Check top-level theme node
+        theme = doc
+            .nodes()
+            .iter()
+            .find(|n| n.name().value() == "theme")
+            .and_then(|n| n.entries().first())
+            .and_then(|e| e.value().as_string())
+            .map(|s| s.to_string());
+    }
     
     // Parse styles
     let styles = doc

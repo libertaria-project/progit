@@ -96,10 +96,16 @@ fn render_column(
     selected_row: Option<usize>,
     is_drag_target: bool,
 ) {
+    // Status colors - MUST be bright and visible at all times!
+    // Backlog = Yellow/Amber (waiting)
+    // In Progress = Green (active)  
+    // Done = Cyan/Blue (completed but visible)
+    // Blockers/Overdue = Red (in card styling below)
     let status_style = match status {
-        Status::Backlog => engine.get("kanban.header.backlog", colors.dim()),
-        Status::InProgress => engine.get("kanban.header.progress", colors.success()),
-        Status::Done => engine.get("kanban.header.done", colors.accent()),
+        Status::Backlog => engine.get("kanban.header.backlog", colors.warning()), // Yellow!
+        Status::InProgress => engine.get("kanban.header.progress", colors.success()), // Green!
+        Status::Done => engine.get("kanban.header.done", 
+            Style::default().fg(ratatui::style::Color::Cyan).add_modifier(Modifier::BOLD)), // Cyan!
     };
 
     // Split area for + button at top, list, + button at bottom

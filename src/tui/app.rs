@@ -424,33 +424,38 @@ impl App {
                         .collect();
                 }
                 6 => {
-                    // Parse due date (YYYY-MM-DD)
+                    // Start dragging out the date parsing to a helper if reuse is needed,
+                    // but for now, let's just support multiple formats inline to keep it simple and contiguous.
+                    // Due Date (end of day)
                     if buffer.is_empty() {
                         issue.due = None;
-                    } else if let Ok(date) = chrono::NaiveDate::parse_from_str(&buffer, "%Y-%m-%d") {
-                        if let Some(dt) = date.and_hms_opt(23, 59, 59) {
-                            issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc));
-                        }
+                    } else if let Some(dt) = parse_date_input(&buffer) {
+                         issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(
+                             dt.and_hms_opt(23, 59, 59).unwrap(), 
+                             chrono::Utc
+                         ));
                     }
                 }
                 7 => {
-                    // Parse started date
+                    // Started Date (start of day)
                     if buffer.is_empty() {
                         issue.started = None;
-                    } else if let Ok(date) = chrono::NaiveDate::parse_from_str(&buffer, "%Y-%m-%d") {
-                        if let Some(dt) = date.and_hms_opt(0, 0, 0) {
-                            issue.started = Some(chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc));
-                        }
+                    } else if let Some(dt) = parse_date_input(&buffer) {
+                         issue.started = Some(chrono::DateTime::from_naive_utc_and_offset(
+                             dt.and_hms_opt(0, 0, 0).unwrap(), 
+                             chrono::Utc
+                         ));
                     }
                 }
                 8 => {
-                    // Parse completed date
+                    // Completed Date (end of day/now)
                     if buffer.is_empty() {
                         issue.completed = None;
-                    } else if let Ok(date) = chrono::NaiveDate::parse_from_str(&buffer, "%Y-%m-%d") {
-                        if let Some(dt) = date.and_hms_opt(23, 59, 59) {
-                            issue.completed = Some(chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc));
-                        }
+                    } else if let Some(dt) = parse_date_input(&buffer) {
+                         issue.completed = Some(chrono::DateTime::from_naive_utc_and_offset(
+                             dt.and_hms_opt(23, 59, 59).unwrap(), 
+                             chrono::Utc
+                         ));
                     }
                 }
                 _ => {}
@@ -580,6 +585,19 @@ impl App {
     pub fn blocker_count(&self) -> usize {
         self.issues.iter().filter(|i| i.is_blocker()).count()
     }
+}
+
+/// Helper: Parse date from string (supports YYYY-MM-DD and YYYYMMDD)
+fn parse_date_input(input: &str) -> Option<chrono::NaiveDate> {
+    // Try ISO format (YYYY-MM-DD)
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
+        return Some(date);
+    }
+    // Try compact format (YYYYMMDD)
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(input, "%Y%m%d") {
+        return Some(date);
+    }
+    None
 }
 
 #[cfg(test)]

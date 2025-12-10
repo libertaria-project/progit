@@ -439,5 +439,27 @@
     "updated": "2025-12-10T23:02:00Z",
     "remotes": {},
     "repo": null
+  },
+  {
+    "id": "feature-009-date-formats",
+    "title": "Configurable Date Formats",
+    "description": "Allow user to choose preferred date format (ISO, YYYYMMDD, etc) in options.",
+    "status": "backlog",
+    "effort": 3,
+    "tags": [
+      "feature",
+      "ux",
+      "backlog"
+    ],
+    "assignee": null,
+    "sprint": null,
+    "due": null,
+    "started": null,
+    "completed": null,
+    "blocked": false,
+    "created": "2025-12-10T23:35:00Z",
+    "updated": "2025-12-10T23:35:00Z",
+    "remotes": {},
+    "repo": null
   }
 ]
