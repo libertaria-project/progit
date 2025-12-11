@@ -8,8 +8,72 @@ Thank you for considering contributing to ProGit! 🎉
 2. **Create feature branch**: `git checkout -b feature/amazing-feature`
 3. **Make changes**
 4. **Test**: `cargo test && cargo clippy`
-5. **Commit**: Use descriptive messages
+5. **Commit**: Use descriptive messages (see [Conventional Commits](#conventional-commits))
 6. **Push & PR**
+
+## Branching Strategy
+
+ProGit uses a **two-branch model**. See [docs/BRANCHING.md](docs/BRANCHING.md) for full details.
+
+### Branches
+
+- **`main`** - Stable releases only (tagged)
+- **`develop`** - Active development (all work lands here first)
+- **`feature/*`** - Individual features/fixes
+
+### Workflow
+
+```bash
+# Start new feature
+git checkout develop
+git checkout -b feature/my-feature
+
+# Make changes with conventional commits
+git commit -m "feat(tui): add new widget"
+
+# Merge to develop
+git checkout develop
+git merge feature/my-feature --no-ff
+git push origin develop
+```
+
+### Conventional Commits
+
+**All commits must follow this format:**
+
+```
+<type>(<scope>): <description>
+```
+
+**Types:**
+- `feat:` - New feature (bumps MINOR version)
+- `fix:` - Bug fix (bumps PATCH version)
+- `docs:` - Documentation only
+- `style:` - Code formatting
+- `refactor:` - Code refactoring
+- `test:` - Adding tests
+- `chore:` - Maintenance
+
+**Examples:**
+```bash
+feat(sync): add GitHub provider support
+fix(tui): prevent crash on empty issue list
+docs: update installation instructions
+```
+
+### Releasing
+
+**Automated version bumping:**
+
+```bash
+# Analyze commits and bump version
+./scripts/bump-version.sh
+
+# Create release (merges develop → main, tags, pushes)
+./scripts/release.sh
+```
+
+See [docs/BRANCHING.md](docs/BRANCHING.md) for complete release workflow.
 
 ## Code Style
 
