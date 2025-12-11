@@ -1,9 +1,0 @@
-issue {
-    id "example-001"
-    title "Welcome to ProGit!"
-    description "This is an example issue. Delete this and create your own with 'n' or ':new'"
-    status "Backlog"
-    effort "Small"
-    created "2025-01-01T10:00:00Z"
-    updated "2025-01-01T10:00:00Z"
-}
