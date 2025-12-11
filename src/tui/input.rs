@@ -65,6 +65,16 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
             KeyAction::Refresh
         }
+        KeyCode::Char('g') => {
+            app.mr_selected = 0;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('G') => {
+            if !app.mr_list.is_empty() {
+                app.mr_selected = app.mr_list.len() - 1;
+            }
+            KeyAction::Refresh
+        }
         KeyCode::Enter => {
             if let Some(mr) = app.mr_list.get(app.mr_selected) {
                 // Determine diff reference: target...source
@@ -96,6 +106,57 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
             KeyAction::Refresh
         }
+        
+        // Common keybindings
+        KeyCode::Char('O') => {
+            app.input_mode = InputMode::Settings;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('b') => {
+            if app.repo_info.is_some() {
+                app.input_mode = InputMode::BranchDropdown;
+                KeyAction::Refresh
+            } else {
+                KeyAction::None
+            }
+        }
+        KeyCode::Char('S') => KeyAction::Sync,
+        KeyCode::Char('?') => {
+            use crate::tui::input::help_text;
+            app.set_status(help_text(app));
+            KeyAction::Refresh
+        }
+        KeyCode::Char('t') => {
+            app.cycle_theme();
+            KeyAction::SaveTheme
+        }
+        
+        // MR-specific actions
+        KeyCode::Char('a') => {
+            // Approve MR (if provider supports it)
+            if let Some(mr) = app.mr_list.get(app.mr_selected) {
+                app.set_status(format!("Approve MR !{} - Not yet implemented", mr.id));
+                // TODO: Implement provider.approve_mr()
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('m') => {
+            // Merge MR (if provider supports it)
+            if let Some(mr) = app.mr_list.get(app.mr_selected) {
+                app.set_status(format!("Merge MR !{} - Not yet implemented", mr.id));
+                // TODO: Implement provider.merge_mr()
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('c') => {
+            // Close MR (if provider supports it)
+            if let Some(mr) = app.mr_list.get(app.mr_selected) {
+                app.set_status(format!("Close MR !{} - Not yet implemented", mr.id));
+                // TODO: Implement provider.close_mr()
+            }
+            KeyAction::Refresh
+        }
+        
         KeyCode::Tab => {
             app.toggle_view();
             KeyAction::Refresh
@@ -1425,7 +1486,7 @@ pub fn help_text(app: &App) -> &'static str {
             ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
             ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
-            ViewMode::MRList => "j/k:nav │ Enter:review │ r:reload │ q:back",
+            ViewMode::MRList => "j/k:nav │ g/G:top/bottom │ Enter:review │ a:approve │ m:merge │ c:close │ r:reload │ S:sync │ b:branch │ O:settings │ ?:help │ q:back",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",
