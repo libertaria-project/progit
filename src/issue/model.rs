@@ -85,6 +85,11 @@ impl Status {
     }
 }
 
+/// Default value for updated field (for backward compatibility with old JSON)
+fn default_updated() -> DateTime<Utc> {
+    Utc::now()
+}
+
 /// The atomic unit of work
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Issue {
@@ -138,6 +143,7 @@ pub struct Issue {
     pub created: DateTime<Utc>,
 
     /// Last update timestamp
+    #[serde(default = "default_updated")]
     pub updated: DateTime<Utc>,
 
     /// External references (e.g. "forgejo" -> "42")

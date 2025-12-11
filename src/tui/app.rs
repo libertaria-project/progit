@@ -4,6 +4,7 @@
 
 use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
+use crate::plugins::PluginManager;
 use crate::tui::theme::Theme;
 use crate::sync::SyncProvider;
 use crate::tui::style::ThemeEngine;
@@ -14,6 +15,8 @@ pub enum ViewMode {
     #[default]
     List,
     Kanban,
+    Diff,
+    MRList,
 }
 
 /// Input mode
@@ -34,6 +37,7 @@ pub enum InputMode {
     MRCreate,        // Creating a merge request
     RepoFilter,      // Filtering by repository
     Settings,        // Settings pane
+    FuzzyPalette,    // Fuzzy command palette (Ctrl+P)
 }
 
 /// Mouse drag state
@@ -60,6 +64,13 @@ pub struct App {
 
     /// Current input mode
     pub input_mode: InputMode,
+
+    // Diff State
+    pub diff_state: Option<crate::diff::DiffState>,
+    
+    // MR List State
+    pub mr_list: Vec<crate::mr::MergeRequest>,
+    pub mr_selected: usize,
 
     /// Search query
     pub search_query: String,
@@ -145,6 +156,18 @@ pub struct App {
     
     /// Show debug console overlay
     pub show_debug_console: bool,
+    
+    /// Plugin manager
+    pub plugin_manager: Option<PluginManager>,
+    
+    /// Fuzzy searcher for command palette
+    pub fuzzy_searcher: crate::fuzzy::FuzzySearcher,
+    
+    /// Fuzzy palette query
+    pub fuzzy_query: String,
+    
+    /// Selected fuzzy result index
+    pub fuzzy_selected: usize,
 }
 
 impl Default for App {
@@ -190,7 +213,14 @@ impl App {
             sync_status: None,
             mr_draft: None,
             mr_field: 0,
+            diff_state: None,
+            mr_list: Vec::new(),
+            mr_selected: 0,
             show_debug_console: false,
+            plugin_manager: None,
+            fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
+            fuzzy_query: String::new(),
+            fuzzy_selected: 0,
         }
     }
 
@@ -198,7 +228,31 @@ impl App {
     pub fn load_issues(&mut self, issues: Vec<Issue>) {
         self.issues = issues;
         self.update_available_repos(); // Update repo list for filtering
+        self.fuzzy_searcher.update_issues(&self.issues); // Update fuzzy search cache
         self.refresh_filter();
+    }
+
+    /// Load MRs from provider
+    pub fn load_mrs(&mut self) -> anyhow::Result<()> {
+        if let Some(ref provider) = self.sync_provider {
+            match provider.list_mrs() {
+                Ok(mrs) => {
+                    self.mr_list = mrs;
+                    self.mr_selected = 0;
+                    self.set_status(format!("Loaded {} MRs", self.mr_list.len()));
+                    Ok(())
+                }
+                Err(e) => {
+                    self.set_status(format!("Failed to load MRs: {}", e));
+                    Err(e)
+                }
+            }
+        } else {
+            // Try to auto-initialize local provider if none?
+            // For now just error
+            self.set_status("No sync provider configured".to_string());
+            Ok(())
+        }
     }
 
     /// Refresh the filtered list based on search query
@@ -289,7 +343,9 @@ impl App {
     pub fn toggle_view(&mut self) {
         self.view_mode = match self.view_mode {
             ViewMode::List => ViewMode::Kanban,
-            ViewMode::Kanban => ViewMode::List,
+            ViewMode::Kanban => ViewMode::MRList,
+            ViewMode::MRList => ViewMode::List,
+            ViewMode::Diff => ViewMode::List,
         };
     }
 

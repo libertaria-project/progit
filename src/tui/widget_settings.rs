@@ -6,7 +6,7 @@ use crate::tui::app::App;
 use crate::tui::theme::{Theme, ThemeColors};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,

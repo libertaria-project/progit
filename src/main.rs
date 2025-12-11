@@ -7,6 +7,10 @@
 mod git;
 mod issue;
 mod mr;
+mod plugins;
+mod diff;
+mod fuzzy;
+mod rebase;
 mod storage;
 mod sync;
 mod tui;
@@ -72,6 +76,12 @@ enum Commands {
     Mr {
         #[command(subcommand)]
         action: Option<MrAction>,
+    },
+    /// Internal: Interactive rebase editor (triggered by git)
+    #[command(hide = true)]
+    RebaseEditor {
+        /// Path to the git-rebase-todo file
+        path: String,
     },
 }
 
@@ -341,6 +351,9 @@ fn main() -> Result<()> {
                 return Err(anyhow!("Issue '{}' not found", id));
             }
         }
+        Some(Commands::RebaseEditor { path }) => {
+            crate::rebase::run(&path)?;
+        }
         None => {
             // No command - run TUI
             start_tui()?;
@@ -348,6 +361,24 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Convert ProGit Issue to Plugin SDK Issue format
+fn convert_issue_to_plugin(issue: &Issue) -> progit_plugin_sdk::prelude::Issue {
+    progit_plugin_sdk::prelude::Issue {
+        id: issue.id.clone(),
+        title: issue.title.clone(),
+        description: issue.description.clone(),
+        status: issue.status.as_str().to_string(),
+        tags: issue.tags.clone(),
+        assignee: issue.assignee.clone(),
+        effort: Some(issue.effort as u8),
+        blocked: issue.blocked,
+        created: issue.created.to_rfc3339(),
+        updated: issue.updated.to_rfc3339(),
+        due: issue.due.map(|d| d.to_rfc3339()),
+        metadata: std::collections::HashMap::new(),
+    }
 }
 
 fn start_tui() -> Result<()> {
@@ -434,6 +465,30 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
     let cwd = std::env::current_dir()?;
     app.repo_info = detect_repo(&cwd)?;
 
+    // Initialize plugin manager and load plugins
+    let mut plugin_manager = crate::plugins::PluginManager::new(&project_root);
+    let plugin_context = progit_plugin_sdk::prelude::PluginContext {
+        repo_path: project_root.to_string_lossy().to_string(),
+        user: std::env::var("USER").ok(),
+        env: std::env::vars().collect(),
+        config: std::collections::HashMap::new(),
+    };
+    
+    match plugin_manager.load_all(&plugin_context) {
+        Ok(count) if count > 0 => {
+            log::info!("✅ Loaded {} plugin(s)", count);
+            app.set_status(format!("Loaded {} plugin(s)", count));
+        }
+        Ok(_) => {
+            log::info!("No plugins found");
+        }
+        Err(e) => {
+            log::warn!("⚠️ Plugin loading failed: {}", e);
+        }
+    }
+    
+    app.plugin_manager = Some(plugin_manager);
+
     // Track UI areas for mouse events
     let mut ui_areas = UIAreas::default();
 
@@ -476,21 +531,34 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     if let Some(s) = status {
                         new_issue.status = s;
                     }
-                    engine.upsert(new_issue)?;
+                    engine.upsert(new_issue.clone())?;
                     app.load_issues(engine.issues().to_vec());
                     app.set_status("Created new issue");
+                    
+                    // Trigger plugin hook
+                    if let Some(ref mut pm) = app.plugin_manager {
+                        let plugin_issue = convert_issue_to_plugin(&new_issue);
+                        pm.on_issue_created(&plugin_issue);
+                    }
                 }
                 KeyAction::DeleteIssue => {
                     // Delete the selected issue based on view mode
                     let issue_id = match app.view_mode {
                         tui::ViewMode::List => app.selected_issue().map(|i| i.id.clone()),
                         tui::ViewMode::Kanban => app.kanban_selected_issue().map(|i| i.id.clone()),
+                        tui::ViewMode::Diff => None,
+                        tui::ViewMode::MRList => None,
                     };
 
                     if let Some(id) = issue_id {
                         if engine.delete(&id)? {
                             app.load_issues(engine.issues().to_vec());
                             app.set_status("Issue deleted");
+                            
+                            // Trigger plugin hook
+                            if let Some(ref mut pm) = app.plugin_manager {
+                                pm.on_issue_deleted(&id);
+                            }
                         } else {
                             app.set_status("Failed to delete issue");
                         }

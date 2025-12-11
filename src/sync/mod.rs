@@ -4,6 +4,7 @@
 
 pub mod forgejo;
 pub mod gitlab;
+pub mod local;
 pub mod keyring;
 
 use anyhow::Result;
@@ -35,6 +36,7 @@ pub fn create_provider(config: SyncConfig) -> Box<dyn SyncProvider> {
     match config.provider.as_str() {
         "forgejo" => Box::new(forgejo::ForgejoProvider::new(config)),
         "gitlab" => Box::new(gitlab::GitLabProvider::new(config)),
+        "local" => Box::new(local::LocalProvider::new(config)),
         _ => panic!("Unknown provider: {}", config.provider),
     }
 }
