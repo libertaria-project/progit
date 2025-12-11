@@ -263,7 +263,10 @@ impl SyncProvider for ForgejoProvider {
             return Err(anyhow!("Failed to create PR: {}", error_text));
         }
         
-        let pr: ForgejoPullRequest = response.json()?;
+        // Try to parse response, with better error message on failure
+        let body = response.text().context("Failed to read response body")?;
+        let pr: ForgejoPullRequest = serde_json::from_str(&body)
+            .context(format!("Failed to parse PR response: {}", body))?;
         Ok(pr.number as u64)
     }
     
@@ -281,7 +284,10 @@ impl SyncProvider for ForgejoProvider {
             return Err(anyhow!("API Error: {}", response.status()));
         }
         
-        let prs: Vec<ForgejoPullRequest> = response.json()?;
+        // Parse with better error handling
+        let body = response.text().context("Failed to read response")?;
+        let prs: Vec<ForgejoPullRequest> = serde_json::from_str(&body)
+            .context(format!("Failed to parse PRs: {}", body))?;
         let mut mrs = Vec::new();
         
         for pr in prs {
@@ -473,7 +479,9 @@ struct ForgejoPullRequest {
     updated_at: DateTime<Utc>,
     merged_at: Option<DateTime<Utc>>,
     user: Option<ForgejoUser>,
+    #[serde(default)]
     assignees: Vec<ForgejoUser>,
+    #[serde(default)]
     labels: Vec<ForgejoLabel>,
     head: ForgejoBranch,
     base: ForgejoBranch,
