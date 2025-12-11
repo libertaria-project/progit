@@ -166,5 +166,8 @@ pub fn help_text(app: &App) -> String {
         crate::tui::ViewMode::Diff => {
              "j/k:scroll  J/K:files  space:collapse  q:close".to_string()
         }
+        crate::tui::ViewMode::MRList => {
+             "j/k:nav  enter:review  r:reload  q:back".to_string()
+        }
     }
 }

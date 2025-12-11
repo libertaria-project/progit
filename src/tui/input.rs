@@ -45,6 +45,67 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> KeyAction {
         ViewMode::List => handle_list_key(app, key),
         ViewMode::Kanban => handle_kanban_key(app, key),
         ViewMode::Diff => handle_diff_key(app, key),
+        ViewMode::MRList => handle_mr_list_key(app, key),
+    }
+}
+
+/// Handle keys in MR list view
+fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Char('j') | KeyCode::Down => {
+            if !app.mr_list.is_empty() {
+                app.mr_selected = (app.mr_selected + 1) % app.mr_list.len();
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if !app.mr_list.is_empty() {
+                app.mr_selected = app.mr_selected.checked_sub(1)
+                    .unwrap_or(app.mr_list.len() - 1);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            if let Some(mr) = app.mr_list.get(app.mr_selected) {
+                // Determine diff reference: target...source
+                // NOTE: For local, this works. For remote, we might need to fetch first?
+                // The DiffState logic handles `git diff arguments`.
+                let diff_ref = format!("{}...{}", mr.target_branch, mr.source_branch);
+                app.set_status(format!("Loading diff for {}...", mr.source_branch));
+                
+                let mut state = crate::diff::DiffState::new(diff_ref);
+                match state.load() {
+                    Ok(_) => {
+                        app.diff_state = Some(state);
+                        app.view_mode = ViewMode::Diff;
+                        KeyAction::Refresh
+                    },
+                    Err(e) => {
+                        app.set_status(format!("Diff failed: {}", e));
+                        KeyAction::Refresh
+                    }
+                }
+            } else {
+                KeyAction::None
+            }
+        }
+        KeyCode::Char('r') => {
+            app.set_status("Reloading MRs...");
+            if let Err(e) = app.load_mrs() {
+                app.set_status(format!("Failed: {}", e));
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Tab => {
+            app.toggle_view();
+            KeyAction::Refresh
+        }
+        KeyCode::Char('q') => {
+             // Go back to Kanban or List?
+             app.view_mode = ViewMode::Kanban;
+             KeyAction::Refresh
+        }
+        _ => KeyAction::None,
     }
 }
 
@@ -1280,6 +1341,11 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                         state.scroll = state.scroll.saturating_add(3);
                     }
                 }
+                ViewMode::MRList => {
+                    if !app.mr_list.is_empty() {
+                        app.mr_selected = (app.mr_selected + 1) % app.mr_list.len();
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -1290,6 +1356,11 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 ViewMode::Diff => {
                     if let Some(ref mut state) = app.diff_state {
                         state.scroll = state.scroll.saturating_sub(3);
+                    }
+                }
+                ViewMode::MRList => {
+                    if !app.mr_list.is_empty() {
+                        app.mr_selected = app.mr_selected.checked_sub(1).unwrap_or(app.mr_list.len() - 1);
                     }
                 }
             }
@@ -1306,6 +1377,7 @@ pub fn help_text(app: &App) -> &'static str {
             ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
             ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
+            ViewMode::MRList => "j/k:nav │ Enter:review │ r:reload │ q:back",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",

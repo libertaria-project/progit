@@ -13,13 +13,14 @@ pub mod input;
 pub mod style;
 pub mod theme;
 pub mod widget_detail;
-pub mod widget_fuzzy_palette;
 pub mod widget_issues;
 pub mod widget_kanban;
 pub mod widget_mr_create;
 pub mod widget_status;
-pub mod widget_debug;
-pub mod widget_settings;
+mod widget_debug;
+mod widget_fuzzy_palette;
+mod widget_mr_list;
+mod widget_settings;
 
 // Re-export public API
 pub use app::{App, DragState, InputMode, ViewMode};
@@ -28,7 +29,7 @@ pub use theme::{Theme, ThemeColors};
 pub use widget_detail::EditField;
 pub use widget_kanban::KanbanAreas;
 
-use crate::git::{render_gitbar, render_remote_dropdown};
+use crate::git::render_remote_dropdown;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
@@ -129,16 +130,23 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     });
 
     // Build title spans with active/inactive styling
-    let (issues_style, kanban_style) = match app.view_mode {
+    let (issues_style, kanban_style, mr_style) = match app.view_mode {
         ViewMode::List => (
             colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
             colors.dim(),
         ),
         ViewMode::Kanban => (
             colors.dim(),
             colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
         ),
-        ViewMode::Diff => (colors.dim(), colors.dim()),
+        ViewMode::MRList => (
+            colors.dim(),
+            colors.dim(),
+            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+        ),
+        ViewMode::Diff => (colors.dim(), colors.dim(), colors.dim()),
     };
     
     // Settings style (highlighted if in settings mode)
@@ -161,6 +169,8 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         Span::styled(issues_label, issues_style),
         Span::raw("│"),
         Span::styled(kanban_label, kanban_style),
+        Span::raw("│"),
+        Span::styled(" MRs ", mr_style),
         Span::styled(format!(" ({} total) ", app.issues.len()), colors.dim()),
         Span::raw(" ".repeat(padding)),
         Span::styled(settings_label, settings_style),
@@ -183,6 +193,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
         ViewMode::Kanban => {
             widget_kanban::render(frame, inner, app)
+        }
+        ViewMode::MRList => {
+             widget_mr_list::render(frame, inner, app);
+             KanbanAreas::default()
         }
         ViewMode::Diff => {
             if let Some(ref state) = app.diff_state {

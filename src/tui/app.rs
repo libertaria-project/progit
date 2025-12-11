@@ -16,6 +16,7 @@ pub enum ViewMode {
     List,
     Kanban,
     Diff,
+    MRList,
 }
 
 /// Input mode
@@ -66,6 +67,10 @@ pub struct App {
 
     // Diff State
     pub diff_state: Option<crate::diff::DiffState>,
+    
+    // MR List State
+    pub mr_list: Vec<crate::mr::MergeRequest>,
+    pub mr_selected: usize,
 
     /// Search query
     pub search_query: String,
@@ -209,6 +214,8 @@ impl App {
             mr_draft: None,
             mr_field: 0,
             diff_state: None,
+            mr_list: Vec::new(),
+            mr_selected: 0,
             show_debug_console: false,
             plugin_manager: None,
             fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
@@ -223,6 +230,29 @@ impl App {
         self.update_available_repos(); // Update repo list for filtering
         self.fuzzy_searcher.update_issues(&self.issues); // Update fuzzy search cache
         self.refresh_filter();
+    }
+
+    /// Load MRs from provider
+    pub fn load_mrs(&mut self) -> anyhow::Result<()> {
+        if let Some(ref provider) = self.sync_provider {
+            match provider.list_mrs() {
+                Ok(mrs) => {
+                    self.mr_list = mrs;
+                    self.mr_selected = 0;
+                    self.set_status(format!("Loaded {} MRs", self.mr_list.len()));
+                    Ok(())
+                }
+                Err(e) => {
+                    self.set_status(format!("Failed to load MRs: {}", e));
+                    Err(e)
+                }
+            }
+        } else {
+            // Try to auto-initialize local provider if none?
+            // For now just error
+            self.set_status("No sync provider configured".to_string());
+            Ok(())
+        }
     }
 
     /// Refresh the filtered list based on search query
@@ -313,7 +343,8 @@ impl App {
     pub fn toggle_view(&mut self) {
         self.view_mode = match self.view_mode {
             ViewMode::List => ViewMode::Kanban,
-            ViewMode::Kanban => ViewMode::List,
+            ViewMode::Kanban => ViewMode::MRList,
+            ViewMode::MRList => ViewMode::List,
             ViewMode::Diff => ViewMode::List,
         };
     }
