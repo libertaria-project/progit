@@ -341,12 +341,19 @@ impl App {
 
     /// Toggle view mode
     pub fn toggle_view(&mut self) {
-        self.view_mode = match self.view_mode {
+        let new_mode = match self.view_mode {
             ViewMode::List => ViewMode::Kanban,
             ViewMode::Kanban => ViewMode::MRList,
             ViewMode::MRList => ViewMode::List,
             ViewMode::Diff => ViewMode::List,
         };
+        
+        // Auto-load MRs when switching to MR list view
+        if new_mode == ViewMode::MRList && self.mr_list.is_empty() {
+            let _ = self.load_mrs();
+        }
+        
+        self.view_mode = new_mode;
     }
 
     /// Cycle theme
