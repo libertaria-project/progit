@@ -276,7 +276,7 @@ impl SyncProvider for ForgejoProvider {
         
         let response = self.client.get(&url)
             .header("Authorization", format!("token {}", token))
-            .query(&[("state", "all")])
+            .query(&[("state", "open")])
             .send()
             .context("Failed to fetch pull requests")?;
         
