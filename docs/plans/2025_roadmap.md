@@ -1,43 +1,39 @@
-# ProGit Strategic Roadmap: Operation Workflow Superiority
+# ProGit Roadmap 2025
 
-**Objective**: Build a terminal-based development environment that is significantly faster than the GitLab Web UI.
-**Timeline**: 6 Months (4 Sprints)
+**Mission**: Build a terminal-based development environment that outperforms web interfaces through local-first speed and keyboard-driven efficiency.
 
-## 🏁 Sprint 1: The Foundation (Month 1-2)
-**Goal**: Unbreakable local storage and lightning-fast issue management.
-**Status**: Near Completion.
+## Core Features (Completed)
 
-- [x] **Storage Engine**: JSON-based (Optimized for Web App Sync & CRUD), atomic, local-first.
-- [x] **TUI Core**: Interactivity, settings, themes, dynamic layouts.
-- [x] **Project Management**: Issues, Kanban, Sprints (Dogfooding).
-- [ ] **Reliability**: Unit test coverage for storage & sync logic.
+- **Local-First Storage**: Atomic, JSON-based storage engine synced with Git tracked files.
+- **TUI Engine**: Dynamic layouts, theming engine, and Vim-style navigation.
+- **Project Management**: Full issue tracking, Kanban boards, and sprint planning.
+- **Fuzzy Command Palette**: Global fuzzy search for issues, commands, and files (`Ctrl+P`).
 
-## 🚀 Sprint 2: The Killer Feature - Code Review (Month 3-4)
-**Goal**: Make the terminal the superior place to review code. "I don't open the browser to approve a PR."
+## In Development
 
-- [ ] **MR Dashboard**: specialized view for Merge Requests (Author, Reviewers, Pipeline Status).
-- [ ] **Diff Viewer**: syntax-highlighted, side-by-side diffs in TUI.
-- [ ] **Review Comments**: add/reply to comments directly on code lines.
-- [ ] **Checkout MR**: One-key context switch to the contributor's branch.
-- [ ] **Approvals**: `A` to Approve, `R` to Request Changes.
+### Interactive Rebase Visualizer
+A graphical interface for complex git rebase operations, replacing the text editor todo list with an interactive TUI component.
 
-## ⚡ Sprint 3: The Ecosystem - CI/CD (Month 5)
-**Goal**: Immediate feedback loop. "Why did it fail?" answered in milliseconds.
+### Advanced Diff Viewer
+Syntax-highlighted side-by-side diffs within the terminal for rapid code review.
 
-- [ ] **Pipeline Status**: Live indicators in status bar.
-- [ ] **Log Viewer**: Stream build logs in real-time with ANSI colors.
-- [ ] **Retry/Cancel**: Control jobs without leaving the context.
-- [ ] **Local Verify**: Run pre-commit hooks / local checks via TUI before pushing.
+## Plugin & Extension Architecture
 
-## 🛠️ Sprint 4: The Forge - Completeness (Month 6)
-**Goal**: A self-contained forge environment.
+We are building a robust, business-friendly plugin system to allow endless customization and corporate integration without bloating the core binary.
 
-- [ ] **Wiki/Docs**: Manage git-backed documentation.
-- [ ] **Release Management**: Tag versions, generate changelogs.
-- [ ] **Plugin System**: Lua/WASM extensions.
-- [ ] **Addon Packs**: Community themes and icons ("Pimp My ProGit").
-- [ ] **Security**: GPG signing and identity integration.
+- **ProGit Plugin SDK**: A standalone Rust Crate for developing extensions.
+- **Dual Runtime Support**:
+    - **LuaJIT**: Lightweight, fast runtime for scripting and automation (Default).
+    - **WASM**: Secure, sandboxed runtime for complex integrations (Optional Feature).
+- **Enterprise Integration**: Capabilities for proprietary logic, identity management, and custom workflows via isolated plugin hooks.
+
+## Future Capabilities
+
+- **Merge Request Review**: Context-aware code review interface.
+- **CI/CD Intelligence**: Real-time pipeline status and log streaming.
+- **Release Management**: Semantic versioning and changelog automation.
+- **Snippet Management**: Local and shared code snippets.
 
 ---
 
-> "We won't build GitLab. We will build the scalpel that makes the Surgeon faster than the Administrator."
+> "The scalpel that makes the Surgeon faster than the Administrator."
