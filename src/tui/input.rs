@@ -139,7 +139,7 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     if let Some(ref provider) = app.sync_provider {
                         match provider.approve_mr(remote_id) {
                             Ok(_) => {
-                                app.set_status(format!("✅ Approved MR !{}", remote_id));
+                                app.set_status(format!("👍 Review approved for MR !{} (LGTM)", remote_id));
                                 // Reload MRs to reflect changes
                                 let _ = app.load_mrs();
                             }
@@ -161,7 +161,7 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     if let Some(ref provider) = app.sync_provider {
                         match provider.merge_mr(remote_id) {
                             Ok(_) => {
-                                app.set_status(format!("✅ Merged MR !{}", remote_id));
+                                app.set_status(format!("✅ Accepted & Merged MR !{}", remote_id));
                                 // Reload MRs to reflect changes
                                 let _ = app.load_mrs();
                             }
@@ -176,18 +176,18 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
             KeyAction::Refresh
         }
-        KeyCode::Char('c') => {
-            // Close MR
+        KeyCode::Char('x') => {
+            // Reject MR (close without merging)
             if let Some(mr) = app.mr_list.get(app.mr_selected).cloned() {
                 if let Some(remote_id) = mr.remote_id {
                     if let Some(ref provider) = app.sync_provider {
                         match provider.close_mr(remote_id) {
                             Ok(_) => {
-                                app.set_status(format!("✅ Closed MR !{}", remote_id));
+                                app.set_status(format!("❌ Rejected MR !{} (closed without merge)", remote_id));
                                 // Reload MRs to reflect changes
                                 let _ = app.load_mrs();
                             }
-                            Err(e) => app.set_status(format!("❌ Failed to close: {}", e)),
+                            Err(e) => app.set_status(format!("❌ Failed to reject: {}", e)),
                         }
                     } else {
                         app.set_status("No sync provider configured".to_string());
@@ -1528,7 +1528,7 @@ pub fn help_text(app: &App) -> &'static str {
             ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
             ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
-            ViewMode::MRList => "j/k:nav │ g/G:top/bottom │ Enter:review │ a:approve │ m:merge │ c:close │ r:reload │ S:sync │ b:branch │ O:settings │ ?:help │ q:back",
+            ViewMode::MRList => "j/k:nav │ Enter:diff │ a:approve(LGTM) │ m:accept+merge │ x:reject │ r:reload │ S:sync │ ?:help │ q:back",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",

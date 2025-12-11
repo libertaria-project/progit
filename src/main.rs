@@ -110,6 +110,21 @@ enum MrAction {
         #[arg(short, long)]
         title: Option<String>,
     },
+    /// Approve a merge request (LGTM review)
+    Approve {
+        /// MR number to approve
+        id: u64,
+    },
+    /// Accept and merge a merge request
+    Merge {
+        /// MR number to merge
+        id: u64,
+    },
+    /// Reject a merge request (close without merging)
+    Reject {
+        /// MR number to reject
+        id: u64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -297,6 +312,27 @@ fn main() -> Result<()> {
                     match provider.create_mr(&mr) {
                         Ok(id) => println!("{} Created MR !{}", "✅".green(), id),
                         Err(e) => println!("{} Failed to create MR: {}", "❌".red(), e),
+                    }
+                }
+                Some(MrAction::Approve { id }) => {
+                    println!("{} Approving MR !{}...", "🔄".blue(), id);
+                    match provider.approve_mr(id) {
+                        Ok(_) => println!("{} Approved MR !{} (LGTM)", "👍".green(), id),
+                        Err(e) => println!("{} Failed to approve: {}", "❌".red(), e),
+                    }
+                }
+                Some(MrAction::Merge { id }) => {
+                    println!("{} Merging MR !{}...", "🔄".blue(), id);
+                    match provider.merge_mr(id) {
+                        Ok(_) => println!("{} Accepted & Merged MR !{}", "✅".green(), id),
+                        Err(e) => println!("{} Failed to merge: {}", "❌".red(), e),
+                    }
+                }
+                Some(MrAction::Reject { id }) => {
+                    println!("{} Rejecting MR !{} (closing without merge)...", "🔄".blue(), id);
+                    match provider.close_mr(id) {
+                        Ok(_) => println!("{} Rejected MR !{}", "❌".yellow(), id),
+                        Err(e) => println!("{} Failed to reject: {}", "❌".red(), e),
                     }
                 }
             }
