@@ -4,6 +4,7 @@
 
 use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
+use crate::plugins::PluginManager;
 use crate::tui::theme::Theme;
 use crate::sync::SyncProvider;
 use crate::tui::style::ThemeEngine;
@@ -145,6 +146,9 @@ pub struct App {
     
     /// Show debug console overlay
     pub show_debug_console: bool,
+    
+    /// Plugin manager
+    pub plugin_manager: Option<PluginManager>,
 }
 
 impl Default for App {
@@ -191,6 +195,7 @@ impl App {
             mr_draft: None,
             mr_field: 0,
             show_debug_console: false,
+            plugin_manager: None,
         }
     }
 

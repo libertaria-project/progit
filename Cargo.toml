@@ -47,6 +47,9 @@ colored = "3.0.0"
 log = "0.4.29"
 tui-logger = { version = "0.17.4", features = ["crossterm"] }
 
+# Plugin SDK (Apache 2.0 - separate license)
+progit-plugin-sdk = { path = "../progit-plugin-sdk" }
+
 [features]
 default = []
 web = ["tokio", "axum", "askama"]
