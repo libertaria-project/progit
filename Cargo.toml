@@ -43,6 +43,12 @@ urlencoding = "2.1"
 keyring = "2"
 rpassword = "7"
 regex = "1"
+colored = "3.0.0"
+log = "0.4.29"
+tui-logger = { version = "0.17.4", features = ["crossterm"] }
+
+# Plugin SDK (Apache 2.0 - separate license)
+progit-plugin-sdk = { path = "../progit-plugin-sdk" }
 
 [features]
 default = []
@@ -53,6 +59,10 @@ lto = true
 codegen-units = 1
 strip = true
 panic = "abort"
+
+[lib]
+name = "progit"
+path = "src/lib.rs"
 
 [[bin]]
 name = "prog"

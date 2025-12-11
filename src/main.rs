@@ -616,13 +616,6 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                              app.set_status(format!("Switched to branch: {}", branch));
                              // Refresh repo info
                              app.repo_info = detect_repo(&cwd)?;
-                             
-                             // Reload issues from disk/engine
-                             if let Err(e) = engine.load() {
-                                 app.set_status(format!("Reload failed: {}", e));
-                             } else {
-                                 app.load_issues(engine.issues().to_vec());
-                             }
                          },
                          Err(e) => app.set_status(format!("Failed to switch: {}", e)),
                      }

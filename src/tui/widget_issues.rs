@@ -16,11 +16,13 @@ use ratatui::{
 /// Render the issues table
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let colors = app.theme.colors();
+    let engine = &app.theme_engine;
 
     // Table header
-    let header_cells = ["ID", "Title", "Status", "Effort", "Tags"]
+    let header_style = engine.get("issues.header", colors.header());
+    let header_cells = ["ID", "Title", "Status", "Effort", "Repo", "Tags"]
         .iter()
-        .map(|h| Cell::from(*h).style(colors.header()));
+        .map(|h| Cell::from(*h).style(header_style));
     let header = Row::new(header_cells).height(1);
 
     // Table rows
@@ -28,28 +30,50 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .filtered
         .iter()
         .filter_map(|&idx| app.issues.get(idx))
-        .map(|issue| issue_row(issue, &colors))
+        .map(|issue| issue_row(issue, &colors, engine))
         .collect();
 
-    // Column widths
+    // Calculate dynamic column widths based on content
+    // ID: min 8, max 15 based on actual IDs
+    let max_id_len = app.filtered.iter()
+        .filter_map(|&idx| app.issues.get(idx))
+        .map(|i| i.short_id().len())
+        .max()
+        .unwrap_or(8)
+        .clamp(8, 15) as u16;
+    
+    // Repo: min 4, max 12 based on actual repo names
+    let max_repo_len = app.filtered.iter()
+        .filter_map(|&idx| app.issues.get(idx))
+        .filter_map(|i| i.repo.as_ref())
+        .map(|r| r.len())
+        .max()
+        .unwrap_or(4)
+        .clamp(4, 12) as u16;
+
+    // Column widths - dynamic where sensible
     let widths = [
-        Constraint::Length(10),     // ID
-        Constraint::Percentage(40), // Title
-        Constraint::Length(12),     // Status
-        Constraint::Length(8),      // Effort
-        Constraint::Percentage(20), // Tags
+        Constraint::Length(max_id_len + 2),  // ID (dynamic)
+        Constraint::Percentage(35),          // Title (flex)
+        Constraint::Length(12),              // Status (fixed)
+        Constraint::Length(6),               // Effort (fixed)
+        Constraint::Length(max_repo_len + 2),// Repo (dynamic)
+        Constraint::Fill(1),                 // Tags (fill remaining)
     ];
 
     // Create table
+    let border_style = engine.get("issues.border", colors.border());
+    let selected_style = engine.get("issues.row.selected", colors.selected());
+    
     let table = Table::new(rows, widths)
         .header(header)
         .block(
             Block::default()
                 .title(table_title(app))
                 .borders(Borders::ALL)
-                .border_style(colors.border()),
+                .border_style(border_style),
         )
-        .row_highlight_style(colors.selected())
+        .row_highlight_style(selected_style)
         .highlight_symbol("▶ ");
 
     // Render with selection state
@@ -60,22 +84,24 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Create a row for an issue
-fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors) -> Row<'a> {
-    // Determine row style based on status and blocking state
-    let row_style = if issue.is_blocker() || issue.is_overdue() {
-        colors.error_bg()
-    } else if issue.status == Status::InProgress {
-        colors.success_bg()
-    } else if issue.status == Status::Done {
-        colors.done_bg()
-    } else {
-        colors.normal()
-    };
+fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) -> Row<'a> {
+    // Determine row style based on SELECTION ONLY
+    // Status does not color the whole row anymore, to avoid "Green on Green" mess.
+    let row_style = engine.get("issues.row.normal", colors.normal());
 
+    // Status colors - ALWAYS visible!
+    // Backlog = Yellow/Amber, InProgress = Green, Done = Cyan
     let status_style = match issue.status {
-        Status::Backlog => colors.dim(),
-        Status::InProgress => colors.success(),
-        Status::Done => colors.accent(),
+        Status::Backlog => colors.warning(),     // Yellow - visible!
+        Status::InProgress => colors.success(),  // Green - active
+        Status::Done => Style::default().fg(ratatui::style::Color::Cyan), // Cyan - completed but visible!
+    };
+    
+    // Status Icon
+    let status_icon = match issue.status {
+        Status::Backlog => "○",
+        Status::InProgress => "▶",
+        Status::Done => "✔",
     };
 
     let blocker_indicator = if issue.is_blocker() { 
@@ -85,13 +111,48 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors) -> Row<'a> {
     } else { 
         "" 
     };
+    
+    // Repo display with color coding
+    let repo_display = issue.repo.as_deref().unwrap_or("-");
+    let repo_style = if issue.repo.is_some() {
+        // Color-code by repo name (simple hash-based coloring)
+        let hash = repo_display.bytes().fold(0u8, |acc, b| acc.wrapping_add(b));
+        let color = match hash % 6 {
+            0 => ratatui::style::Color::Cyan,
+            1 => ratatui::style::Color::Magenta,
+            2 => ratatui::style::Color::Yellow,
+            3 => ratatui::style::Color::Green,
+            4 => ratatui::style::Color::Blue,
+            _ => ratatui::style::Color::Red,
+        };
+        Style::default().fg(color)
+    } else {
+        colors.dim()
+    };
+
+    // Render tags as pills: [ tag ] [ tag2 ]
+    let mut tag_spans = Vec::new();
+    for (i, tag) in issue.tags.iter().enumerate() {
+        if i > 0 {
+            tag_spans.push(Span::raw(" "));
+        }
+        tag_spans.push(Span::styled(format!("[ {} ]", tag), colors.accent()));
+    }
+    
+    // Create Cell from spans (empty if no tags)
+    let tags_cell = if tag_spans.is_empty() {
+        Cell::from("")
+    } else {
+        Cell::from(Line::from(tag_spans))
+    };
 
     let cells = [
-        Cell::from(issue.short_id().to_string()),
+        Cell::from(issue.short_id().to_string()).style(colors.dim()),
         Cell::from(format!("{}{}", blocker_indicator, &issue.title)),
-        Cell::from(issue.status.as_str()).style(status_style),
+        Cell::from(format!("{} {}", status_icon, issue.status.as_str())).style(status_style),
         Cell::from(format!("{}", issue.effort as u8)),
-        Cell::from(issue.tags.join(", ")),
+        Cell::from(repo_display).style(repo_style),
+        tags_cell,
     ];
 
     Row::new(cells).style(row_style)

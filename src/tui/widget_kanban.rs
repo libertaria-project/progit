@@ -24,6 +24,7 @@ pub struct KanbanAreas {
 /// Render the kanban board
 pub fn render(frame: &mut Frame, area: Rect, app: &App) -> KanbanAreas {
     let colors = app.theme.colors();
+    let engine = &app.theme_engine;
     let mut areas = KanbanAreas::default();
 
     // Split into 3 columns
@@ -47,6 +48,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) -> KanbanAreas {
         "📥 Backlog",
         &backlog,
         &colors,
+        engine,
         Status::Backlog,
         app.kanban_column == 0,
         if app.kanban_column == 0 { Some(app.kanban_row) } else { None },
@@ -58,6 +60,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) -> KanbanAreas {
         "🔄 In Progress",
         &in_progress,
         &colors,
+        engine,
         Status::InProgress,
         app.kanban_column == 1,
         if app.kanban_column == 1 { Some(app.kanban_row) } else { None },
@@ -69,6 +72,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) -> KanbanAreas {
         "✅ Done",
         &done,
         &colors,
+        engine,
         Status::Done,
         app.kanban_column == 2,
         if app.kanban_column == 2 { Some(app.kanban_row) } else { None },
@@ -86,15 +90,22 @@ fn render_column(
     title: &str,
     issues: &[&Issue],
     colors: &ThemeColors,
+    engine: &crate::tui::style::ThemeEngine,
     status: Status,
     is_selected_column: bool,
     selected_row: Option<usize>,
     is_drag_target: bool,
 ) {
+    // Status colors - MUST be bright and visible at all times!
+    // Backlog = Yellow/Amber (waiting)
+    // In Progress = Green (active)  
+    // Done = Cyan/Blue (completed but visible)
+    // Blockers/Overdue = Red (in card styling below)
     let status_style = match status {
-        Status::Backlog => colors.dim(),
-        Status::InProgress => colors.success(),
-        Status::Done => colors.accent(),
+        Status::Backlog => engine.get("kanban.header.backlog", colors.warning()), // Yellow!
+        Status::InProgress => engine.get("kanban.header.progress", colors.success()), // Green!
+        Status::Done => engine.get("kanban.header.done", 
+            Style::default().fg(ratatui::style::Color::Cyan).add_modifier(Modifier::BOLD)), // Cyan!
     };
 
     // Split area for + button at top, list, + button at bottom
@@ -109,9 +120,9 @@ fn render_column(
 
     // Top + button
     let top_btn_style = if is_selected_column {
-        colors.accent()
+        engine.get("kanban.button.active", colors.accent())
     } else {
-        colors.dim()
+        engine.get("kanban.button.inactive", colors.dim())
     };
     let top_btn = Paragraph::new(Line::from(vec![
         Span::styled("  [+] New Issue", top_btn_style),
@@ -130,15 +141,15 @@ fn render_column(
             let blocker_mark = if issue.is_blocker() { "🔥" } else if issue.is_overdue() { "⏰" } else { "  " };
 
             let style = if is_selected {
-                colors.selected()
+                engine.get("kanban.card.selected", colors.selected())
             } else if issue.is_blocker() || issue.is_overdue() {
-                colors.error_bg()
+                engine.get_conditional("kanban.card", "error", colors.error_bg())
             } else if issue.status == Status::InProgress {
-                 colors.success_bg()
+                 engine.get_conditional("kanban.card", "active", colors.success_bg())
             } else if issue.status == Status::Done {
-                 colors.done_bg()
+                 engine.get_conditional("kanban.card", "done", colors.done_bg())
             } else {
-                colors.normal()
+                engine.get("kanban.card.normal", colors.normal())
             };
 
             let content = format!(
@@ -158,11 +169,11 @@ fn render_column(
 
     // Column border style
     let border_style = if is_drag_target {
-        colors.accent().add_modifier(Modifier::BOLD)
+        engine.get("kanban.border.drag", colors.accent().add_modifier(Modifier::BOLD))
     } else if is_selected_column {
-        status_style
+        status_style // Use header style for border when selected
     } else {
-        colors.border()
+        engine.get("kanban.border.normal", colors.border())
     };
 
     // Create column block
@@ -172,7 +183,7 @@ fn render_column(
             Span::raw(" "),
             Span::styled(
                 format!("({} pts)", total_effort),
-                Style::default().add_modifier(Modifier::DIM),
+                engine.get("kanban.effort", Style::default().add_modifier(Modifier::DIM)),
             ),
         ]))
         .borders(Borders::ALL)
@@ -185,7 +196,7 @@ fn render_column(
 
     // Bottom + button (for quick add at bottom of column)
     let bottom_btn = Paragraph::new(Line::from(vec![
-        Span::styled("  [+]", colors.dim()),
+        Span::styled("  [+]", engine.get("kanban.button.inactive", colors.dim())),
     ]));
     frame.render_widget(bottom_btn, chunks[2]);
 }

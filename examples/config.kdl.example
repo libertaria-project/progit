@@ -1,0 +1,79 @@
+// ProGit Configuration Example
+// Copy this to .project/config.kdl and customize for your project
+
+config {
+    // Sprint duration in days
+    sprint-duration-days 14
+    
+    // Team members (for assignee dropdown/autocomplete)
+    team {
+        - "alice"
+        - "bob"
+        - "charlie"
+    }
+    
+    // Default effort estimate for new issues (1-5)
+    default-effort 3
+    
+    // Theme: nord, gruvbox, dracula, cyberpunk, vibe
+    theme "vibe"
+}
+
+// ==============================================================================
+// SYNC CONFIGURATION
+// ==============================================================================
+
+// OPTION 1: Single Repository (Legacy - Backward Compatible)
+// Uncomment if you have ONE repository:
+//
+// sync {
+//     provider "gitlab"              // or "forgejo", "github"
+//     url "https://gitlab.com"       // Your GitLab/Forgejo instance URL
+//     owner "your-username"          // Repository owner/group
+//     repo "your-repo"               // Repository name
+// }
+
+// OPTION 2: Multiple Repositories (Recommended for teams)
+// Uncomment and configure if you manage MULTIPLE related repositories:
+//
+// repos {
+//     repo "frontend" {
+//         path "../my-frontend"      // Optional: path to repo (relative or absolute)
+//         sync {
+//             provider "gitlab"
+//             url "https://gitlab.dlabs.hu"
+//             owner "myteam"
+//             repo "frontend-app"
+//         }
+//     }
+//     
+//     repo "backend" {
+//         path "../my-backend"
+//         sync {
+//             provider "forgejo"
+//             url "https://git.example.com"
+//             owner "myteam"
+//             repo "backend-api"
+//         }
+//     }
+//     
+//     repo "infra" {
+//         sync {
+//             provider "gitlab"
+//             url "https://gitlab.com"
+//             owner "myteam"
+//             repo "infrastructure"
+//         }
+//     }
+// }
+
+// ==============================================================================
+// WEB APP CONFIGURATION (Future Commercial Feature)
+// ==============================================================================
+// Uncomment to enable the web interface (coming soon):
+//
+// web {
+//     enabled false
+//     port 8080
+//     api-token "your-secure-token-here"  // For API authentication
+// }

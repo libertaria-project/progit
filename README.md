@@ -1,9 +1,11 @@
 # 🚀 ProGit
 
 > **"Your Code. Your Repository. Your Rules. Your Issues."**  
-> *Decentralized Issue Tracking for the Ungovernable.*
+> *The Terminal-First Forge Alternative.*
 
-## **We Unfuck GitHub & GitLab.**
+## **We're Rivaling GitLab, GitHub, and Forgejo.**
+
+### **With a Single Binary. And a Plugin Ecosystem.**
 
 **Your issues belong in YOUR repository. Not their database.**
 
@@ -11,25 +13,71 @@ For too long, GitHub and GitLab have held your project's issues hostage. They se
 
 **ProGit breaks the chains.**
 
-Store your issues as **human-readable KDL files** directly in your git repository. Track them, diff them, review them in pull requests. Your issues are YOUR data, versioned alongside your code, accessible forever—even if GitHub shuts down tomorrow.
+We're not just an issue tracker. We're building a **complete forge alternative** that runs in your terminal:
 
-We deliver what they gatekeep:
+- ✅ **Issue Tracking** (Done - you're using it now)
+- ✅ **Merge Request Creation** (Done - press `M`)
+- ✅ **Multi-Repo Management** (Done - manage frontend/backend/infra in ONE TUI)
+- 🚧 **Code Review in Terminal** (Coming - comment on diffs without browser)
+- 🚧 **CI/CD Pipeline Viewer** (Coming - watch builds in real-time)
+- 🚧 **Wiki/Docs Management** (Coming - markdown files, git-tracked)
+- 🚧 **Plugin System** (Coming - extend with Lua/WASM)
+
+Store your issues as **JSON files** directly in your git repository. Track them, diff them, review them in pull requests. Your issues are YOUR data, versioned alongside your code, accessible forever—even if GitHub shuts down tomorrow.
+
+## 🔥 **What Makes ProGit Different?**
+
+### **Multi-Repository Management** (GitLab/GitHub Can't Do This!)
+
+Manage issues across **multiple related repositories** in a single TUI:
+
+```
+📋 Issues (13 total) │ 📦 frontend: 5 │ backend: 3 │ infra: 2
+
+ID       Title              Status      Effort  Repo       Tags
+abc123   Fix auth bug       in-progress 5       frontend   security
+def456   API optimization   backlog     3       backend    performance
+ghi789   Deploy pipeline    done        8       infra      devops
+```
+
+**One ProGit instance. Multiple repos. Color-coded. Filterable. Synced correctly.**
+
+Perfect for:
+- **Monorepo teams** (track all services in one view)
+- **Microservices** (frontend, backend, infra issues together)
+- **Multi-project coordination** (see the big picture)
+
+Configure once, manage forever:
+```kdl
+repos {
+    repo "frontend" {
+        sync { provider "gitlab" url "https://gitlab.com" ... }
+    }
+    repo "backend" {
+        sync { provider "forgejo" url "https://git.example.com" ... }
+    }
+}
+```
+
+### **What We Deliver:**
 
   - 🎯 **Full Kanban Board** (drag-and-drop, visual status)
   - 📊 **Time Tracking** (due dates, effort estimates, velocity)
+  - 🔀 **Browser-Free MR Creation** (press `M`, done)
+  - 📦 **Multi-Repo Management** (one TUI, infinite repos)
   - 🔄 **Bidirectional Sync** (GitLab, Forgejo, GitHub coming soon)
   - ⚡ **Blazing Fast TUI** (Pure Rust, 5MB binary, no Electron bloat)
-  - 🎭 **Beautiful Themes** (Nord, Gruvbox, Dracula, Cyberpunk)
-  - 💾 **Git-Native Storage** (`.project/issues/*.kdl` — transparent, diffable files)
+  - 🎭 **Beautiful Themes** (Nord, Gruvbox, Dracula, Cyberpunk, Vibe)
+  - 💾 **Git-Native Storage** (`.project/issues/*.json` — transparent, diffable files)
   - 🔒 **100% Local-First** (work offline, sync when YOU decide)
   - ⌨️ **Keyboard-Driven** (Vim-style navigation, command palette)
   - 🆓 **Zero Subscriptions** (EUPL-1.2 license, free forever)
 
-**This is issue tracking, democratized.**
+**This is the forge, democratized.**
 
-> *"What GitLab sells, we give away. What GitHub hides, we expose. Your code, your issues, your repository."*
+> *"What GitLab sells, we give away. What GitHub hides, we expose. Your code, your issues, your repository. One binary. Infinite sovereignty."*
 
-📊 **[See how ProGit compares to Jira, Linear, and GitHub Issues →](https://www.google.com/search?q=COMPARISON.md)**
+📊 **[See how ProGit compares to Jira, Linear, and GitHub Issues →](COMPARISON.md)**
 
 -----
 
@@ -55,7 +103,7 @@ We deliver what they gatekeep:
 
 ```bash
 # Clone & Build
-git clone https://github.com/yourusername/progit
+git clone https://git.maiwald.work/SSSS/progit
 cd progit
 cargo build --release
 
@@ -120,6 +168,12 @@ prog due <id> 2025-12-31    # Set deadline
 prog due <id> clear         # Remove deadline
 prog block <id>             # Toggle 'Blocked' status
 prog clean                  # Prune duplicates
+
+# Branches & MRs
+prog branch list            # List branches
+prog branch create <name>   # Create and switch to branch
+prog mr list                # List open MRs
+prog mr create              # Create MR from current branch
 ```
 
 -----
@@ -178,9 +232,9 @@ src/
 ├── issue/          # Domain Model
 │   ├── model.rs    # Core Structs
 │   └── operations.rs
-├── storage/        # Dual KDL/JSON Persistence
-│   ├── kdl.rs      # Human-readable (Tracked)
-│   └── json.rs     # Machine-fast Cache (Ignored)
+├── storage/        # JSON Persistence
+│   ├── kdl.rs      # Config Parsing
+│   └── json.rs     # Issue Storage (Source of Truth)
 ├── sync/           # Forge Adapters
 │   ├── gitlab.rs
 │   └── forgejo.rs
@@ -191,20 +245,48 @@ src/
 
 ### Storage Philosophy
 
-  - **KDL** (`.project/issues/*.kdl`) - The Source of Truth. Merge-conflict friendly.
-  - **JSON** (`.progit/cache.json`) - The Speed Layer. Rebuilt on launch.
-  - **Dual Sync** - Edit the KDL manually? The JSON updates. Edit in TUI? The KDL updates.
+  - **JSON** (`.project/issues/*.json`) - The Source of Truth. Optimized for Web App Sync & CRUD.
+  - **KDL** (`.project/config.kdl`) - Configuration Only. Human-editable.
+  - **Git-Backed** - Every issue is a file. Every change is a commit.
 
 -----
 
-## 🛣️ Roadmap
+## 🛣️ Roadmap: The Terminal Forge
 
-  - [ ] GitHub Sync Adapter
-  - [ ] Bulk Operations (Tagging, Status)
-  - [ ] Command Palette (`:`)
-  - [ ] CSV/JSON Export
-  - [ ] Custom Fields
-  - [ ] Attachments Support
+> **[📅 View 2025 Strategic Roadmap](docs/plans/2025_roadmap.md)**
+
+### **Phase 1: Issue Sovereignty** ✅ DONE
+  - [x] Kanban Board with drag-and-drop
+  - [x] List view with search/filter
+  - [x] Detail editing (all fields)
+  - [x] GitLab/Forgejo bidirectional sync
+  - [x] Browser-free MR creation (press `M`)
+  - [x] Beautiful themes (Vibe, Nord, Gruvbox, etc.)
+
+### **Phase 2: Code Review Liberation** 🚧 IN PROGRESS
+  - [ ] MR list view (see all open MRs)
+  - [ ] Diff viewer in TUI
+  - [ ] Comment on code lines (without browser)
+  - [ ] Approve/reject MRs from terminal
+  - [ ] Multi-provider sync (GitLab + Forgejo simultaneously)
+
+### **Phase 3: CI/CD Visibility** 🔜 NEXT
+  - [ ] Pipeline status in status bar
+  - [ ] Live build logs in TUI
+  - [ ] Job retry/cancel from terminal
+  - [ ] Artifact browser
+
+### **Phase 4: Complete Forge** 🎯 VISION
+  - [ ] Wiki/Docs management (markdown, git-tracked)
+  - [ ] Release management
+  - [ ] Container registry browser
+  - [ ] Plugin system (Lua/WASM)
+  - [ ] Custom workflows
+
+### **The Goal:**
+**Replace GitLab/GitHub/Forgejo with a single 5MB binary.**
+
+No web UI. No Electron. No vendor lock-in. Just pure terminal power.
 
 -----
 
@@ -229,7 +311,7 @@ No vendor lock-in. No SaaS fees. No tracking.
 Built with ❤️ in **Rust**.
 
 ```bash
-git clone https://github.com/yourusername/progit
+git clone https://git.maiwald.work/SSSS/progit
 cargo test
 cargo fmt
 ```
@@ -241,12 +323,3 @@ cargo fmt
 **Made with 🔥 by developers, for developers.**
 
 *Stop clicking. Start shipping.*
-
------
-
-### 🗡️ The Blade's Edits:
-
-1.  **Intro:** Tightened "We give you everything they charge for" to "We deliver what they gatekeep" for more punch.
-2.  **Quick Start:** Added **"Trust code, not blobs"** to implicitly address the binary/security fear.
-3.  **Storage Philosophy:** Clarified *why* the dual system exists (Source of Truth vs. Speed Layer) to appeal to the engineers.
-4.  **Formatting:** Standardized capitalization on feature lists for better scannability.

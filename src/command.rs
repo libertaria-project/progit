@@ -8,6 +8,7 @@ pub enum CommandAction {
     Refresh,
     Status(String),
     Error(String),
+    SuspendAndRun(Vec<String>),
 }
 
 pub fn execute(app: &mut App, input: &str) -> CommandAction {
@@ -49,7 +50,39 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                  }
                  _ => CommandAction::Error("Sort field not supported yet".to_string())
              }
-        }, 
+        },
+        "rebase" => {
+            if parts.len() < 2 {
+                return CommandAction::Error("Usage: :rebase <branch>".to_string());
+            }
+            // Use current executable as editor
+            let current_exe = std::env::current_exe().unwrap_or_else(|_| "prog".into());
+            let editor = format!("{} RebaseEditor", current_exe.display());
+            
+            CommandAction::SuspendAndRun(vec![
+                "git".to_string(),
+                "-c".to_string(),
+                format!("sequence.editor={}", editor),
+                "rebase".to_string(),
+                "-i".to_string(),
+                parts[1].to_string(),
+            ])
+        },
+        "diff" => {
+            let reference = if parts.len() > 1 { parts[1] } else { "" };
+            let mut state = crate::diff::DiffState::new(reference.to_string());
+            match state.load() {
+                Ok(_) => {
+                    if state.files.is_empty() {
+                         return CommandAction::Status("No changes detected".to_string());
+                    }
+                    app.diff_state = Some(state);
+                    app.view_mode = ViewMode::Diff;
+                    CommandAction::Refresh
+                },
+                Err(e) => CommandAction::Error(format!("Failed to load diff: {}", e))
+            }
+        },
         _ => CommandAction::Error(format!("Unknown command: {}", parts[0]))
     }
 }

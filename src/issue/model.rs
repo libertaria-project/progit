@@ -6,16 +6,16 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Story point effort values (Fibonacci-ish)
+/// Story point effort values (Triangular Sequence)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "u8", into = "u8")]
 pub enum Effort {
     Trivial = 1,
-    Small = 2,
-    Medium = 3,
-    Large = 5,
-    XLarge = 8,
-    Epic = 13,
+    Small = 3,
+    Medium = 6,
+    Large = 10,
+    XLarge = 15,
+    Epic = 21,
 }
 
 impl TryFrom<u8> for Effort {
@@ -24,12 +24,12 @@ impl TryFrom<u8> for Effort {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             1 => Ok(Effort::Trivial),
-            2 => Ok(Effort::Small),
-            3 => Ok(Effort::Medium),
-            5 => Ok(Effort::Large),
-            8 => Ok(Effort::XLarge),
-            13 => Ok(Effort::Epic),
-            _ => Err("Invalid effort value. Use: 1, 2, 3, 5, 8, or 13"),
+            3 => Ok(Effort::Small),
+            6 => Ok(Effort::Medium),
+            10 => Ok(Effort::Large),
+            15 => Ok(Effort::XLarge),
+            21 => Ok(Effort::Epic),
+            _ => Err("Invalid effort value. Use: 1, 3, 6, 10, 15, or 21"),
         }
     }
 }
@@ -85,6 +85,11 @@ impl Status {
     }
 }
 
+/// Default value for updated field (for backward compatibility with old JSON)
+fn default_updated() -> DateTime<Utc> {
+    Utc::now()
+}
+
 /// The atomic unit of work
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Issue {
@@ -138,11 +143,17 @@ pub struct Issue {
     pub created: DateTime<Utc>,
 
     /// Last update timestamp
+    #[serde(default = "default_updated")]
     pub updated: DateTime<Utc>,
 
     /// External references (e.g. "forgejo" -> "42")
     #[serde(default)]
     pub remotes: std::collections::HashMap<String, String>,
+    
+    /// Repository ownership (for multi-repo setups)
+    /// e.g., "frontend", "backend", "infra"
+    #[serde(default)]
+    pub repo: Option<String>,
 }
 
 impl Issue {
@@ -165,6 +176,7 @@ impl Issue {
             created: now,
             updated: now,
             remotes: std::collections::HashMap::new(),
+            repo: None,
         }
     }
 
@@ -215,6 +227,12 @@ impl Issue {
         self.blocked = blocked;
         self
     }
+    
+    /// Builder: set repository
+    pub fn with_repo(mut self, repo: impl Into<String>) -> Self {
+        self.repo = Some(repo.into());
+        self
+    }
 
     /// Check if issue is a blocker (Tag OR Manual toggle)
     pub fn is_blocker(&self) -> bool {
@@ -261,8 +279,9 @@ mod tests {
 
     #[test]
     fn test_effort_from_u8() {
-        assert_eq!(Effort::try_from(5).unwrap(), Effort::Large);
-        assert!(Effort::try_from(4).is_err());
+        // Triangular sequence test
+        assert_eq!(Effort::try_from(10).unwrap(), Effort::Large); // Was 5, now 10
+        assert!(Effort::try_from(5).is_err()); // 5 is no longer valid
     }
 
     #[test]

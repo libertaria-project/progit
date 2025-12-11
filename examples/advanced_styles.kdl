@@ -1,0 +1,181 @@
+// Advanced ProGit Configuration with Style Inheritance and Conditional Styling
+// Copy this to .project/config.kdl and customize for your project
+
+config {
+    // Sprint duration in days
+    sprint-duration-days 14
+    
+    // Team members (for assignee dropdown/autocomplete)
+    team {
+        - "alice"
+        - "bob"
+        - "charlie"
+    }
+    
+    // Default effort estimate for new issues (1-5)
+    default-effort 3
+    
+    // Theme: nord, gruvbox, dracula, cyberpunk, vibe
+    theme "vibe"
+}
+
+// ==============================================================================
+// ADVANCED STYLING SYSTEM
+// ==============================================================================
+
+styles {
+    // Base styles (foundation)
+    base {
+        fg "white"
+        bg "black"
+        bold true
+    }
+    
+    // Text styles
+    text inherits base {
+        fg "gray"
+        bold false
+    }
+    
+    text.accent inherits text {
+        fg "cyan"
+        bold true
+    }
+    
+    text.dim inherits text {
+        fg "darkgray"
+        dim true
+    }
+    
+    // Header styles
+    header inherits base {
+        fg "blue"
+        underlined true
+    }
+    
+    header.important inherits header {
+        fg "red"
+        bold true
+    }
+    
+    // Issue styles with conditional variants
+    issue {
+        fg "white"
+        bg "black"
+    }
+    
+    issue.urgent {
+        fg "red"
+        bold true
+    }
+    
+    issue.completed {
+        fg "green"
+        dim true
+    }
+    
+    issue.blocked {
+        fg "yellow"
+        bg "darkred"
+        bold true
+    }
+    
+    // Button styles
+    button inherits base {
+        fg "black"
+        bg "white"
+        bold true
+    }
+    
+    button.primary inherits button {
+        bg "blue"
+        fg "white"
+    }
+    
+    button.danger inherits button {
+        bg "red"
+        fg "white"
+    }
+    
+    button.disabled inherits button {
+        bg "gray"
+        fg "darkgray"
+        dim true
+    }
+    
+    // Status indicators
+    status {
+        fg "white"
+        bg "black"
+    }
+    
+    status.todo inherits status {
+        fg "yellow"
+    }
+    
+    status.in_progress inherits status {
+        fg "blue"
+    }
+    
+    status.done inherits status {
+        fg "green"
+    }
+    
+    // Git bar styles
+    gitbar {
+        fg "white"
+        bg "black"
+    }
+    
+    gitbar.velocity inherits gitbar {
+        fg "green"
+        bold true
+    }
+    
+    gitbar.progress inherits gitbar {
+        fg "blue"
+        bold true
+    }
+    
+    gitbar.active inherits gitbar {
+        fg "yellow"
+        bold true
+    }
+    
+    gitbar.blocker inherits gitbar {
+        fg "red"
+        bold true
+    }
+
+    // Kanban Board
+    kanban.card {
+        fg "gray"
+    }
+
+    kanban.card.selected {
+        fg "white"
+        bg "black"
+        bold true
+    }
+
+    kanban.header.progress {
+        fg "blue"
+        underlined true
+    }
+
+    // Status Bar
+    status.branch.clean {
+        fg "green"
+        bold true
+    }
+
+    status.branch.dirty {
+        fg "yellow"
+        bold true
+    }
+
+    status.mode.search {
+        fg "cyan"
+        reversed true
+    }
+}

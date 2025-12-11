@@ -8,7 +8,7 @@
 | **Offline** | ✅ Full | ❌ No | ❌ No | ❌ No | ⚠️ Limited |
 | **Keyboard** | ✅ Vim-style | ⚠️ Some | ⚠️ Basic | ✅ Yes | ⚠️ Basic |
 | **Visual Status** | ✅ Color-coded | ⚠️ Complex | ❌ Labels only | ✅ Good | ⚠️ Labels |
-| **Local Storage** | ✅ KDL+JSON | ❌ Cloud | ❌ Cloud | ❌ Cloud | ❌ Cloud |
+| **Local Storage** | ✅ JSON (Issues) + KDL (Config) | ❌ Cloud | ❌ Cloud | ❌ Cloud | ❌ Cloud |
 | **Sync** | ✅ Bidirectional | N/A | N/A | N/A | N/A |
 | **Price** | 🆓 Free | 💰💰💰 $$$ | 🆓 Free | 💰 $$ | 🆓 Free |
 | **Themes** | 🎨 4 built-in | ⚠️ Limited | ⚠️ Dark/Light | ✅ Multiple | ⚠️ Dark/Light |
@@ -62,7 +62,7 @@ Linear:  Good keyboard support ✓
 ```
 
 #### 4. **Data Ownership**
-- **ProGit**: Files on YOUR disk (`~/.project/issues/*.kdl`)
+- **ProGit**: Files on YOUR disk (`~/.project/issues/*.json`)
 - **Jira/Linear/GitHub**: Cloud-only, export is painful
 
 #### 5. **Sync Intelligence**
@@ -79,8 +79,8 @@ Linear:  Good keyboard support ✓
 # Export GitHub issues to JSON
 gh issue list --json number,title,body,state,labels > github_export.json
 
-# Import to ProGit (script coming soon)
-prog import github github_export.json
+# Import to ProGit (Import tool coming in v0.2)
+# prog import github github_export.json
 ```
 
 ### From GitLab
@@ -95,7 +95,7 @@ prog import github github_export.json
 
 ```bash
 # CSV export from Jira
-# Import script: prog import jira issues.csv
+# Import script: Coming soon
 ```
 
 ---
