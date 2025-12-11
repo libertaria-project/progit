@@ -104,7 +104,7 @@ enum MrAction {
     /// Create a new merge request (interactive or from args)
     Create {
         /// Target branch (default: main/master)
-        #[arg(short, long)]
+        #[arg(short = 'b', long)]
         target: Option<String>,
         /// Title (default: from last commit or branch name)
         #[arg(short, long)]
