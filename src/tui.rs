@@ -138,6 +138,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
             colors.dim(),
             colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
         ),
+        ViewMode::Diff => (colors.dim(), colors.dim()),
     };
     
     // Settings style (highlighted if in settings mode)
@@ -182,6 +183,12 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
         ViewMode::Kanban => {
             widget_kanban::render(frame, inner, app)
+        }
+        ViewMode::Diff => {
+            if let Some(ref state) = app.diff_state {
+                crate::diff::render_diff(frame, inner, state);
+            }
+            KanbanAreas::default()
         }
     };
 

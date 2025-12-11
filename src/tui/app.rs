@@ -15,6 +15,7 @@ pub enum ViewMode {
     #[default]
     List,
     Kanban,
+    Diff,
 }
 
 /// Input mode
@@ -62,6 +63,9 @@ pub struct App {
 
     /// Current input mode
     pub input_mode: InputMode,
+
+    // Diff State
+    pub diff_state: Option<crate::diff::DiffState>,
 
     /// Search query
     pub search_query: String,
@@ -204,6 +208,7 @@ impl App {
             sync_status: None,
             mr_draft: None,
             mr_field: 0,
+            diff_state: None,
             show_debug_console: false,
             plugin_manager: None,
             fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
@@ -309,6 +314,7 @@ impl App {
         self.view_mode = match self.view_mode {
             ViewMode::List => ViewMode::Kanban,
             ViewMode::Kanban => ViewMode::List,
+            ViewMode::Diff => ViewMode::List,
         };
     }
 

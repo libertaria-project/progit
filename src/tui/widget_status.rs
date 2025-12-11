@@ -163,5 +163,8 @@ pub fn help_text(app: &App) -> String {
         crate::tui::ViewMode::Kanban => {
              "n:new  H/L:move  space:status  enter:details  s:sync  ?:help".to_string()
         }
+        crate::tui::ViewMode::Diff => {
+             "j/k:scroll  J/K:files  space:collapse  q:close".to_string()
+        }
     }
 }

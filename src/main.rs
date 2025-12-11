@@ -8,6 +8,7 @@ mod git;
 mod issue;
 mod mr;
 mod plugins;
+mod diff;
 mod fuzzy;
 mod rebase;
 mod storage;
@@ -545,6 +546,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     let issue_id = match app.view_mode {
                         tui::ViewMode::List => app.selected_issue().map(|i| i.id.clone()),
                         tui::ViewMode::Kanban => app.kanban_selected_issue().map(|i| i.id.clone()),
+                        tui::ViewMode::Diff => None,
                     };
 
                     if let Some(id) = issue_id {

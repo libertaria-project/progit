@@ -44,6 +44,58 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match app.view_mode {
         ViewMode::List => handle_list_key(app, key),
         ViewMode::Kanban => handle_kanban_key(app, key),
+        ViewMode::Diff => handle_diff_key(app, key),
+    }
+}
+
+/// Handle keys in diff view
+fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+             app.view_mode = ViewMode::List;
+             app.diff_state = None;
+             KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+             if let Some(ref mut state) = app.diff_state {
+                 state.scroll = state.scroll.saturating_add(1);
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+             if let Some(ref mut state) = app.diff_state {
+                 state.scroll = state.scroll.saturating_sub(1);
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('J') => {
+             if let Some(ref mut state) = app.diff_state {
+                 if state.selected_file < state.files.len().saturating_sub(1) {
+                     state.selected_file += 1;
+                     state.scroll = 0;
+                 }
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('K') => {
+             if let Some(ref mut state) = app.diff_state {
+                 if state.selected_file > 0 {
+                     state.selected_file -= 1;
+                     state.scroll = 0;
+                 }
+             }
+             KeyAction::Refresh
+        }
+        // Collapsing
+        KeyCode::Char(' ') => {
+            if let Some(ref mut state) = app.diff_state {
+                if let Some(file) = state.files.get_mut(state.selected_file) {
+                    file.collapsed = !file.collapsed;
+                }
+            }
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
     }
 }
 
@@ -1223,6 +1275,11 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
             match app.view_mode {
                 ViewMode::List => app.next(),
                 ViewMode::Kanban => app.kanban_down(),
+                ViewMode::Diff => {
+                    if let Some(ref mut state) = app.diff_state {
+                        state.scroll = state.scroll.saturating_add(3);
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -1230,6 +1287,11 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
             match app.view_mode {
                 ViewMode::List => app.previous(),
                 ViewMode::Kanban => app.kanban_up(),
+                ViewMode::Diff => {
+                    if let Some(ref mut state) = app.diff_state {
+                        state.scroll = state.scroll.saturating_sub(3);
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -1243,6 +1305,7 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::Normal => match app.view_mode {
             ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
+            ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",
