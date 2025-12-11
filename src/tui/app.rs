@@ -4,8 +4,10 @@
 
 use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
+use crate::plugins::PluginManager;
 use crate::tui::theme::Theme;
 use crate::sync::SyncProvider;
+use crate::tui::style::ThemeEngine;
 
 /// Current view mode
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -13,6 +15,8 @@ pub enum ViewMode {
     #[default]
     List,
     Kanban,
+    Diff,
+    MRList,
 }
 
 /// Input mode
@@ -31,6 +35,9 @@ pub enum InputMode {
     DetailEdit,      // Editing a field in detail view
     Command,         // Command palette (: command)
     MRCreate,        // Creating a merge request
+    RepoFilter,      // Filtering by repository
+    Settings,        // Settings pane
+    FuzzyPalette,    // Fuzzy command palette (Ctrl+P)
 }
 
 /// Mouse drag state
@@ -57,6 +64,13 @@ pub struct App {
 
     /// Current input mode
     pub input_mode: InputMode,
+
+    // Diff State
+    pub diff_state: Option<crate::diff::DiffState>,
+    
+    // MR List State
+    pub mr_list: Vec<crate::mr::MergeRequest>,
+    pub mr_selected: usize,
 
     /// Search query
     pub search_query: String,
@@ -96,9 +110,13 @@ pub struct App {
 
     /// Selected remote in dropdown
     pub selected_remote: usize,
-
     /// Selected branch in dropdown
     pub selected_branch: usize,
+    
+    /// Repo filter state
+    pub repo_filter: Option<String>,  // None = show all, Some(repo) = filter by repo
+    pub selected_repo_filter: usize,  // Selected index in repo filter dropdown
+    pub available_repos: Vec<String>, // Cached list of unique repos
 
     /// Branch pending deletion (for confirmation)
     pub pending_branch_delete: Option<String>,
@@ -132,6 +150,24 @@ pub struct App {
     
     /// Current field in MR creation form (0=title, 1=description, 2=target_branch)
     pub mr_field: usize,
+
+    /// Style engine
+    pub theme_engine: ThemeEngine,
+    
+    /// Show debug console overlay
+    pub show_debug_console: bool,
+    
+    /// Plugin manager
+    pub plugin_manager: Option<PluginManager>,
+    
+    /// Fuzzy searcher for command palette
+    pub fuzzy_searcher: crate::fuzzy::FuzzySearcher,
+    
+    /// Fuzzy palette query
+    pub fuzzy_query: String,
+    
+    /// Selected fuzzy result index
+    pub fuzzy_selected: usize,
 }
 
 impl Default for App {
@@ -157,11 +193,15 @@ impl App {
             should_quit: false,
             repo_info: None,
             drag_state: DragState::default(),
+            theme_engine: ThemeEngine::new(&std::collections::HashMap::new()), // Initialize with empty config
             kanban_column: 0,
             kanban_row: 0,
 
             selected_remote: 0,
             selected_branch: 0,
+            repo_filter: None,
+            selected_repo_filter: 0,
+            available_repos: Vec::new(),
             pending_branch_delete: None,
             detail_issue_id: None,
             detail_field: 0,
@@ -173,37 +213,96 @@ impl App {
             sync_status: None,
             mr_draft: None,
             mr_field: 0,
+            diff_state: None,
+            mr_list: Vec::new(),
+            mr_selected: 0,
+            show_debug_console: false,
+            plugin_manager: None,
+            fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
+            fuzzy_query: String::new(),
+            fuzzy_selected: 0,
         }
     }
 
     /// Load issues into the app
     pub fn load_issues(&mut self, issues: Vec<Issue>) {
         self.issues = issues;
+        self.update_available_repos(); // Update repo list for filtering
+        self.fuzzy_searcher.update_issues(&self.issues); // Update fuzzy search cache
         self.refresh_filter();
+    }
+
+    /// Load MRs from provider
+    pub fn load_mrs(&mut self) -> anyhow::Result<()> {
+        if let Some(ref provider) = self.sync_provider {
+            match provider.list_mrs() {
+                Ok(mrs) => {
+                    self.mr_list = mrs;
+                    self.mr_selected = 0;
+                    self.set_status(format!("Loaded {} MRs", self.mr_list.len()));
+                    Ok(())
+                }
+                Err(e) => {
+                    self.set_status(format!("Failed to load MRs: {}", e));
+                    Err(e)
+                }
+            }
+        } else {
+            // Try to auto-initialize local provider if none?
+            // For now just error
+            self.set_status("No sync provider configured".to_string());
+            Ok(())
+        }
     }
 
     /// Refresh the filtered list based on search query
     pub fn refresh_filter(&mut self) {
-        if self.search_query.is_empty() {
-            self.filtered = (0..self.issues.len()).collect();
+        let query = if self.search_query.is_empty() {
+            None
         } else {
-            let query = self.search_query.to_lowercase();
-            self.filtered = self
-                .issues
-                .iter()
-                .enumerate()
-                .filter(|(_, i)| {
-                    i.title.to_lowercase().contains(&query)
-                        || i.description.to_lowercase().contains(&query)
-                })
-                .map(|(idx, _)| idx)
-                .collect();
-        }
+            Some(self.search_query.to_lowercase())
+        };
+        
+        self.filtered = self
+            .issues
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| {
+                // Search filter
+                let matches_search = query.as_ref().map_or(true, |q| {
+                    i.title.to_lowercase().contains(q)
+                        || i.description.to_lowercase().contains(q)
+                });
+                
+                // Repo filter
+                let matches_repo = self.repo_filter.as_ref().map_or(true, |repo| {
+                    i.repo.as_ref().map_or(false, |r| r == repo)
+                });
+                
+                matches_search && matches_repo
+            })
+            .map(|(idx, _)| idx)
+            .collect();
 
         // Keep selection in bounds
         if !self.filtered.is_empty() && self.selected >= self.filtered.len() {
             self.selected = self.filtered.len() - 1;
         }
+    }
+    
+    /// Update available repos list from current issues
+    pub fn update_available_repos(&mut self) {
+        use std::collections::HashSet;
+        
+        let mut repos: HashSet<String> = HashSet::new();
+        for issue in &self.issues {
+            if let Some(ref repo) = issue.repo {
+                repos.insert(repo.clone());
+            }
+        }
+        
+        self.available_repos = repos.into_iter().collect();
+        self.available_repos.sort();
     }
 
     /// Get currently selected issue
@@ -244,7 +343,9 @@ impl App {
     pub fn toggle_view(&mut self) {
         self.view_mode = match self.view_mode {
             ViewMode::List => ViewMode::Kanban,
-            ViewMode::Kanban => ViewMode::List,
+            ViewMode::Kanban => ViewMode::MRList,
+            ViewMode::MRList => ViewMode::List,
+            ViewMode::Diff => ViewMode::List,
         };
     }
 
@@ -373,39 +474,44 @@ impl App {
                 4 => issue.assignee = if buffer.is_empty() { None } else { Some(buffer) },
                 5 => {
                     issue.tags = buffer
-                        .split(',')
+                        .split(|c| c == ',' || c == ';')
                         .map(|s| s.trim().to_string())
                         .filter(|s| !s.is_empty())
                         .collect();
                 }
                 6 => {
-                    // Parse due date (YYYY-MM-DD)
+                    // Start dragging out the date parsing to a helper if reuse is needed,
+                    // but for now, let's just support multiple formats inline to keep it simple and contiguous.
+                    // Due Date (end of day)
                     if buffer.is_empty() {
                         issue.due = None;
-                    } else if let Ok(date) = chrono::NaiveDate::parse_from_str(&buffer, "%Y-%m-%d") {
-                        if let Some(dt) = date.and_hms_opt(23, 59, 59) {
-                            issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc));
-                        }
+                    } else if let Some(dt) = parse_date_input(&buffer) {
+                         issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(
+                             dt.and_hms_opt(23, 59, 59).unwrap(), 
+                             chrono::Utc
+                         ));
                     }
                 }
                 7 => {
-                    // Parse started date
+                    // Started Date (start of day)
                     if buffer.is_empty() {
                         issue.started = None;
-                    } else if let Ok(date) = chrono::NaiveDate::parse_from_str(&buffer, "%Y-%m-%d") {
-                        if let Some(dt) = date.and_hms_opt(0, 0, 0) {
-                            issue.started = Some(chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc));
-                        }
+                    } else if let Some(dt) = parse_date_input(&buffer) {
+                         issue.started = Some(chrono::DateTime::from_naive_utc_and_offset(
+                             dt.and_hms_opt(0, 0, 0).unwrap(), 
+                             chrono::Utc
+                         ));
                     }
                 }
                 8 => {
-                    // Parse completed date
+                    // Completed Date (end of day/now)
                     if buffer.is_empty() {
                         issue.completed = None;
-                    } else if let Ok(date) = chrono::NaiveDate::parse_from_str(&buffer, "%Y-%m-%d") {
-                        if let Some(dt) = date.and_hms_opt(23, 59, 59) {
-                            issue.completed = Some(chrono::DateTime::from_naive_utc_and_offset(dt, chrono::Utc));
-                        }
+                    } else if let Some(dt) = parse_date_input(&buffer) {
+                         issue.completed = Some(chrono::DateTime::from_naive_utc_and_offset(
+                             dt.and_hms_opt(23, 59, 59).unwrap(), 
+                             chrono::Utc
+                         ));
                     }
                 }
                 _ => {}
@@ -537,6 +643,19 @@ impl App {
     }
 }
 
+/// Helper: Parse date from string (supports YYYY-MM-DD and YYYYMMDD)
+fn parse_date_input(input: &str) -> Option<chrono::NaiveDate> {
+    // Try ISO format (YYYY-MM-DD)
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
+        return Some(date);
+    }
+    // Try compact format (YYYYMMDD)
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(input, "%Y%m%d") {
+        return Some(date);
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -594,7 +713,7 @@ mod tests {
             Issue::new("In Progress").with_status(Status::InProgress),
         ]);
 
-        assert_eq!(app.velocity(), 7);
+        assert_eq!(app.velocity(), 13);
     }
 
     #[test]

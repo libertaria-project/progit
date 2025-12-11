@@ -33,6 +33,8 @@ pub enum KeyAction {
     DeleteIssue,
     /// Trigger sync
     Sync,
+    /// Toggle debug console
+    ToggleDebug,
     /// Quit the application
     Quit,
 }
@@ -42,6 +44,119 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match app.view_mode {
         ViewMode::List => handle_list_key(app, key),
         ViewMode::Kanban => handle_kanban_key(app, key),
+        ViewMode::Diff => handle_diff_key(app, key),
+        ViewMode::MRList => handle_mr_list_key(app, key),
+    }
+}
+
+/// Handle keys in MR list view
+fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Char('j') | KeyCode::Down => {
+            if !app.mr_list.is_empty() {
+                app.mr_selected = (app.mr_selected + 1) % app.mr_list.len();
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if !app.mr_list.is_empty() {
+                app.mr_selected = app.mr_selected.checked_sub(1)
+                    .unwrap_or(app.mr_list.len() - 1);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            if let Some(mr) = app.mr_list.get(app.mr_selected) {
+                // Determine diff reference: target...source
+                // NOTE: For local, this works. For remote, we might need to fetch first?
+                // The DiffState logic handles `git diff arguments`.
+                let diff_ref = format!("{}...{}", mr.target_branch, mr.source_branch);
+                app.set_status(format!("Loading diff for {}...", mr.source_branch));
+                
+                let mut state = crate::diff::DiffState::new(diff_ref);
+                match state.load() {
+                    Ok(_) => {
+                        app.diff_state = Some(state);
+                        app.view_mode = ViewMode::Diff;
+                        KeyAction::Refresh
+                    },
+                    Err(e) => {
+                        app.set_status(format!("Diff failed: {}", e));
+                        KeyAction::Refresh
+                    }
+                }
+            } else {
+                KeyAction::None
+            }
+        }
+        KeyCode::Char('r') => {
+            app.set_status("Reloading MRs...");
+            if let Err(e) = app.load_mrs() {
+                app.set_status(format!("Failed: {}", e));
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Tab => {
+            app.toggle_view();
+            KeyAction::Refresh
+        }
+        KeyCode::Char('q') => {
+             // Go back to Kanban or List?
+             app.view_mode = ViewMode::Kanban;
+             KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in diff view
+fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+             app.view_mode = ViewMode::List;
+             app.diff_state = None;
+             KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+             if let Some(ref mut state) = app.diff_state {
+                 state.scroll = state.scroll.saturating_add(1);
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+             if let Some(ref mut state) = app.diff_state {
+                 state.scroll = state.scroll.saturating_sub(1);
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('J') => {
+             if let Some(ref mut state) = app.diff_state {
+                 if state.selected_file < state.files.len().saturating_sub(1) {
+                     state.selected_file += 1;
+                     state.scroll = 0;
+                 }
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('K') => {
+             if let Some(ref mut state) = app.diff_state {
+                 if state.selected_file > 0 {
+                     state.selected_file -= 1;
+                     state.scroll = 0;
+                 }
+             }
+             KeyAction::Refresh
+        }
+        // Collapsing
+        KeyCode::Char(' ') => {
+            if let Some(ref mut state) = app.diff_state {
+                if let Some(file) = state.files.get_mut(state.selected_file) {
+                    file.collapsed = !file.collapsed;
+                }
+            }
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
     }
 }
 
@@ -132,39 +247,70 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 KeyAction::None
             }
         }
+        
+        // Help
+        KeyCode::Char('?') => {
+            use crate::tui::widget_status::help_text;
+            app.set_status(help_text(app));
+            KeyAction::Refresh
+        }
+        
+        // Debug Console
+        KeyCode::F(8) => KeyAction::ToggleDebug,
+        
+        // Settings pane
+        KeyCode::Char('O') => {
+            app.input_mode = InputMode::Settings;
+            KeyAction::Refresh
+        }
 
         // Create Merge Request
         KeyCode::Char('M') => {
-            if app.repo_info.is_some() && app.sync_provider.is_some() {
-                // Initialize MR draft with smart defaults
-                if let Some(ref repo) = app.repo_info {
-                    let source_branch = repo.branch.clone();
-                    let target_branch = crate::git::repository::suggest_target_branch(
-                        std::path::Path::new(&repo.path)
-                    ).unwrap_or_else(|_| "main".to_string());
-                    
-                    // Auto-generate title from branch name
-                    let title = source_branch
-                        .replace("feature/", "")
-                        .replace("bugfix/", "Fix: ")
-                        .replace("hotfix/", "Hotfix: ")
-                        .replace('-', " ")
-                        .replace('_', " ");
-                    
-                    app.mr_draft = Some(crate::mr::MergeRequest::new(
-                        &source_branch,
-                        &target_branch,
-                        &title,
-                    ));
-                    app.mr_field = 1; // Start on title field (0=source is readonly)
-                    app.edit_buffer = title;
-                    app.input_mode = InputMode::MRCreate;
-                }
-                KeyAction::Refresh
-            } else {
-                app.set_status("MR creation requires git repo and sync provider");
-                KeyAction::Refresh
+            // Check for git repo first
+            if app.repo_info.is_none() {
+                app.set_status("⚠️  MR creation requires a git repository");
+                return KeyAction::Refresh;
             }
+            
+            // Check for sync provider
+            if app.sync_provider.is_none() {
+                app.set_status("⚠️  No sync provider configured. Run 'prog sync' first or add sync config to .project/config.kdl");
+                return KeyAction::Refresh;
+            }
+            
+            // Initialize MR draft with smart defaults
+            if let Some(ref repo) = app.repo_info {
+                let source_branch = repo.branch.clone();
+                let target_branch = crate::git::repository::suggest_target_branch(
+                    std::path::Path::new(&repo.path)
+                ).unwrap_or_else(|_| "main".to_string());
+                
+                // Auto-generate title from branch name
+                let title = source_branch
+                    .replace("feature/", "")
+                    .replace("bugfix/", "Fix: ")
+                    .replace("hotfix/", "Hotfix: ")
+                    .replace('-', " ")
+                    .replace('_', " ");
+                
+                app.mr_draft = Some(crate::mr::MergeRequest::new(
+                    &source_branch,
+                    &target_branch,
+                    &title,
+                ));
+                app.mr_field = 1; // Start on title field (0=source is readonly)
+                app.edit_buffer = title;
+                app.input_mode = InputMode::MRCreate;
+            }
+            KeyAction::Refresh
+        }
+
+        // Fuzzy Command Palette (Ctrl+P)
+        KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input_mode = InputMode::FuzzyPalette;
+            app.fuzzy_query.clear();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
         }
 
         // Quit
@@ -295,6 +441,24 @@ fn handle_kanban_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
         }
 
+        // Repository filter dropdown
+        KeyCode::Char('f') => {
+            if !app.available_repos.is_empty() {
+                app.input_mode = InputMode::RepoFilter;
+                KeyAction::Refresh
+            } else {
+                KeyAction::None
+            }
+        }
+
+        // Fuzzy Command Palette (Ctrl+P)
+        KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input_mode = InputMode::FuzzyPalette;
+            app.fuzzy_query.clear();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+
         // Quit
         KeyCode::Char('q') => KeyAction::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => KeyAction::Quit,
@@ -372,6 +536,33 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 }
                 CommandAction::Error(err) => {
                     app.set_status(format!("Error: {}", err));
+                    KeyAction::Refresh
+                }
+                CommandAction::SuspendAndRun(args) => {
+                    // Suspend TUI
+                    let _ = crossterm::terminal::disable_raw_mode();
+                    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+
+                    // Run command
+                    let status = std::process::Command::new(&args[0])
+                        .args(&args[1..])
+                        .status();
+
+                    // Resume TUI
+                    let _ = crossterm::terminal::enable_raw_mode();
+                    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen);
+
+                    match status {
+                        Ok(s) if s.success() => {
+                             app.set_status("Command executed successfully".to_string());
+                        }
+                        Ok(s) => {
+                             app.set_status(format!("Command failed with code: {}", s));
+                        }
+                        Err(e) => {
+                             app.set_status(format!("Failed to run command: {}", e));
+                        }
+                    }
                     KeyAction::Refresh
                 }
             }
@@ -543,6 +734,113 @@ pub fn handle_branch_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
     }
 }
 
+/// Handle keys in fuzzy palette mode
+fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            app.fuzzy_query.clear();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+        KeyCode::Down | KeyCode::Char('j') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let results = app.fuzzy_searcher.search(&app.fuzzy_query);
+            if !results.is_empty() {
+                app.fuzzy_selected = (app.fuzzy_selected + 1).min(results.len() - 1);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            app.fuzzy_selected = app.fuzzy_selected.saturating_sub(1);
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            // Execute selected item
+            let results = app.fuzzy_searcher.search(&app.fuzzy_query);
+            if let Some(result) = results.get(app.fuzzy_selected) {
+                use crate::fuzzy::FuzzyItem;
+                match &result.item {
+                    FuzzyItem::Issue { id, .. } => {
+                        app.open_detail(id);
+                        app.input_mode = InputMode::Normal;
+                    }
+                    FuzzyItem::Command { action, .. } => {
+                        app.input_mode = InputMode::Normal;
+                        // Execute command action
+                        match action.as_str() {
+                            "new_issue" => return KeyAction::CreateIssue(None),
+                            "toggle_view" => {
+                                app.toggle_view();
+                                return KeyAction::Refresh;
+                            }
+                            "sync" => return KeyAction::Sync,
+                            "cycle_theme" => {
+                                app.cycle_theme();
+                                return KeyAction::SaveTheme;
+                            }
+                            "settings" => {
+                                app.input_mode = InputMode::Settings;
+                                return KeyAction::Refresh;
+                            }
+                            "quit" => return KeyAction::Quit,
+                            "sort" => {
+                                // TODO: Implement sort menu
+                                return KeyAction::Refresh;
+                            }
+                            "branch" => {
+                                // TODO: Switch to branch dropdown
+                                app.input_mode = InputMode::BranchDropdown;
+                                return KeyAction::Refresh;
+                            }
+                            "mr" => {
+                                app.input_mode = InputMode::MRCreate;
+                                // Initialize MR draft if needed (simplified logic)
+                                if app.mr_draft.is_none() {
+                                    if let Some(ref repo) = app.repo_info {
+                                        app.mr_draft = Some(crate::mr::MergeRequest::new(
+                                            &repo.branch,
+                                            "main",
+                                            &repo.branch,
+                                        ));
+                                        app.mr_field = 1;
+                                        app.edit_buffer = repo.branch.clone();
+                                    }
+                                }
+                                return KeyAction::Refresh;
+                            }
+                            "search" => {
+                                app.input_mode = InputMode::Search;
+                                return KeyAction::Refresh;
+                            }
+                            _ => {}
+                        }
+                    }
+                    FuzzyItem::File { .. } => {
+                        // TODO: Open file in editor
+                        app.input_mode = InputMode::Normal;
+                    }
+                    FuzzyItem::Commit { .. } => {
+                        // TODO: Show commit details
+                        app.input_mode = InputMode::Normal;
+                    }
+                }
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Backspace => {
+            app.fuzzy_query.pop();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.fuzzy_query.push(c);
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
 /// Main key event handler - dispatches based on input mode
 pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match app.input_mode {
@@ -557,6 +855,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::DetailEdit => handle_detail_edit_key(app, key),
         InputMode::Command => handle_command_key(app, key),
         InputMode::MRCreate => handle_mr_create_key(app, key),
+        InputMode::RepoFilter => handle_repo_filter_key(app, key),
+        InputMode::Settings => handle_settings_key(app, key),
+        InputMode::FuzzyPalette => handle_fuzzy_palette_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -628,7 +929,14 @@ fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             return KeyAction::Refresh;
                         }
                         Err(e) => {
-                            app.set_status(format!("❌ MR creation failed: {}", e));
+                            // Log full error to stderr for debugging
+                            eprintln!("❌ MR Creation Error: {:?}", e);
+                            eprintln!("   MR Details: source={}, target={}, title={}", 
+                                mr.source_branch, mr.target_branch, mr.title);
+                            
+                            // Show error in status bar (truncated if needed)
+                            let error_msg = format!("❌ MR failed: {}", e);
+                            app.set_status(error_msg);
                             return KeyAction::Refresh;
                         }
                     }
@@ -642,6 +950,62 @@ fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
         }
         KeyCode::Char(c) => {
             app.edit_buffer.push(c);
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in repo filter dropdown
+fn handle_repo_filter_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            if !app.available_repos.is_empty() {
+                // Wraparound navigation: 0 (All) + N repos
+                app.selected_repo_filter = (app.selected_repo_filter + 1) % (app.available_repos.len() + 1);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if !app.available_repos.is_empty() {
+                // Wraparound navigation upward
+                let max = app.available_repos.len();
+                app.selected_repo_filter = app.selected_repo_filter.checked_sub(1).unwrap_or(max);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            // Apply filter selection
+            // Index 0 = "All Repositories", 1+ = specific repos
+            let filter_msg = if app.selected_repo_filter == 0 {
+                app.repo_filter = None;
+                "Showing all repositories".to_string()
+            } else {
+                if let Some(repo) = app.available_repos.get(app.selected_repo_filter - 1).cloned() {
+                    app.repo_filter = Some(repo.clone());
+                    format!("Filtered to: {}", repo)
+                } else {
+                    app.repo_filter = None;
+                    "Filter cleared".to_string()
+                }
+            };
+            
+            app.refresh_filter();
+            app.set_status(filter_msg);
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('c') => {
+            // Quick shortcut to clear filter
+            app.repo_filter = None;
+            app.selected_repo_filter = 0;
+            app.refresh_filter();
+            app.set_status("Filter cleared");
+            app.input_mode = InputMode::Normal;
             KeyAction::Refresh
         }
         _ => KeyAction::None,
@@ -738,6 +1102,22 @@ fn handle_detail_edit_key(app: &mut App, key: KeyEvent) -> KeyAction {
     }
 }
 
+/// Handle keys in settings pane
+fn handle_settings_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('O') | KeyCode::Char('o') => {
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('t') => {
+            // Cycle theme
+            app.cycle_theme();
+            KeyAction::SaveTheme
+        }
+        _ => KeyAction::None,
+    }
+}
+
 /// Handle mouse events
 pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> KeyAction {
     // Get current time for double-click detection
@@ -807,6 +1187,46 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 return KeyAction::None;
             }
 
+            // Click on Issues tab
+            if let Some(tab_area) = ui_areas.tab_issues {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.view_mode != ViewMode::List {
+                        app.view_mode = ViewMode::List;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
+            // Click on Kanban tab
+            if let Some(tab_area) = ui_areas.tab_kanban {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.view_mode != ViewMode::Kanban {
+                        app.view_mode = ViewMode::Kanban;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
+            // Click on Settings tab
+            if let Some(tab_area) = ui_areas.tab_settings {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.input_mode == InputMode::Settings {
+                        app.input_mode = InputMode::Normal; // Toggle off
+                    } else {
+                        app.input_mode = InputMode::Settings;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
+            // Click on help icon (? help)
+            if let Some(help_area) = ui_areas.help_icon {
+                if point_in_rect(mouse.column, mouse.row, help_area) {
+                    app.set_status(help_text(app));
+                    return KeyAction::Refresh;
+                }
+            }
+
             // Ignore clicks in status bar
             if point_in_rect(mouse.column, mouse.row, ui_areas.status_bar) {
                 return KeyAction::None;
@@ -852,19 +1272,36 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 
             // Handle list view
             if app.view_mode == ViewMode::List {
-                if let Some(issue) = app.selected_issue() {
-                    let issue_id = issue.id.clone();
-
-                    let is_double_click = app.last_click_issue.as_ref() == Some(&issue_id)
-                        && now.saturating_sub(app.last_click_time) < 400;
-
-                    if is_double_click {
-                        app.open_detail(&issue_id);
-                        app.last_click_issue = None;
+                // Calculate which row was clicked (offset for header/border)
+                // The list content starts at content.y + 3 (border + header row + separator)
+                let list_start_y = ui_areas.content.y + 3;
+                
+                if mouse.row >= list_start_y {
+                    let clicked_row = (mouse.row - list_start_y) as usize;
+                    
+                    // Check if valid row in filtered list
+                    if clicked_row < app.filtered.len() {
+                        // Get the issue index and then the ID
+                        let issue_idx = app.filtered[clicked_row];
+                        let issue_id = app.issues[issue_idx].id.clone();
+                        
+                        // Select this row
+                        app.selected = clicked_row;
+                        
+                        // Check for double-click
+                        let is_double_click = app.last_click_issue.as_ref() == Some(&issue_id)
+                            && now.saturating_sub(app.last_click_time) < 400;
+                        
+                        if is_double_click {
+                            app.open_detail(&issue_id);
+                            app.last_click_issue = None;
+                            return KeyAction::Refresh;
+                        } else {
+                            app.last_click_time = now;
+                            app.last_click_issue = Some(issue_id);
+                        }
+                        
                         return KeyAction::Refresh;
-                    } else {
-                        app.last_click_time = now;
-                        app.last_click_issue = Some(issue_id);
                     }
                 }
             }
@@ -899,6 +1336,16 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
             match app.view_mode {
                 ViewMode::List => app.next(),
                 ViewMode::Kanban => app.kanban_down(),
+                ViewMode::Diff => {
+                    if let Some(ref mut state) = app.diff_state {
+                        state.scroll = state.scroll.saturating_add(3);
+                    }
+                }
+                ViewMode::MRList => {
+                    if !app.mr_list.is_empty() {
+                        app.mr_selected = (app.mr_selected + 1) % app.mr_list.len();
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -906,6 +1353,16 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
             match app.view_mode {
                 ViewMode::List => app.previous(),
                 ViewMode::Kanban => app.kanban_up(),
+                ViewMode::Diff => {
+                    if let Some(ref mut state) = app.diff_state {
+                        state.scroll = state.scroll.saturating_sub(3);
+                    }
+                }
+                ViewMode::MRList => {
+                    if !app.mr_list.is_empty() {
+                        app.mr_selected = app.mr_selected.checked_sub(1).unwrap_or(app.mr_list.len() - 1);
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -917,8 +1374,10 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 pub fn help_text(app: &App) -> &'static str {
     match app.input_mode {
         InputMode::Normal => match app.view_mode {
-            ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ Tab:kanban │ /:search │ q:quit",
-            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ Space:status │ Tab:list │ q:quit",
+            ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
+            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
+            ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
+            ViewMode::MRList => "j/k:nav │ Enter:review │ r:reload │ q:back",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",
@@ -931,5 +1390,8 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::DetailEdit => "Type to edit │ Enter:save │ Esc:cancel",
         InputMode::Command => "Type command │ Enter:exec │ Esc:cancel",
         InputMode::MRCreate => "Tab:next field │ Enter:submit │ Esc:cancel",
+        InputMode::RepoFilter => "j/k:nav │ Enter:select │ c:clear │ Esc:cancel",
+        InputMode::Settings => "t:theme │ O/Esc:close",
+        InputMode::FuzzyPalette => "Type to search │ Enter:select │ Esc:close",
     }
 }

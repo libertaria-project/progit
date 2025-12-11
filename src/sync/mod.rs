@@ -4,6 +4,7 @@
 
 pub mod forgejo;
 pub mod gitlab;
+pub mod local;
 pub mod keyring;
 
 use anyhow::Result;
@@ -35,6 +36,7 @@ pub fn create_provider(config: SyncConfig) -> Box<dyn SyncProvider> {
     match config.provider.as_str() {
         "forgejo" => Box::new(forgejo::ForgejoProvider::new(config)),
         "gitlab" => Box::new(gitlab::GitLabProvider::new(config)),
+        "local" => Box::new(local::LocalProvider::new(config)),
         _ => panic!("Unknown provider: {}", config.provider),
     }
 }
@@ -54,13 +56,28 @@ pub fn merge_issues(local_issues: &[Issue], remote_issues: Vec<Issue>, provider_
                 
                 if remote_issue.updated > local_updated {
                     // Remote is newer - update but preserve local ID and other remotes
-                    println!("   ⬇ Updating local issue '{}' from remote #{} (remote newer)", local_title, remote_id);
+                    log::info!("⬇ Updating local issue '{}' from remote #{} (remote newer)", local_title, remote_id);
                     let local_id = merged[existing_idx].id.clone();
                     let local_remotes = merged[existing_idx].remotes.clone();
                     
                     let mut updated = remote_issue.clone();
                     updated.id = local_id;
                     
+                    // PRESERVE LOCAL FIELDS
+                    // Remote doesn't know about these, so keep local values unless we explicitly want remote to overwrite
+                    updated.sprint = merged[existing_idx].sprint.clone();
+                    updated.blocked = merged[existing_idx].blocked;
+                    updated.effort = merged[existing_idx].effort.clone(); 
+                    updated.started = merged[existing_idx].started;
+                    updated.completed = merged[existing_idx].completed;
+                    
+                    // Merge tags (union) instead of overwrite
+                    for tag in &merged[existing_idx].tags {
+                        if !updated.tags.contains(tag) {
+                            updated.tags.push(tag.clone());
+                        }
+                    }
+
                     // Preserve other remotes
                     for (k, v) in local_remotes.iter() {
                         if k != provider_name {
@@ -74,22 +91,26 @@ pub fn merge_issues(local_issues: &[Issue], remote_issues: Vec<Issue>, provider_
                     if !merged[existing_idx].remotes.contains_key(provider_name) {
                         merged[existing_idx].remotes.insert(provider_name.to_string(), remote_id.clone());
                     }
-                    println!("   ⬆ Keeping local changes for '{}' (local newer or equal)", local_title);
+                    log::debug!("⬆ Keeping local changes for '{}' (local newer or equal)", local_title);
                 }
             } else if let Some(title_match_idx) = merged.iter().position(|i| i.title.trim().eq_ignore_ascii_case(remote_issue.title.trim())) {
                  // Match by Title (loose) - link them
-                println!("   🔗 Linking local '{}' to remote #{} by title match", merged[title_match_idx].title, remote_id);
+                log::info!("🔗 Linking local '{}' to remote #{} by title match", merged[title_match_idx].title, remote_id);
                  
                 // Add remote link to local issue
                 merged[title_match_idx].remotes.insert(provider_name.to_string(), remote_id.clone());
             } else {
                 // Really new issue from remote
-                println!("   ➕ Adding new remote issue: '{}'", remote_issue.title);
-                merged.push(remote_issue);
+                // Verify we don't already have it by ID (double check)
+                if !merged.iter().any(|i| i.remotes.get(provider_name) == Some(remote_id)) {
+                     log::info!("➕ Adding new remote issue: '{}'", remote_issue.title);
+                     merged.push(remote_issue);
+                }
             }
         } else {
             // Unlikely case: remote issue has no ID for its own provider
-            merged.push(remote_issue);
+            // merged.push(remote_issue);
+            log::warn!("⚠️ Skipping remote issue without ID: '{}'", remote_issue.title);
         }
     }
     

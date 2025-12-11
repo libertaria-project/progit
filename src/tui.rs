@@ -10,12 +10,17 @@
 
 pub mod app;
 pub mod input;
+pub mod style;
 pub mod theme;
 pub mod widget_detail;
 pub mod widget_issues;
 pub mod widget_kanban;
 pub mod widget_mr_create;
 pub mod widget_status;
+mod widget_debug;
+mod widget_fuzzy_palette;
+mod widget_mr_list;
+mod widget_settings;
 
 // Re-export public API
 pub use app::{App, DragState, InputMode, ViewMode};
@@ -24,7 +29,7 @@ pub use theme::{Theme, ThemeColors};
 pub use widget_detail::EditField;
 pub use widget_kanban::KanbanAreas;
 
-use crate::git::{render_gitbar, render_remote_dropdown};
+use crate::git::render_remote_dropdown;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
@@ -51,6 +56,14 @@ pub struct UIAreas {
     pub detail_pane: Option<Rect>,
     /// Detail pane close button [X]
     pub detail_close_btn: Option<Rect>,
+    /// Help icon area in status bar
+    pub help_icon: Option<Rect>,
+    /// Tab: Issues (clickable)
+    pub tab_issues: Option<Rect>,
+    /// Tab: Kanban (clickable)
+    pub tab_kanban: Option<Rect>,
+    /// Tab: Settings (clickable, right-aligned)
+    pub tab_settings: Option<Rect>,
 }
 
 /// Render the entire UI, returns UI areas for mouse handling
@@ -81,43 +94,120 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     areas.git_remote = remote_area;
 
 
-    // Render view based on mode - wrapped in titled frame
+    // Render view based on mode - with clickable tab title bar
+    // Create the tabbed title: [📋 Issues] [📊 Kanban] ... [⚙ Settings]
+    let issues_label = " 📋 Issues ";
+    let kanban_label = " 📊 Kanban ";
+    let settings_label = " ⚙ Settings ";
+    
+    // Calculate tab widths for click detection
+    let tab_start_x = areas.content.x + 1; // After border
+    let issues_tab_width = issues_label.chars().count() as u16 + 2;
+    let kanban_tab_width = kanban_label.chars().count() as u16 + 2;
+    let settings_tab_width = settings_label.chars().count() as u16 + 2;
+    
+    // Store tab areas for mouse hit detection
+    areas.tab_issues = Some(Rect {
+        x: tab_start_x,
+        y: areas.content.y,
+        width: issues_tab_width,
+        height: 1,
+    });
+    areas.tab_kanban = Some(Rect {
+        x: tab_start_x + issues_tab_width + 1, // +1 for separator
+        y: areas.content.y,
+        width: kanban_tab_width,
+        height: 1,
+    });
+    
+    // Settings tab (right-aligned)
+    let settings_x = areas.content.x + areas.content.width - settings_tab_width - 2;
+    areas.tab_settings = Some(Rect {
+        x: settings_x,
+        y: areas.content.y,
+        width: settings_tab_width,
+        height: 1,
+    });
+
+    // Build title spans with active/inactive styling
+    let (issues_style, kanban_style, mr_style) = match app.view_mode {
+        ViewMode::List => (
+            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
+            colors.dim(),
+        ),
+        ViewMode::Kanban => (
+            colors.dim(),
+            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
+        ),
+        ViewMode::MRList => (
+            colors.dim(),
+            colors.dim(),
+            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+        ),
+        ViewMode::Diff => (colors.dim(), colors.dim(), colors.dim()),
+    };
+    
+    // Settings style (highlighted if in settings mode)
+    let settings_style = if app.input_mode == InputMode::Settings {
+        colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED)
+    } else {
+        colors.dim()
+    };
+
+    // Calculate padding for right-alignment
+    let left_content_len = issues_label.len() + 1 + kanban_label.len() + format!(" ({} total) ", app.issues.len()).len();
+    let total_width = areas.content.width as usize - 2; // Minus borders
+    let padding = if total_width > left_content_len + settings_label.len() {
+        total_width - left_content_len - settings_label.len()
+    } else {
+        1
+    };
+
+    let title_spans = vec![
+        Span::styled(issues_label, issues_style),
+        Span::raw("│"),
+        Span::styled(kanban_label, kanban_style),
+        Span::raw("│"),
+        Span::styled(" MRs ", mr_style),
+        Span::styled(format!(" ({} total) ", app.issues.len()), colors.dim()),
+        Span::raw(" ".repeat(padding)),
+        Span::styled(settings_label, settings_style),
+    ];
+
+    let block = Block::default()
+        .title(Line::from(title_spans))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(colors.border());
+
+    let inner = block.inner(chunks[1]);
+    frame.render_widget(block, chunks[1]);
+
+    // Render the actual view content
     areas.kanban = match app.view_mode {
         ViewMode::List => {
-            // Create titled frame for list view
-            let block = Block::default()
-                .title(Line::from(vec![
-                    Span::styled(" 📋 Issues ", colors.accent()),
-                    Span::styled(format!("({} total) ", app.issues.len()), colors.dim()),
-                ]))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(colors.border());
-
-            let inner = block.inner(chunks[1]);
-            frame.render_widget(block, chunks[1]);
             widget_issues::render(frame, inner, app);
             KanbanAreas::default()
         }
         ViewMode::Kanban => {
-            // Create titled frame for kanban view
-            let block = Block::default()
-                .title(Line::from(vec![
-                    Span::styled(" 📊 Kanban ", colors.accent()),
-                    Span::styled(format!("({} issues) ", app.issues.len()), colors.dim()),
-                ]))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(colors.border());
-
-            let inner = block.inner(chunks[1]);
-            frame.render_widget(block, chunks[1]);
             widget_kanban::render(frame, inner, app)
+        }
+        ViewMode::MRList => {
+             widget_mr_list::render(frame, inner, app);
+             KanbanAreas::default()
+        }
+        ViewMode::Diff => {
+            if let Some(ref state) = app.diff_state {
+                crate::diff::render_diff(frame, inner, state);
+            }
+            KanbanAreas::default()
         }
     };
 
     // Status bar at bottom - now with &mut App
-    widget_status::render(frame, chunks[2], app);
+    areas.help_icon = widget_status::render(frame, chunks[2], app);
 
     // Render dropdown overlay if open
     if app.input_mode == InputMode::RemoteDropdown {
@@ -130,7 +220,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
                 width: 50.min(size.width - 20),
                 height: dropdown_height.min(10),
             };
-            render_remote_dropdown(frame, dropdown_area, repo, app.selected_remote, &colors);
+            render_remote_dropdown(frame, dropdown_area, repo, app.selected_remote, &colors, &app.theme_engine);
         }
     }
 
@@ -147,7 +237,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
                  height: dropdown_height.min(15),
              };
              use crate::git::render_branch_dropdown;
-             render_branch_dropdown(frame, dropdown_area, repo, app.selected_branch, &colors);
+             render_branch_dropdown(frame, dropdown_area, repo, app.selected_branch, &colors, &app.theme_engine);
         }
     }
 
@@ -160,7 +250,23 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
             height: 3,
         };
         use crate::git::render_branch_input;
-        render_branch_input(frame, input_area, &app.edit_buffer, &colors);
+        render_branch_input(frame, input_area, &app.edit_buffer, &colors, &app.theme_engine);
+    }
+
+    // Render repository filter dropdown overlay if open
+    if app.input_mode == InputMode::RepoFilter {
+        if !app.available_repos.is_empty() {
+            // Position dropdown below git bar
+            // Height = repos + 1 ("All") + 2 (border)
+            let dropdown_height = (app.available_repos.len() + 3) as u16;
+            let dropdown_area = Rect {
+                x: chunks[0].x + 5,
+                y: chunks[0].y + chunks[0].height,
+                width: 40,
+                height: dropdown_height.min(15),
+            };
+            render_repo_filter_dropdown(frame, dropdown_area, app, &colors);
+        }
     }
 
     // Render detail pane overlay if open
@@ -180,7 +286,146 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
     }
 
+    // Render debug console overlay if enabled
+    if app.show_debug_console {
+        let area = centered_rect(size, 80, 50);
+        // Clear background for overlay
+        frame.render_widget(ratatui::widgets::Clear, area);
+        widget_debug::render(frame, area, app);
+    }
+    
+    // Render settings pane overlay if open
+    if app.input_mode == InputMode::Settings {
+        widget_settings::render(frame, app, 0);
+    }
+    
+    // Render fuzzy command palette overlay if open (Ctrl+P)
+    if app.input_mode == InputMode::FuzzyPalette {
+        widget_fuzzy_palette::render(frame, app, &colors);
+    }
+    
     areas
+}
+
+/// Helper function to create a centered rect using up certain percentage of the available rect `r`
+fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
+/// Calculate repository statistics from issues
+fn calculate_repo_stats(issues: &[crate::issue::Issue]) -> Vec<(String, usize)> {
+    use std::collections::HashMap;
+    
+    let mut repo_counts: HashMap<String, usize> = HashMap::new();
+    
+    for issue in issues {
+        if let Some(ref repo) = issue.repo {
+            *repo_counts.entry(repo.clone()).or_insert(0) += 1;
+        }
+    }
+    
+    // Sort by count (descending) for consistent display
+    let mut stats: Vec<(String, usize)> = repo_counts.into_iter().collect();
+    stats.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    stats
+}
+
+/// Render the repository filter dropdown menu
+fn render_repo_filter_dropdown(frame: &mut Frame, area: Rect, app: &App, colors: &ThemeColors) {
+    use ratatui::widgets::{Clear, Paragraph};
+    use ratatui::style::Modifier;
+    
+    let engine = &app.theme_engine;
+
+    // Clear background first to prevent bleed-through
+    frame.render_widget(Clear, area);
+    
+    let mut items: Vec<Line> = Vec::new();
+    
+    // Styles
+    let normal_style = engine.get("dropdown.filter.normal", colors.normal());
+    let selected_style = engine.get("dropdown.filter.selected", colors.selected());
+    let dim_style = engine.get("dropdown.filter.dim", colors.dim());
+    
+    // First item: "All Repositories" (index 0)
+    let all_prefix = if app.selected_repo_filter == 0 { "▶ " } else { "  " };
+    let all_style = if app.selected_repo_filter == 0 { selected_style } else { normal_style };
+    
+    items.push(Line::from(vec![
+        Span::styled(all_prefix, all_style),
+        Span::styled("All Repositories", all_style.add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!(" ({})", app.issues.len()),
+            dim_style
+        ),
+    ]));
+    
+    // Add each repository with issue count
+    for (i, repo) in app.available_repos.iter().enumerate() {
+        let idx = i + 1; // Offset by 1 since 0 is "All"
+        let prefix = if app.selected_repo_filter == idx { "▶ " } else { "  " };
+        let style = if app.selected_repo_filter == idx { selected_style } else { normal_style };
+        
+        // Count issues for this repo
+        let count = app.issues.iter().filter(|issue| {
+            issue.repo.as_ref().map_or(false, |r| r == repo)
+        }).count();
+        
+        // Color-code by repo name (same logic as issue table)
+        // Allow override via config: "repo.color.frontend"
+        let repo_config_key = format!("repo.color.{}", repo);
+        
+        let repo_style = if app.selected_repo_filter == idx {
+            style // Keep selection style if selected
+        } else {
+             // Check if specific repo color is configured, otherwise use hash
+            let hash = repo.bytes().fold(0u8, |acc, b| acc.wrapping_add(b));
+            let default_color = match hash % 6 {
+                0 => ratatui::style::Color::Cyan,
+                1 => ratatui::style::Color::Magenta,
+                2 => ratatui::style::Color::Yellow,
+                3 => ratatui::style::Color::Green,
+                4 => ratatui::style::Color::Blue,
+                _ => ratatui::style::Color::Red,
+            };
+            engine.get(&repo_config_key, ratatui::style::Style::default().fg(default_color))
+        };
+        
+        items.push(Line::from(vec![
+            Span::styled(prefix, style),
+            Span::styled(repo, repo_style.add_modifier(Modifier::BOLD)),
+            Span::styled(format!(" ({})", count), dim_style),
+        ]));
+    }
+    
+    let border_style = engine.get("dropdown.border", colors.accent());
+    let title_style = engine.get("dropdown.title", colors.header());
+
+    let dropdown = Paragraph::new(items)
+        .block(
+            Block::default()
+                .title(Span::styled(" Filter by Repository ", title_style))
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        );
+
+    frame.render_widget(dropdown, area);
 }
 
 #[cfg(test)]
