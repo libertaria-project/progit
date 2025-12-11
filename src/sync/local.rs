@@ -156,4 +156,30 @@ impl SyncProvider for LocalProvider {
         // For now, no-op.
         Ok(())
     }
+    
+    fn approve_mr(&self, _remote_id: u64) -> Result<()> {
+        // Local mode: no approval needed
+        Ok(())
+    }
+    
+    fn merge_mr(&self, remote_id: u64) -> Result<()> {
+        // Find the branch for this MR
+        let mr = self.get_mr(remote_id)?;
+        
+        // Merge the branch into target
+        self.run_git(&["checkout", &self.target_branch])?;
+        self.run_git(&["merge", "--no-ff", &mr.source_branch])?;
+        
+        Ok(())
+    }
+    
+    fn close_mr(&self, remote_id: u64) -> Result<()> {
+        // Find the branch for this MR
+        let mr = self.get_mr(remote_id)?;
+        
+        // Delete the branch (close without merging)
+        self.run_git(&["branch", "-D", &mr.source_branch])?;
+        
+        Ok(())
+    }
 }

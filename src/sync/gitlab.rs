@@ -441,4 +441,19 @@ impl SyncProvider for GitLabProvider {
         
         Ok(())
     }
+    
+    fn approve_mr(&self, remote_id: u64) -> Result<()> {
+        // TODO: Implement GitLab MR approval
+        Err(anyhow!("MR approval not yet implemented for GitLab"))
+    }
+    
+    fn merge_mr(&self, remote_id: u64) -> Result<()> {
+        // TODO: Implement GitLab MR merge
+        Err(anyhow!("MR merge not yet implemented for GitLab"))
+    }
+    
+    fn close_mr(&self, remote_id: u64) -> Result<()> {
+        // TODO: Implement GitLab MR close
+        Err(anyhow!("MR close not yet implemented for GitLab"))
+    }
 }

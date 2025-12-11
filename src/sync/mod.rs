@@ -30,6 +30,12 @@ pub trait SyncProvider {
     fn get_mr(&self, remote_id: u64) -> Result<MergeRequest>;
     /// Update MR (title, description, state)
     fn update_mr(&self, mr: &MergeRequest) -> Result<()>;
+    /// Approve/review MR
+    fn approve_mr(&self, remote_id: u64) -> Result<()>;
+    /// Merge MR
+    fn merge_mr(&self, remote_id: u64) -> Result<()>;
+    /// Close MR without merging
+    fn close_mr(&self, remote_id: u64) -> Result<()>;
 }
 
 pub fn create_provider(config: SyncConfig) -> Box<dyn SyncProvider> {

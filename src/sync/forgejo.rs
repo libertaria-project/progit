@@ -240,23 +240,247 @@ impl SyncProvider for ForgejoProvider {
     }
     
     // Merge Request operations (Pull Requests in Forgejo/Gitea)
-    fn create_mr(&self, _mr: &crate::mr::MergeRequest) -> Result<u64> {
-        // TODO: Implement Forgejo PR creation
-        Err(anyhow!("MR creation not yet implemented for Forgejo"))
+    fn create_mr(&self, mr: &crate::mr::MergeRequest) -> Result<u64> {
+        let token = self.get_token()?;
+        let url = format!("{}/pulls", self.base_url());
+        
+        let payload = serde_json::json!({
+            "title": mr.title,
+            "head": mr.source_branch,
+            "base": mr.target_branch,
+            "body": mr.description,
+        });
+        
+        let response = self.client.post(&url)
+            .header("Authorization", format!("token {}", token))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context("Failed to create pull request")?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("Failed to create PR: {}", error_text));
+        }
+        
+        let pr: ForgejoPullRequest = response.json()?;
+        Ok(pr.number as u64)
     }
     
     fn list_mrs(&self) -> Result<Vec<crate::mr::MergeRequest>> {
-        // TODO: Implement Forgejo PR listing
-        Ok(vec![])
+        let token = self.get_token()?;
+        let url = format!("{}/pulls", self.base_url());
+        
+        let response = self.client.get(&url)
+            .header("Authorization", format!("token {}", token))
+            .query(&[("state", "all")])
+            .send()
+            .context("Failed to fetch pull requests")?;
+        
+        if !response.status().is_success() {
+            return Err(anyhow!("API Error: {}", response.status()));
+        }
+        
+        let prs: Vec<ForgejoPullRequest> = response.json()?;
+        let mut mrs = Vec::new();
+        
+        for pr in prs {
+            let state = if pr.merged {
+                crate::mr::MRState::Merged
+            } else if pr.state == "closed" {
+                crate::mr::MRState::Closed
+            } else {
+                crate::mr::MRState::Open
+            };
+            
+            let mr = crate::mr::MergeRequest {
+                id: uuid::Uuid::new_v4().to_string(),
+                remote_id: Some(pr.number as u64),
+                source_branch: pr.head.ref_name,
+                target_branch: pr.base.ref_name,
+                title: pr.title,
+                description: pr.body.unwrap_or_default(),
+                state,
+                author: pr.user.map(|u| u.username),
+                assignees: pr.assignees.into_iter().map(|a| a.username).collect(),
+                labels: pr.labels.into_iter().map(|l| l.name).collect(),
+                linked_issues: Vec::new(),
+                web_url: Some(pr.html_url),
+                created: pr.created_at,
+                updated: pr.updated_at,
+                merged_at: pr.merged_at,
+                is_draft: pr.draft.unwrap_or(false),
+            };
+            mrs.push(mr);
+        }
+        
+        Ok(mrs)
     }
     
-    fn get_mr(&self, _remote_id: u64) -> Result<crate::mr::MergeRequest> {
-        // TODO: Implement Forgejo PR fetching
-        Err(anyhow!("MR get not yet implemented for Forgejo"))
+    fn get_mr(&self, remote_id: u64) -> Result<crate::mr::MergeRequest> {
+        let token = self.get_token()?;
+        let url = format!("{}/pulls/{}", self.base_url(), remote_id);
+        
+        let response = self.client.get(&url)
+            .header("Authorization", format!("token {}", token))
+            .send()
+            .context(format!("Failed to fetch PR #{}", remote_id))?;
+        
+        if !response.status().is_success() {
+            return Err(anyhow!("API Error: {}", response.status()));
+        }
+        
+        let pr: ForgejoPullRequest = response.json()?;
+        
+        let state = if pr.merged {
+            crate::mr::MRState::Merged
+        } else if pr.state == "closed" {
+            crate::mr::MRState::Closed
+        } else {
+            crate::mr::MRState::Open
+        };
+        
+        Ok(crate::mr::MergeRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            remote_id: Some(pr.number as u64),
+            source_branch: pr.head.ref_name,
+            target_branch: pr.base.ref_name,
+            title: pr.title,
+            description: pr.body.unwrap_or_default(),
+            state,
+            author: pr.user.map(|u| u.username),
+            assignees: pr.assignees.into_iter().map(|a| a.username).collect(),
+            labels: pr.labels.into_iter().map(|l| l.name).collect(),
+            linked_issues: Vec::new(),
+            web_url: Some(pr.html_url),
+            created: pr.created_at,
+            updated: pr.updated_at,
+            merged_at: pr.merged_at,
+            is_draft: pr.draft.unwrap_or(false),
+        })
     }
     
-    fn update_mr(&self, _mr: &crate::mr::MergeRequest) -> Result<()> {
-        // TODO: Implement Forgejo PR update
-        Err(anyhow!("MR update not yet implemented for Forgejo"))
+    fn update_mr(&self, mr: &crate::mr::MergeRequest) -> Result<()> {
+        if let Some(remote_id) = mr.remote_id {
+            let token = self.get_token()?;
+            let url = format!("{}/pulls/{}", self.base_url(), remote_id);
+            
+            let payload = serde_json::json!({
+                "title": mr.title,
+                "body": mr.description,
+            });
+            
+            let response = self.client.patch(&url)
+                .header("Authorization", format!("token {}", token))
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .context(format!("Failed to update PR #{}", remote_id))?;
+            
+            if !response.status().is_success() {
+                let error_text = response.text().unwrap_or_default();
+                return Err(anyhow!("Failed to update PR: {}", error_text));
+            }
+            
+            Ok(())
+        } else {
+            Err(anyhow!("Cannot update MR without remote_id"))
+        }
     }
+    
+    fn merge_mr(&self, remote_id: u64) -> Result<()> {
+        let token = self.get_token()?;
+        let url = format!("{}/pulls/{}/merge", self.base_url(), remote_id);
+        
+        let payload = serde_json::json!({
+            "Do": "merge",
+        });
+        
+        let response = self.client.post(&url)
+            .header("Authorization", format!("token {}", token))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context(format!("Failed to merge PR #{}", remote_id))?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("Failed to merge PR: {}", error_text));
+        }
+        
+        Ok(())
+    }
+    
+    fn close_mr(&self, remote_id: u64) -> Result<()> {
+        let token = self.get_token()?;
+        let url = format!("{}/pulls/{}", self.base_url(), remote_id);
+        
+        let payload = serde_json::json!({
+            "state": "closed",
+        });
+        
+        let response = self.client.patch(&url)
+            .header("Authorization", format!("token {}", token))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context(format!("Failed to close PR #{}", remote_id))?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("Failed to close PR: {}", error_text));
+        }
+        
+        Ok(())
+    }
+    
+    fn approve_mr(&self, remote_id: u64) -> Result<()> {
+        let token = self.get_token()?;
+        let url = format!("{}/pulls/{}/reviews", self.base_url(), remote_id);
+        
+        let payload = serde_json::json!({
+            "event": "APPROVED",
+            "body": "Approved via ProGit TUI",
+        });
+        
+        let response = self.client.post(&url)
+            .header("Authorization", format!("token {}", token))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context(format!("Failed to approve PR #{}", remote_id))?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("Failed to approve PR: {}", error_text));
+        }
+        
+        Ok(())
+    }
+}
+
+// Forgejo Pull Request API Models
+#[derive(Debug, Deserialize)]
+struct ForgejoPullRequest {
+    number: i64,
+    title: String,
+    body: Option<String>,
+    state: String,
+    merged: bool,
+    draft: Option<bool>,
+    html_url: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    merged_at: Option<DateTime<Utc>>,
+    user: Option<ForgejoUser>,
+    assignees: Vec<ForgejoUser>,
+    labels: Vec<ForgejoLabel>,
+    head: ForgejoBranch,
+    base: ForgejoBranch,
+}
+
+#[derive(Debug, Deserialize)]
+struct ForgejoBranch {
+    #[serde(rename = "ref")]
+    ref_name: String,
 }

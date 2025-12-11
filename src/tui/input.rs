@@ -133,26 +133,68 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
         
         // MR-specific actions
         KeyCode::Char('a') => {
-            // Approve MR (if provider supports it)
-            if let Some(mr) = app.mr_list.get(app.mr_selected) {
-                app.set_status(format!("Approve MR !{} - Not yet implemented", mr.id));
-                // TODO: Implement provider.approve_mr()
+            // Approve MR
+            if let Some(mr) = app.mr_list.get(app.mr_selected).cloned() {
+                if let Some(remote_id) = mr.remote_id {
+                    if let Some(ref provider) = app.sync_provider {
+                        match provider.approve_mr(remote_id) {
+                            Ok(_) => {
+                                app.set_status(format!("✅ Approved MR !{}", remote_id));
+                                // Reload MRs to reflect changes
+                                let _ = app.load_mrs();
+                            }
+                            Err(e) => app.set_status(format!("❌ Failed to approve: {}", e)),
+                        }
+                    } else {
+                        app.set_status("No sync provider configured".to_string());
+                    }
+                } else {
+                    app.set_status("MR has no remote ID".to_string());
+                }
             }
             KeyAction::Refresh
         }
         KeyCode::Char('m') => {
-            // Merge MR (if provider supports it)
-            if let Some(mr) = app.mr_list.get(app.mr_selected) {
-                app.set_status(format!("Merge MR !{} - Not yet implemented", mr.id));
-                // TODO: Implement provider.merge_mr()
+            // Merge MR
+            if let Some(mr) = app.mr_list.get(app.mr_selected).cloned() {
+                if let Some(remote_id) = mr.remote_id {
+                    if let Some(ref provider) = app.sync_provider {
+                        match provider.merge_mr(remote_id) {
+                            Ok(_) => {
+                                app.set_status(format!("✅ Merged MR !{}", remote_id));
+                                // Reload MRs to reflect changes
+                                let _ = app.load_mrs();
+                            }
+                            Err(e) => app.set_status(format!("❌ Failed to merge: {}", e)),
+                        }
+                    } else {
+                        app.set_status("No sync provider configured".to_string());
+                    }
+                } else {
+                    app.set_status("MR has no remote ID".to_string());
+                }
             }
             KeyAction::Refresh
         }
         KeyCode::Char('c') => {
-            // Close MR (if provider supports it)
-            if let Some(mr) = app.mr_list.get(app.mr_selected) {
-                app.set_status(format!("Close MR !{} - Not yet implemented", mr.id));
-                // TODO: Implement provider.close_mr()
+            // Close MR
+            if let Some(mr) = app.mr_list.get(app.mr_selected).cloned() {
+                if let Some(remote_id) = mr.remote_id {
+                    if let Some(ref provider) = app.sync_provider {
+                        match provider.close_mr(remote_id) {
+                            Ok(_) => {
+                                app.set_status(format!("✅ Closed MR !{}", remote_id));
+                                // Reload MRs to reflect changes
+                                let _ = app.load_mrs();
+                            }
+                            Err(e) => app.set_status(format!("❌ Failed to close: {}", e)),
+                        }
+                    } else {
+                        app.set_status("No sync provider configured".to_string());
+                    }
+                } else {
+                    app.set_status("MR has no remote ID".to_string());
+                }
             }
             KeyAction::Refresh
         }
