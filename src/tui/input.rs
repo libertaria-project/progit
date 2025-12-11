@@ -425,6 +425,33 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     app.set_status(format!("Error: {}", err));
                     KeyAction::Refresh
                 }
+                CommandAction::SuspendAndRun(args) => {
+                    // Suspend TUI
+                    let _ = crossterm::terminal::disable_raw_mode();
+                    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+
+                    // Run command
+                    let status = std::process::Command::new(&args[0])
+                        .args(&args[1..])
+                        .status();
+
+                    // Resume TUI
+                    let _ = crossterm::terminal::enable_raw_mode();
+                    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen);
+
+                    match status {
+                        Ok(s) if s.success() => {
+                             app.set_status("Command executed successfully".to_string());
+                        }
+                        Ok(s) => {
+                             app.set_status(format!("Command failed with code: {}", s));
+                        }
+                        Err(e) => {
+                             app.set_status(format!("Failed to run command: {}", e));
+                        }
+                    }
+                    KeyAction::Refresh
+                }
             }
         }
         KeyCode::Backspace => {

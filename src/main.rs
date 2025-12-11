@@ -9,6 +9,7 @@ mod issue;
 mod mr;
 mod plugins;
 mod fuzzy;
+mod rebase;
 mod storage;
 mod sync;
 mod tui;
@@ -74,6 +75,12 @@ enum Commands {
     Mr {
         #[command(subcommand)]
         action: Option<MrAction>,
+    },
+    /// Internal: Interactive rebase editor (triggered by git)
+    #[command(hide = true)]
+    RebaseEditor {
+        /// Path to the git-rebase-todo file
+        path: String,
     },
 }
 
@@ -342,6 +349,9 @@ fn main() -> Result<()> {
             } else {
                 return Err(anyhow!("Issue '{}' not found", id));
             }
+        }
+        Some(Commands::RebaseEditor { path }) => {
+            crate::rebase::run(&path)?;
         }
         None => {
             // No command - run TUI

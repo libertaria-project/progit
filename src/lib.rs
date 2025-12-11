@@ -8,6 +8,7 @@ pub mod git;
 pub mod issue;
 pub mod mr;
 pub mod plugins;
+pub mod rebase;
 pub mod storage;
 pub mod sync;
 pub mod tui;
