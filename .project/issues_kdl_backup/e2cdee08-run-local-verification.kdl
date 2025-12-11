@@ -1,0 +1,16 @@
+issue id="e2cdee08-630c-4425-8f05-e5bd9f859917" {
+    title "Run Local Verification"
+    description "Trigger pre-commit hooks or local test runners from TUI."
+    status "backlog"
+    effort 6
+    tags {
+        - "ci-cd"
+        - "local"
+        - "sprint-3"
+    }
+    remotes {
+        gitlab "79"
+    }
+    created "2025-12-11T12:45:35.468+00:00"
+    updated "2025-12-11T18:51:49.768+00:00"
+}

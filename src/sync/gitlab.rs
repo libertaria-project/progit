@@ -354,8 +354,15 @@ impl SyncProvider for GitLabProvider {
             .send()
             .context("Failed to list merge requests")?;
             
-        let gl_mrs: Vec<serde_json::Value> = response.json()
-            .context("Failed to parse MR list")?;
+        if !response.status().is_success() {
+             return Err(anyhow!("API Error: {}", response.status()));
+        }
+
+        let body = response.text().context("Failed to get response body")?;
+        let gl_mrs: Vec<serde_json::Value> = match serde_json::from_str(&body) {
+            Ok(v) => v,
+            Err(e) => return Err(anyhow!("Failed to parse MR list: {}\nBody: {}", e, body)),
+        };
             
         let mut mrs = Vec::new();
         for gl_mr in gl_mrs {
@@ -443,17 +450,76 @@ impl SyncProvider for GitLabProvider {
     }
     
     fn approve_mr(&self, remote_id: u64) -> Result<()> {
-        // TODO: Implement GitLab MR approval
-        Err(anyhow!("MR approval not yet implemented for GitLab"))
+        let token = self.get_token()?;
+        let url = self.api_url(&format!("merge_requests/{}/approve", remote_id));
+        
+        log::info!("👍 Approving MR !{}", remote_id);
+        
+        let response = self.client.post(&url)
+            .header("PRIVATE-TOKEN", &token)
+            .send()
+            .context("Failed to approve merge request")?;
+            
+        if !response.status().is_success() {
+             let error_text = response.text().unwrap_or_default();
+             return Err(anyhow!("MR approval failed: {}", error_text));
+        }
+        
+        log::info!("✅ Approved MR !{}", remote_id);
+        Ok(())
     }
     
     fn merge_mr(&self, remote_id: u64) -> Result<()> {
-        // TODO: Implement GitLab MR merge
-        Err(anyhow!("MR merge not yet implemented for GitLab"))
+        let token = self.get_token()?;
+        let url = self.api_url(&format!("merge_requests/{}/merge", remote_id));
+        
+        log::info!("🔀 Merging MR !{}", remote_id);
+        
+        // GitLab specific parameters for merge
+        let payload = serde_json::json!({
+            "should_remove_source_branch": true,
+            "merge_when_pipeline_succeeds": true,
+        });
+
+        let response = self.client.put(&url)
+            .header("PRIVATE-TOKEN", &token)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context("Failed to merge merge request")?;
+            
+        if !response.status().is_success() {
+             let error_text = response.text().unwrap_or_default();
+             return Err(anyhow!("MR merge failed: {}", error_text));
+        }
+        
+        log::info!("✅ Merged MR !{}", remote_id);
+        Ok(())
     }
     
     fn close_mr(&self, remote_id: u64) -> Result<()> {
-        // TODO: Implement GitLab MR close
-        Err(anyhow!("MR close not yet implemented for GitLab"))
+        let token = self.get_token()?;
+        let url = self.api_url(&format!("merge_requests/{}", remote_id));
+        
+        log::info!("🚫 Closing MR !{}", remote_id);
+        
+        let payload = serde_json::json!({
+            "state_event": "close"
+        });
+
+        let response = self.client.put(&url)
+            .header("PRIVATE-TOKEN", &token)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .context("Failed to close merge request")?;
+            
+        if !response.status().is_success() {
+             let error_text = response.text().unwrap_or_default();
+             return Err(anyhow!("MR close failed: {}", error_text));
+        }
+        
+        log::info!("✅ Closed MR !{}", remote_id);
+        Ok(())
     }
 }

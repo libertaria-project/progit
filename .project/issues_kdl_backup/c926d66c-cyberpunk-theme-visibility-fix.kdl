@@ -1,0 +1,16 @@
+issue id="c926d66c-427d-4911-bec8-526a89600ccb" {
+    title "Cyberpunk theme visibility fix"
+    description "Brightened Cyberpunk theme colors for visibility on non-black terminal backgrounds. accent_dim now hot magenta."
+    status "backlog"
+    effort 6
+    tags {
+        - "bugfix"
+        - "sprint-1"
+        - "theme"
+    }
+    remotes {
+        gitlab "73"
+    }
+    created "2025-12-11T12:45:31.296+00:00"
+    updated "2025-12-11T12:45:31.296+00:00"
+}

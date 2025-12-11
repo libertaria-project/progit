@@ -1,0 +1,16 @@
+issue id="221f252c-fb34-48b7-b2cf-ff340937c3ce" {
+    title "MR list view (see all open MRs)"
+    description "Add a new view mode or tab showing all open Merge Requests from synced remotes. Display title, source/target branch, status."
+    status "backlog"
+    effort 6
+    tags {
+        - "code-review"
+        - "phase2"
+        - "sprint-2"
+    }
+    remotes {
+        gitlab "57"
+    }
+    created "2025-12-11T12:45:18.498+00:00"
+    updated "2025-12-11T18:51:52.257+00:00"
+}

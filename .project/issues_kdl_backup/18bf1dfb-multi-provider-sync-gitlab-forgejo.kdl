@@ -1,0 +1,16 @@
+issue id="18bf1dfb-02b5-442c-a4d2-058006aad479" {
+    title "Multi-provider sync (GitLab + Forgejo simultaneously)"
+    description "Support syncing issues from multiple remotes at once. Conflict resolution between providers."
+    status "backlog"
+    effort 6
+    tags {
+        - "phase2"
+        - "sprint-2"
+        - "sync"
+    }
+    remotes {
+        gitlab "61"
+    }
+    created "2025-12-11T12:45:21.730+00:00"
+    updated "2025-12-11T12:45:21.730+00:00"
+}

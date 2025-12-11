@@ -1,0 +1,16 @@
+issue id="2fbbe8f3-0123-4541-97c0-a0bedda5229f" {
+    title "Artifact browser"
+    description "Browse and download CI/CD artifacts from completed pipelines."
+    status "backlog"
+    effort 6
+    tags {
+        - "ci-cd"
+        - "phase3"
+        - "sprint-3"
+    }
+    remotes {
+        gitlab "65"
+    }
+    created "2025-12-11T12:45:24.902+00:00"
+    updated "2025-12-11T12:45:24.902+00:00"
+}

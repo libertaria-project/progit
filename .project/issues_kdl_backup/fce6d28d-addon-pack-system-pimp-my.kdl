@@ -1,0 +1,17 @@
+issue id="fce6d28d-9fb4-4885-9065-7490614a087d" {
+    title "Addon Pack System (Pimp my ProGit)"
+    description "Extensible addon packs for themes, Nerd Font icon sets, ASCII banners, status animations. Community-contributed customization. Install via prog addon install <pack>."
+    status "backlog"
+    effort 6
+    tags {
+        - "community"
+        - "phase4"
+        - "plugins"
+        - "sprint-4"
+    }
+    remotes {
+        gitlab "74"
+    }
+    created "2025-12-11T12:45:31.971+00:00"
+    updated "2025-12-11T18:51:46.946+00:00"
+}

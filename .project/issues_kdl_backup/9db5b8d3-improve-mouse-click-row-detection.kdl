@@ -1,0 +1,16 @@
+issue id="9db5b8d3-3da0-4805-9b02-97c28d337cca" {
+    title "Improve mouse click row detection edge cases"
+    description "Test and fix any remaining off-by-one issues in list view mouse click handling. Consider scroll offset."
+    status "backlog"
+    effort 6
+    tags {
+        - "bugfix"
+        - "sprint-1"
+        - "ux"
+    }
+    remotes {
+        gitlab "70"
+    }
+    created "2025-12-11T12:45:29.078+00:00"
+    updated "2025-12-11T12:45:29.078+00:00"
+}

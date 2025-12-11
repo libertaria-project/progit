@@ -1,495 +1,148 @@
 [
   {
-    "id": "storage-001",
-    "title": "Complete StorageEngine migration",
-    "description": "Finish migrating TUI to use StorageEngine exclusively. Delete obsolete kdl.rs issue logic and old sync.rs code.",
-    "status": "backlog",
-    "effort": 6,
-    "tags": [
-      "refactor",
-      "sprint-1",
-      "storage"
-    ],
-    "assignee": null,
-    "sprint": 1,
-    "due": null,
-    "started": "2025-12-10T19:00:00Z",
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:16.274Z",
-    "updated": "2025-12-11T12:45:16.274Z",
-    "remotes": {
-      "gitlab": "55"
-    },
-    "repo": null
-  },
-  {
-    "id": "storage-002",
-    "title": "Add timestamp-based conflict resolution",
-    "description": "Implement proper timestamp comparison for sync: older=pushed, newer=pulled, deleted=never recreated.",
-    "status": "backlog",
-    "effort": 6,
-    "tags": [
-      "sprint-1",
-      "storage",
-      "sync"
-    ],
-    "assignee": null,
-    "sprint": 1,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:17.648Z",
-    "updated": "2025-12-11T12:45:17.648Z",
-    "remotes": {
-      "gitlab": "56"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase2-001",
-    "title": "MR list view (see all open MRs)",
-    "description": "Add a new view mode or tab showing all open Merge Requests from synced remotes. Display title, source/target branch, status.",
-    "status": "backlog",
-    "effort": 10,
-    "tags": [
-      "code-review",
-      "phase2",
-      "sprint-2"
-    ],
-    "assignee": null,
-    "sprint": 2,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:18.498Z",
-    "updated": "2025-12-11T12:45:18.498Z",
-    "remotes": {
-      "gitlab": "57"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase2-002",
-    "title": "Diff viewer in TUI",
-    "description": "Implement syntax-highlighted diff viewing for MRs. Show file changes, additions (green), deletions (red).",
-    "status": "backlog",
+    "id": "done-001",
+    "title": "Panopticum Integration Phase 1",
+    "description": "Add native panoctl integration",
+    "status": "done",
     "effort": 15,
     "tags": [
-      "code-review",
-      "phase2",
-      "sprint-2"
+      "infrastructure"
     ],
     "assignee": null,
-    "sprint": 2,
+    "sprint": null,
     "due": null,
     "started": null,
-    "completed": null,
-    "blocked": true,
-    "created": "2025-12-11T12:45:19.365Z",
-    "updated": "2025-12-11T12:45:19.365Z",
+    "completed": "2025-12-10T23:59:59Z",
+    "blocked": false,
+    "created": "2025-12-11T19:16:36.008Z",
+    "updated": "2025-12-11T19:50:40.991818846Z",
     "remotes": {
-      "gitlab": "58"
+      "gitlab": "81"
     },
     "repo": null
   },
   {
-    "id": "phase2-003",
-    "title": "Comment on code lines (without browser)",
-    "description": "Allow adding review comments to specific lines in diffs. Submit via GitLab/Forgejo API.",
-    "status": "backlog",
-    "effort": 15,
+    "id": "done-002",
+    "title": "Enhanced Remote Branch UI",
+    "description": "Show project name in branch list",
+    "status": "done",
+    "effort": 3,
     "tags": [
-      "code-review",
-      "phase2",
-      "sprint-2"
+      "ui"
     ],
     "assignee": null,
-    "sprint": 2,
+    "sprint": null,
     "due": null,
     "started": null,
-    "completed": null,
-    "blocked": true,
-    "created": "2025-12-11T12:45:20.305Z",
-    "updated": "2025-12-11T12:45:20.305Z",
+    "completed": "2025-12-10T23:59:59Z",
+    "blocked": false,
+    "created": "2025-12-11T19:16:36.973Z",
+    "updated": "2025-12-11T19:50:48.151573043Z",
     "remotes": {
-      "gitlab": "59"
+      "gitlab": "82"
     },
     "repo": null
   },
   {
-    "id": "phase2-004",
-    "title": "Approve/Reject MRs from terminal",
-    "description": "Add keyboard shortcuts to approve, request changes, or close MRs directly from the TUI.",
-    "status": "backlog",
+    "id": "progress-001",
+    "title": "Write Panopticum Documentation",
+    "description": "Create comprehensive docs",
+    "status": "in-progress",
     "effort": 6,
     "tags": [
-      "code-review",
-      "phase2",
-      "sprint-2"
+      "documentation"
     ],
-    "assignee": null,
-    "sprint": 2,
-    "due": null,
-    "started": null,
+    "assignee": "voxis",
+    "sprint": null,
+    "due": "2025-12-13T23:59:59Z",
+    "started": "2025-12-11T19:00:00Z",
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T12:45:20.954Z",
-    "updated": "2025-12-11T12:45:20.954Z",
+    "created": "2025-12-11T17:00:00Z",
+    "updated": "2025-12-11T19:25:00Z",
     "remotes": {
-      "gitlab": "60"
+      "gitlab": "83"
     },
     "repo": null
   },
   {
-    "id": "phase2-005",
-    "title": "Multi-provider sync (GitLab + Forgejo simultaneously)",
-    "description": "Support syncing issues from multiple remotes at once. Conflict resolution between providers.",
-    "status": "backlog",
+    "id": "progress-002",
+    "title": "Implement Dedicated Ops Tab",
+    "description": "ViewMode::Infrastructure",
+    "status": "in-progress",
     "effort": 15,
     "tags": [
-      "phase2",
-      "sprint-2",
-      "sync"
+      "panopticum",
+      "phase-2"
     ],
     "assignee": null,
-    "sprint": 2,
+    "sprint": null,
     "due": null,
-    "started": null,
+    "started": "2025-12-09T09:00:00Z",
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T12:45:21.730Z",
-    "updated": "2025-12-11T12:45:21.730Z",
+    "created": "2025-12-11T19:16:39.247Z",
+    "updated": "2025-12-11T19:51:38.342269343Z",
     "remotes": {
-      "gitlab": "61"
+      "gitlab": "84"
     },
     "repo": null
   },
   {
-    "id": "phase3-001",
-    "title": "Pipeline status in status bar",
-    "description": "Show CI/CD pipeline status (✓ passed, ✗ failed, ⏳ running) in the footer status bar.",
-    "status": "backlog",
-    "effort": 6,
-    "tags": [
-      "ci-cd",
-      "phase3",
-      "sprint-3"
-    ],
-    "assignee": null,
-    "sprint": 3,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:22.519Z",
-    "updated": "2025-12-11T12:45:22.519Z",
-    "remotes": {
-      "gitlab": "62"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase3-002",
-    "title": "Live build logs in TUI",
-    "description": "Stream CI job logs in real-time. Scrollable log viewer with ANSI color support.",
-    "status": "backlog",
-    "effort": 15,
-    "tags": [
-      "ci-cd",
-      "phase3",
-      "sprint-3"
-    ],
-    "assignee": null,
-    "sprint": 3,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:23.113Z",
-    "updated": "2025-12-11T12:45:23.113Z",
-    "remotes": {
-      "gitlab": "63"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase3-003",
-    "title": "Job retry/cancel from terminal",
-    "description": "Keyboard shortcuts to retry failed jobs or cancel running pipelines.",
-    "status": "backlog",
-    "effort": 6,
-    "tags": [
-      "ci-cd",
-      "phase3",
-      "sprint-3"
-    ],
-    "assignee": null,
-    "sprint": 3,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:24.039Z",
-    "updated": "2025-12-11T12:45:24.039Z",
-    "remotes": {
-      "gitlab": "64"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase3-004",
-    "title": "Artifact browser",
-    "description": "Browse and download CI/CD artifacts from completed pipelines.",
-    "status": "backlog",
-    "effort": 10,
-    "tags": [
-      "ci-cd",
-      "phase3",
-      "sprint-3"
-    ],
-    "assignee": null,
-    "sprint": 3,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:24.902Z",
-    "updated": "2025-12-11T12:45:24.902Z",
-    "remotes": {
-      "gitlab": "65"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase4-001",
-    "title": "Wiki/Docs management",
-    "description": "Manage markdown documentation files (git-tracked). Create, edit, preview docs in TUI.",
-    "status": "backlog",
-    "effort": 15,
-    "tags": [
-      "forge",
-      "phase4",
-      "sprint-4"
-    ],
-    "assignee": null,
-    "sprint": 4,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:25.698Z",
-    "updated": "2025-12-11T12:45:25.698Z",
-    "remotes": {
-      "gitlab": "66"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase4-002",
-    "title": "Release management",
-    "description": "Create releases with changelogs, tag versions, attach artifacts.",
-    "status": "backlog",
-    "effort": 10,
-    "tags": [
-      "forge",
-      "phase4",
-      "sprint-4"
-    ],
-    "assignee": null,
-    "sprint": 4,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:26.796Z",
-    "updated": "2025-12-11T12:45:26.796Z",
-    "remotes": {
-      "gitlab": "67"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase4-003",
-    "title": "Container registry browser",
-    "description": "Browse container images in project registry. View tags, sizes, digests.",
-    "status": "backlog",
-    "effort": 10,
-    "tags": [
-      "forge",
-      "phase4",
-      "sprint-4"
-    ],
-    "assignee": null,
-    "sprint": 4,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:27.521Z",
-    "updated": "2025-12-11T12:45:27.521Z",
-    "remotes": {
-      "gitlab": "68"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase4-004",
-    "title": "Plugin system (Lua/WASM)",
-    "description": "Extensibility via Lua scripts or WASM modules. Custom commands, workflows, integrations.",
-    "status": "backlog",
+    "id": "progress-003",
+    "title": "Build panoctl Alpha Release",
+    "description": "Complete core validation",
+    "status": "in-progress",
     "effort": 21,
     "tags": [
-      "phase4",
-      "plugins",
-      "sprint-4"
+      "blocker",
+      "panoctl"
     ],
     "assignee": null,
-    "sprint": 4,
+    "sprint": null,
     "due": null,
-    "started": null,
+    "started": "2025-12-06T09:00:00Z",
+    "completed": null,
+    "blocked": true,
+    "created": "2025-12-11T19:16:40.116Z",
+    "updated": "2025-12-11T19:51:28.111305193Z",
+    "remotes": {
+      "gitlab": "85"
+    },
+    "repo": null
+  },
+  {
+    "id": "backlog-001",
+    "title": "Hexahedron Structure Visualizer",
+    "description": "Interactive tree view",
+    "status": "backlog",
+    "effort": 15,
+    "tags": [
+      "panopticum",
+      "visualization"
+    ],
+    "assignee": null,
+    "sprint": null,
+    "due": "2025-12-10T23:59:59Z",
+    "started": "2025-12-03T00:00:00Z",
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T12:45:28.301Z",
-    "updated": "2025-12-11T12:45:28.301Z",
+    "created": "2025-12-11T19:16:40.837Z",
+    "updated": "2025-12-11T19:51:18.768808960Z",
     "remotes": {
-      "gitlab": "69"
+      "gitlab": "86"
     },
     "repo": null
   },
   {
-    "id": "ux-001",
-    "title": "Improve mouse click row detection edge cases",
-    "description": "Test and fix any remaining off-by-one issues in list view mouse click handling. Consider scroll offset.",
-    "status": "backlog",
-    "effort": 3,
-    "tags": [
-      "bugfix",
-      "sprint-1",
-      "ux"
-    ],
-    "assignee": null,
-    "sprint": 1,
-    "due": null,
-    "started": "2025-12-10T21:00:00Z",
-    "completed": "2025-12-10T21:05:00Z",
-    "blocked": false,
-    "created": "2025-12-11T12:45:29.078Z",
-    "updated": "2025-12-11T12:45:29.078Z",
-    "remotes": {
-      "gitlab": "70"
-    },
-    "repo": null
-  },
-  {
-    "id": "ux-002",
-    "title": "Clickable view tabs (Issues/Kanban)",
-    "description": "Add clickable tabs in title bar to switch between views. Implemented with mouse hit detection.",
+    "id": "backlog-002",
+    "title": "Pre-Commit Validation Guillotine",
+    "description": "Auto-validate on staged changes",
     "status": "backlog",
     "effort": 6,
     "tags": [
-      "feature",
-      "sprint-1",
-      "ux"
-    ],
-    "assignee": null,
-    "sprint": 1,
-    "due": null,
-    "started": "2025-12-10T21:05:00Z",
-    "completed": "2025-12-10T21:15:00Z",
-    "blocked": false,
-    "created": "2025-12-11T12:45:29.871Z",
-    "updated": "2025-12-11T12:45:29.871Z",
-    "remotes": {
-      "gitlab": "71"
-    },
-    "repo": null
-  },
-  {
-    "id": "ux-003",
-    "title": "Settings pane with theme and font recommendations",
-    "description": "Created Settings overlay accessible via 'O' key or click. Shows theme picker, keyboard shortcuts, Nerd Font recommendations.",
-    "status": "backlog",
-    "effort": 6,
-    "tags": [
-      "feature",
-      "sprint-1",
-      "ux"
-    ],
-    "assignee": null,
-    "sprint": 1,
-    "due": null,
-    "started": "2025-12-10T22:35:00Z",
-    "completed": "2025-12-10T22:50:00Z",
-    "blocked": false,
-    "created": "2025-12-11T12:45:30.548Z",
-    "updated": "2025-12-11T12:45:30.548Z",
-    "remotes": {
-      "gitlab": "72"
-    },
-    "repo": null
-  },
-  {
-    "id": "theme-001",
-    "title": "Cyberpunk theme visibility fix",
-    "description": "Brightened Cyberpunk theme colors for visibility on non-black terminal backgrounds. accent_dim now hot magenta.",
-    "status": "backlog",
-    "effort": 3,
-    "tags": [
-      "bugfix",
-      "sprint-1",
-      "theme"
-    ],
-    "assignee": null,
-    "sprint": 1,
-    "due": null,
-    "started": "2025-12-10T22:52:00Z",
-    "completed": "2025-12-10T22:53:00Z",
-    "blocked": false,
-    "created": "2025-12-11T12:45:31.296Z",
-    "updated": "2025-12-11T12:45:31.296Z",
-    "remotes": {
-      "gitlab": "73"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase4-005",
-    "title": "Addon Pack System (Pimp my ProGit)",
-    "description": "Extensible addon packs for themes, Nerd Font icon sets, ASCII banners, status animations. Community-contributed customization. Install via prog addon install <pack>.",
-    "status": "backlog",
-    "effort": 10,
-    "tags": [
-      "community",
-      "phase4",
-      "plugins",
-      "sprint-4"
-    ],
-    "assignee": null,
-    "sprint": 4,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:31.971Z",
-    "updated": "2025-12-11T12:45:31.971Z",
-    "remotes": {
-      "gitlab": "74"
-    },
-    "repo": null
-  },
-  {
-    "id": "feature-009-date-formats",
-    "title": "Configurable Date Formats",
-    "description": "Allow user to choose preferred date format (ISO, YYYYMMDD, etc) in options.",
-    "status": "backlog",
-    "effort": 3,
-    "tags": [
-      "backlog",
-      "feature",
-      "ux"
+      "git-hooks",
+      "panopticum"
     ],
     "assignee": null,
     "sprint": null,
@@ -497,128 +150,79 @@
     "started": null,
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T12:45:32.704Z",
-    "updated": "2025-12-11T12:45:32.704Z",
+    "created": "2025-12-11T19:16:41.699Z",
+    "updated": "2025-12-11T19:16:41.699Z",
     "remotes": {
-      "gitlab": "75"
+      "gitlab": "87"
     },
     "repo": null
   },
   {
-    "id": "test-001",
-    "title": "Storage Engine Unit Tests",
-    "description": "Ensure atomic writes and migration logic are bulletproof with comprehensive tests.",
-    "status": "backlog",
-    "effort": 6,
-    "tags": [
-      "quality",
-      "sprint-1"
-    ],
-    "assignee": null,
-    "sprint": 1,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:33.404Z",
-    "updated": "2025-12-11T12:45:33.404Z",
-    "remotes": {
-      "gitlab": "76"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase2-005",
-    "title": "MR Dashboard View",
-    "description": "Dedicated view for Merge Requests with columns for Author, Reviewers, Pipeline.",
-    "status": "backlog",
-    "effort": 10,
-    "tags": [
-      "code-review",
-      "sprint-2",
-      "ui"
-    ],
-    "assignee": null,
-    "sprint": 2,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:33.997Z",
-    "updated": "2025-12-11T12:45:33.997Z",
-    "remotes": {
-      "gitlab": "77"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase2-006",
-    "title": "One-click MR Checkout",
-    "description": "Switch local git branch to the MR source branch seamlessly.",
-    "status": "backlog",
-    "effort": 3,
-    "tags": [
-      "git",
-      "productivity",
-      "sprint-2"
-    ],
-    "assignee": null,
-    "sprint": 2,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:34.680Z",
-    "updated": "2025-12-11T12:45:34.680Z",
-    "remotes": {
-      "gitlab": "78"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase3-005",
-    "title": "Run Local Verification",
-    "description": "Trigger pre-commit hooks or local test runners from TUI.",
-    "status": "backlog",
-    "effort": 6,
-    "tags": [
-      "ci-cd",
-      "local",
-      "sprint-3"
-    ],
-    "assignee": null,
-    "sprint": 3,
-    "due": null,
-    "started": null,
-    "completed": null,
-    "blocked": false,
-    "created": "2025-12-11T12:45:35.468Z",
-    "updated": "2025-12-11T12:45:35.468Z",
-    "remotes": {
-      "gitlab": "79"
-    },
-    "repo": null
-  },
-  {
-    "id": "phase4-006",
-    "title": "GPG Signing Integration",
-    "description": "Ensure all commits/tags created by ProGit are GPG signed.",
+    "id": "backlog-003",
+    "title": "SOPS Secret Handling",
+    "description": "Decrypt and inject secrets",
     "status": "backlog",
     "effort": 6,
     "tags": [
       "security",
-      "sprint-4"
+      "sops"
     ],
     "assignee": null,
-    "sprint": 4,
+    "sprint": null,
     "due": null,
     "started": null,
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T12:45:36.465Z",
-    "updated": "2025-12-11T12:45:36.465Z",
+    "created": "2025-12-11T19:16:42.305Z",
+    "updated": "2025-12-11T19:16:42.305Z",
     "remotes": {
-      "gitlab": "80"
+      "gitlab": "88"
+    },
+    "repo": null
+  },
+  {
+    "id": "backlog-004",
+    "title": "Advanced Theme Customization",
+    "description": "Per-element color overrides",
+    "status": "backlog",
+    "effort": 3,
+    "tags": [
+      "themes",
+      "ui"
+    ],
+    "assignee": null,
+    "sprint": null,
+    "due": null,
+    "started": null,
+    "completed": null,
+    "blocked": false,
+    "created": "2025-12-11T19:16:43Z",
+    "updated": "2025-12-11T19:16:43Z",
+    "remotes": {
+      "gitlab": "89"
+    },
+    "repo": null
+  },
+  {
+    "id": "backlog-005",
+    "title": "Plugin Marketplace Discovery",
+    "description": "Browse and install plugins",
+    "status": "backlog",
+    "effort": 21,
+    "tags": [
+      "blocker",
+      "plugins"
+    ],
+    "assignee": null,
+    "sprint": null,
+    "due": null,
+    "started": null,
+    "completed": null,
+    "blocked": false,
+    "created": "2025-12-11T19:16:43.606Z",
+    "updated": "2025-12-11T19:16:43.606Z",
+    "remotes": {
+      "gitlab": "90"
     },
     "repo": null
   }

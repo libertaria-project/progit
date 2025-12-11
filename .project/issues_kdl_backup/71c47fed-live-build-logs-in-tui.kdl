@@ -1,0 +1,16 @@
+issue id="71c47fed-a003-4ca9-af45-1fa04f8cf840" {
+    title "Live build logs in TUI"
+    description "Stream CI job logs in real-time. Scrollable log viewer with ANSI color support."
+    status "backlog"
+    effort 6
+    tags {
+        - "ci-cd"
+        - "phase3"
+        - "sprint-3"
+    }
+    remotes {
+        gitlab "63"
+    }
+    created "2025-12-11T12:45:23.113+00:00"
+    updated "2025-12-11T12:45:23.113+00:00"
+}

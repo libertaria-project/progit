@@ -25,16 +25,41 @@ impl StorageEngine {
         }
     }
 
-    /// Load all issues from disk
+    /// Load all issues from disk (supporting both single file and directory mode)
     pub fn load(&mut self) -> Result<&[Issue]> {
+        self.issues.clear();
+
+        // 1. Load from aggregate issues.json (fast load)
         if self.issues_path.exists() {
             let content = fs::read_to_string(&self.issues_path)
                 .context("Failed to read issues.json")?;
-            self.issues = serde_json::from_str(&content)
-                .context("Failed to parse issues.json")?;
-        } else {
-            self.issues = Vec::new();
+            if let Ok(issues) = serde_json::from_str::<Vec<Issue>>(&content) {
+                self.issues = issues;
+            }
         }
+
+        // 2. Load from .project/issues/*.json (directory mode - overrides aggregate)
+        // This restores the "individual file" workflow
+        let issues_dir = self.issues_path.parent().unwrap().join("issues");
+        if issues_dir.exists() {
+            for entry in fs::read_dir(issues_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().map_or(false, |ext| ext == "json") {
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(issue) = serde_json::from_str::<Issue>(&content) {
+                            // Upsert: replace if exists, add if new
+                            if let Some(existing) = self.issues.iter_mut().find(|i| i.id == issue.id) {
+                                *existing = issue;
+                            } else {
+                                self.issues.push(issue);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(&self.issues)
     }
 

@@ -1,0 +1,16 @@
+issue id="4d231433-8aad-423a-8dfb-c28bc7a6e6ce" {
+    title "Pipeline status in status bar"
+    description "Show CI/CD pipeline status (✓ passed, ✗ failed, ⏳ running) in the footer status bar."
+    status "backlog"
+    effort 6
+    tags {
+        - "ci-cd"
+        - "phase3"
+        - "sprint-3"
+    }
+    remotes {
+        gitlab "62"
+    }
+    created "2025-12-11T12:45:22.519+00:00"
+    updated "2025-12-11T12:45:22.519+00:00"
+}

@@ -291,8 +291,21 @@ fn main() -> Result<()> {
                 Some(BranchAction::Remote { action }) => {
                     match action {
                         RemoteBranchAction::List => {
+                            // Get remote URL for context
+                            let remote_url = crate::git::get_remote_url(&project_root, "origin")
+                                .ok()
+                                .flatten()
+                                .unwrap_or_else(|| "unknown".to_string());
+                            
+                            // Parse project name from URL
+                            let project_name = if let Some((_, owner, repo)) = crate::git::parse_git_url(&remote_url) {
+                                format!("{}/{}", owner, repo)
+                            } else {
+                                "unknown/unknown".to_string()
+                            };
+                            
                             let branches = crate::git::list_remote_branches(&project_root)?;
-                            println!("{} Remote Branches:", "🌐".blue());
+                            println!("{} Remote Branches: {} ({})", "🌐".blue(), project_name.cyan(), remote_url.dimmed());
                             for branch in branches {
                                 println!("  - {}", branch);
                             }
@@ -972,20 +985,23 @@ theme "nord"
 
 fn auto_configure(sync_config: &mut storage::config::SyncConfig, cwd: &std::path::Path) {
     if let Ok(Some(remote_url)) = crate::git::get_remote_url(cwd, "origin") {
-        // Normalize URLs
-        let clean_remote = remote_url.trim_end_matches(".git").trim_end_matches('/');
-        let clean_config = sync_config.url.trim_end_matches(".git").trim_end_matches('/');
-        
-        if clean_remote != clean_config {
-             // Detect Provider Type
-             if remote_url.contains("gitlab") {
-                 sync_config.provider = "gitlab".to_string();
-             } else if remote_url.contains("gitea") || 
-                       remote_url.contains("forgejo") || 
-                       remote_url.contains("codeberg") ||
-                       clean_remote.contains("maiwald.work") { 
-                 sync_config.provider = "forgejo".to_string();
-             }
+        // Only trigger change detection if we can successfully parse the remote URL
+        if let Some((base, _, _)) = crate::git::parse_git_url(&remote_url) {
+            // Compare BASE URLs (e.g. "gitlab.com" vs "gitlab.com"), not full paths
+            // This fixes the bug where "https://gitlab.com" != "git@gitlab.com:user/repo.git" triggered false detection
+            let current_base = sync_config.url.trim_end_matches('/');
+            let detected_base = base.trim_end_matches('/');
+
+            if current_base != detected_base {
+                 // Detect Provider Type
+                 if remote_url.contains("gitlab") {
+                     sync_config.provider = "gitlab".to_string();
+                 } else if remote_url.contains("gitea") || 
+                           remote_url.contains("forgejo") || 
+                           remote_url.contains("codeberg") ||
+                           base.contains("maiwald.work") { 
+                     sync_config.provider = "forgejo".to_string();
+                 }
 
              // Parse URL components properly
              if let Some((base, owner, repo)) = crate::git::parse_git_url(&remote_url) {
@@ -997,6 +1013,7 @@ fn auto_configure(sync_config: &mut storage::config::SyncConfig, cwd: &std::path
              } else {
                 // Fallback manual parsing if parse_git_url fails (e.g. non-standard URL)
                 sync_config.url = remote_url.clone();
+                let clean_remote = remote_url.trim_end_matches(".git").trim_end_matches('/');
                 let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
                 if parts.len() >= 2 {
                      let repo = parts.last().unwrap();
@@ -1007,4 +1024,5 @@ fn auto_configure(sync_config: &mut storage::config::SyncConfig, cwd: &std::path
              }
         }
     }
+}
 }

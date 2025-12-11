@@ -1,0 +1,16 @@
+issue id="c1a66df4-1094-4c02-8f46-551c4b25ec59" {
+    title "Add timestamp-based conflict resolution"
+    description "Implement proper timestamp comparison for sync: older=pushed, newer=pulled, deleted=never recreated."
+    status "backlog"
+    effort 6
+    tags {
+        - "sprint-1"
+        - "storage"
+        - "sync"
+    }
+    remotes {
+        gitlab "56"
+    }
+    created "2025-12-11T12:45:17.648+00:00"
+    updated "2025-12-11T12:45:17.648+00:00"
+}

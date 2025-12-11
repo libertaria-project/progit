@@ -1,0 +1,16 @@
+issue id="a866fb6d-c1e6-4eec-a28d-0518748ccf23" {
+    title "One-click MR Checkout"
+    description "Switch local git branch to the MR source branch seamlessly."
+    status "backlog"
+    effort 6
+    tags {
+        - "git"
+        - "productivity"
+        - "sprint-2"
+    }
+    remotes {
+        gitlab "78"
+    }
+    created "2025-12-11T12:45:34.680+00:00"
+    updated "2025-12-11T12:45:34.680+00:00"
+}

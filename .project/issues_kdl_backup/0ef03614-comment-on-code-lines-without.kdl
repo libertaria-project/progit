@@ -1,0 +1,16 @@
+issue id="0ef03614-4e32-4f78-91d6-3a3906c35a80" {
+    title "Comment on code lines (without browser)"
+    description "Allow adding review comments to specific lines in diffs. Submit via GitLab/Forgejo API."
+    status "backlog"
+    effort 6
+    tags {
+        - "code-review"
+        - "phase2"
+        - "sprint-2"
+    }
+    remotes {
+        gitlab "59"
+    }
+    created "2025-12-11T12:45:20.305+00:00"
+    updated "2025-12-11T12:45:20.305+00:00"
+}

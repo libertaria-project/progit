@@ -1,0 +1,16 @@
+issue id="d6c41c04-c1d2-4c52-89b1-7edf0a8dda07" {
+    title "Configurable Date Formats"
+    description "Allow user to choose preferred date format (ISO, YYYYMMDD, etc) in options."
+    status "backlog"
+    effort 6
+    tags {
+        - "backlog"
+        - "feature"
+        - "ux"
+    }
+    remotes {
+        gitlab "75"
+    }
+    created "2025-12-11T12:45:32.704+00:00"
+    updated "2025-12-11T12:45:32.704+00:00"
+}

@@ -1,0 +1,16 @@
+issue id="f298dbd0-da53-48df-a7b5-166fa0b612da" {
+    title "Wiki/Docs management"
+    description "Manage markdown documentation files (git-tracked). Create, edit, preview docs in TUI."
+    status "backlog"
+    effort 6
+    tags {
+        - "forge"
+        - "phase4"
+        - "sprint-4"
+    }
+    remotes {
+        gitlab "66"
+    }
+    created "2025-12-11T12:45:25.698+00:00"
+    updated "2025-12-11T12:45:25.698+00:00"
+}

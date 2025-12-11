@@ -198,6 +198,55 @@ pub fn create_branch(path: &Path, name: &str) -> Result<()> {
     switch_branch(path, name)
 }
 
+/// List remote branches
+pub fn list_remote_branches(path: &Path) -> Result<Vec<String>> {
+    let repo = Git2Repo::open(path)?;
+    let mut branches = Vec::new();
+
+    if let Ok(iter) = repo.branches(Some(BranchType::Remote)) {
+        for branch in iter.flatten() {
+             if let Ok(Some(name)) = branch.0.name() {
+                 // Remove "origin/" prefix for cleaner output, or keep full name?
+                 // Keeping full name is safer for clarity: "origin/HEAD", "origin/main"
+                 branches.push(name.to_string());
+             }
+        }
+    }
+    branches.sort();
+    Ok(branches)
+}
+
+/// Create a remote branch by pushing current HEAD
+pub fn create_remote_branch(path: &Path, name: &str, remote: Option<&str>) -> Result<()> {
+    let target_remote = remote.unwrap_or("origin");
+    
+    // Check if branch name is valid (basic check)
+    if name.contains(' ') || name.contains("..") {
+        anyhow::bail!("Invalid branch name");
+    }
+
+    println!("🚀 Pushing HEAD to {}/{}...", target_remote, name);
+
+    // Use git CLI for robustness with auth
+    let output = std::process::Command::new("git")
+        .current_dir(path)
+        .arg("push")
+        .arg("-u")
+        .arg(target_remote)
+        .arg(format!("HEAD:{}", name))
+        .output()?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("Failed to push branch: {}", err);
+    }
+    
+    // Refresh repo info (optional, but good practice)
+    refresh_repo(path)?;
+    
+    Ok(())
+}
+
 /// Delete a branch (cannot delete current branch)
 pub fn delete_branch(path: &Path, name: &str) -> Result<()> {
     let repo = Git2Repo::open(path)?;
@@ -231,15 +280,22 @@ pub fn get_remote_url(path: &Path, remote: &str) -> Result<Option<String>> {
 pub fn parse_git_url(url: &str) -> Option<(String, String, String)> {
     // Supports:
     // https://github.com/user/repo.git
+    // https://gitlab.com/group/subgroup/repo.git
     // git@github.com:user/repo.git
     
     let trimmed = url.trim_end_matches(".git");
     
     if trimmed.starts_with("http") {
         if let Some(pos) = trimmed.find("://") {
-            let parts: Vec<&str> = trimmed[pos+3..].split('/').collect();
+            let core = &trimmed[pos+3..];
+            let parts: Vec<&str> = core.split('/').collect();
             if parts.len() >= 3 {
-                return Some(("https://".to_string() + parts[0], parts[1].to_string(), parts[2].to_string()));
+                 // Format: domain.com/owner/repo or domain.com/group/sub/repo
+                 let host = format!("https://{}", parts[0]);
+                 let repo = parts.last().unwrap().to_string();
+                 // Join everything between domain and repo as "owner"
+                 let owner = parts[1..parts.len()-1].join("/");
+                 return Some((host, owner, repo));
             }
         }
     } else if trimmed.starts_with("git@") {
@@ -248,8 +304,10 @@ pub fn parse_git_url(url: &str) -> Option<(String, String, String)> {
             let host = &trimmed[..colon];
             let path = &trimmed[colon+1..];
             let parts: Vec<&str> = path.split('/').collect();
-            if parts.len() >= 2 {
-                return Some(("https://".to_string() + host, parts[0].to_string(), parts[1].to_string()));
+             if parts.len() >= 2 {
+                 let repo = parts.last().unwrap().to_string();
+                 let owner = parts[..parts.len()-1].join("/");
+                 return Some(("https://".to_string() + host, owner, repo));
             }
         }
     }

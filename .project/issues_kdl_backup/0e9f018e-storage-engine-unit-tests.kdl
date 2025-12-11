@@ -1,0 +1,15 @@
+issue id="0e9f018e-eb9b-4717-a676-5911ca6a5f95" {
+    title "Storage Engine Unit Tests"
+    description "Ensure atomic writes and migration logic are bulletproof with comprehensive tests."
+    status "backlog"
+    effort 6
+    tags {
+        - "quality"
+        - "sprint-1"
+    }
+    remotes {
+        gitlab "76"
+    }
+    created "2025-12-11T12:45:33.404+00:00"
+    updated "2025-12-11T12:45:33.404+00:00"
+}

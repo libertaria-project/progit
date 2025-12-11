@@ -1,0 +1,16 @@
+issue id="0b526c32-bed0-4115-b457-7193e5e9a4dd" {
+    title "Job retry/cancel from terminal"
+    description "Keyboard shortcuts to retry failed jobs or cancel running pipelines."
+    status "backlog"
+    effort 6
+    tags {
+        - "ci-cd"
+        - "phase3"
+        - "sprint-3"
+    }
+    remotes {
+        gitlab "64"
+    }
+    created "2025-12-11T12:45:24.039+00:00"
+    updated "2025-12-11T18:51:55.628+00:00"
+}

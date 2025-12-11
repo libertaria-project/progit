@@ -1,0 +1,16 @@
+issue id="3efc3521-5a16-4d27-b785-ddd06d20ca88" {
+    title "Settings pane with theme and font recommendations"
+    description "Created Settings overlay accessible via 'O' key or click. Shows theme picker, keyboard shortcuts, Nerd Font recommendations."
+    status "backlog"
+    effort 6
+    tags {
+        - "feature"
+        - "sprint-1"
+        - "ux"
+    }
+    remotes {
+        gitlab "72"
+    }
+    created "2025-12-11T12:45:30.548+00:00"
+    updated "2025-12-11T12:45:30.548+00:00"
+}

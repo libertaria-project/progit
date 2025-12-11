@@ -1,0 +1,16 @@
+issue id="e75300bd-03e6-4397-9778-275e80ca58ff" {
+    title "Complete StorageEngine migration"
+    description "Finish migrating TUI to use StorageEngine exclusively. Delete obsolete kdl.rs issue logic and old sync.rs code."
+    status "backlog"
+    effort 6
+    tags {
+        - "refactor"
+        - "sprint-1"
+        - "storage"
+    }
+    remotes {
+        gitlab "55"
+    }
+    created "2025-12-11T12:45:16.274+00:00"
+    updated "2025-12-11T12:45:16.274+00:00"
+}

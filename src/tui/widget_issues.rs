@@ -85,36 +85,49 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 
 /// Create a row for an issue
 fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) -> Row<'a> {
-    // Determine row style based on SELECTION ONLY
-    // Status does not color the whole row anymore, to avoid "Green on Green" mess.
-    let row_style = engine.get("issues.row.normal", colors.normal());
-
-    // Status colors - ALWAYS visible!
-    // Backlog = Yellow/Amber, InProgress = Green, Done = Cyan
-    let status_style = match issue.status {
-        Status::Backlog => colors.warning(),     // Yellow - visible!
-        Status::InProgress => colors.success(),  // Green - active
-        Status::Done => Style::default().fg(ratatui::style::Color::Cyan), // Cyan - completed but visible!
-    };
+    // 1. Determine urgency first
+    let is_blocker = issue.is_blocker();
+    let is_overdue = issue.is_overdue();
     
-    // Status Icon
+    // 2. Define the Base Style for the Row
+    // Blocker = RED (Critical) - Use Theme RGB
+    // Overdue = YELLOW/ORANGE (Warning) - Use Theme RGB
+    let base_style = if is_blocker {
+        // Use the explicit error color from the theme (RGB)
+        // This avoids any ANSI color mapping issues in the terminal
+        colors.error().add_modifier(Modifier::BOLD)
+    } else if is_overdue {
+        // Use the explicit warning color from the theme (RGB)
+        colors.warning()
+    } else {
+        engine.get("issues.row.normal", colors.normal())
+    };
+
+    // 3. Define specific usage styles (only used if NOT urgent/overdue)
+    let status_color = match issue.status {
+        Status::Backlog => colors.dim(),         // Grey
+        Status::InProgress => colors.success(),  // Green
+        Status::Done => Style::default().fg(ratatui::style::Color::Cyan), // Cyan
+    };
+
+    // 4. Icons
     let status_icon = match issue.status {
         Status::Backlog => "○",
         Status::InProgress => "▶",
         Status::Done => "✔",
     };
 
-    let blocker_indicator = if issue.is_blocker() { 
+    let blocker_indicator = if is_blocker { 
         "🔥 " 
-    } else if issue.is_overdue() { 
+    } else if is_overdue { 
         "⏰ " 
     } else { 
         "" 
     };
     
-    // Repo display with color coding
+    // 5. Repo Display
     let repo_display = issue.repo.as_deref().unwrap_or("-");
-    let repo_style = if issue.repo.is_some() {
+    let repo_style = if issue.repo.is_some() && !is_blocker && !is_overdue {
         // Color-code by repo name (simple hash-based coloring)
         let hash = repo_display.bytes().fold(0u8, |acc, b| acc.wrapping_add(b));
         let color = match hash % 6 {
@@ -126,36 +139,52 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
             _ => ratatui::style::Color::Red,
         };
         Style::default().fg(color)
+    } else if is_blocker || is_overdue {
+        base_style // Inherit Red or Yellow
     } else {
         colors.dim()
     };
 
-    // Render tags as pills: [ tag ] [ tag2 ]
+    // 6. Tags
     let mut tag_spans = Vec::new();
     for (i, tag) in issue.tags.iter().enumerate() {
         if i > 0 {
             tag_spans.push(Span::raw(" "));
         }
-        tag_spans.push(Span::styled(format!("[ {} ]", tag), colors.accent()));
+        let tag_style = if is_blocker || is_overdue { base_style } else { colors.accent() };
+        tag_spans.push(Span::styled(format!("[ {} ]", tag), tag_style));
     }
-    
-    // Create Cell from spans (empty if no tags)
     let tags_cell = if tag_spans.is_empty() {
         Cell::from("")
     } else {
         Cell::from(Line::from(tag_spans))
     };
 
+    // 7. Construct Cells
+    let is_urgent = is_blocker || is_overdue;
+    
     let cells = [
-        Cell::from(issue.short_id().to_string()).style(colors.dim()),
-        Cell::from(format!("{}{}", blocker_indicator, &issue.title)),
-        Cell::from(format!("{} {}", status_icon, issue.status.as_str())).style(status_style),
-        Cell::from(format!("{}", issue.effort as u8)),
+        // ID: Dim unless urgent
+        Cell::from(issue.short_id().to_string()).style(if is_urgent { base_style } else { colors.dim() }),
+        
+        // Title: ALWAYS base_style (Red if urgent, Normal otherwise)
+        Cell::from(format!("{}{}", blocker_indicator, &issue.title)).style(base_style),
+        
+        // Status: Inherit if urgent, else Status Color
+        Cell::from(format!("{} {}", status_icon, issue.status.as_str()))
+            .style(if is_urgent { base_style } else { status_color }),
+            
+        // Effort: base_style
+        Cell::from(format!("{}", issue.effort as u8)).style(base_style),
+        
+        // Repo: Inherit if urgent, else Rainbow/Dim
         Cell::from(repo_display).style(repo_style),
-        tags_cell,
+        
+        // Tags
+        tags_cell.style(base_style),
     ];
 
-    Row::new(cells).style(row_style)
+    Row::new(cells).style(base_style)
 }
 
 /// Generate table title with stats

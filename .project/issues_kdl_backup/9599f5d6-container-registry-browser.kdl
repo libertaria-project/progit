@@ -1,0 +1,16 @@
+issue id="9599f5d6-484d-4449-8c2f-fea27e5a13ad" {
+    title "Container registry browser"
+    description "Browse container images in project registry. View tags, sizes, digests."
+    status "backlog"
+    effort 6
+    tags {
+        - "forge"
+        - "phase4"
+        - "sprint-4"
+    }
+    remotes {
+        gitlab "68"
+    }
+    created "2025-12-11T12:45:27.521+00:00"
+    updated "2025-12-11T18:51:57.011+00:00"
+}

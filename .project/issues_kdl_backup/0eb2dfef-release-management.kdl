@@ -1,0 +1,16 @@
+issue id="0eb2dfef-3124-485d-bbd8-b333a24c3baf" {
+    title "Release management"
+    description "Create releases with changelogs, tag versions, attach artifacts."
+    status "backlog"
+    effort 6
+    tags {
+        - "forge"
+        - "phase4"
+        - "sprint-4"
+    }
+    remotes {
+        gitlab "67"
+    }
+    created "2025-12-11T12:45:26.796+00:00"
+    updated "2025-12-11T12:45:26.796+00:00"
+}

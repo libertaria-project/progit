@@ -1,0 +1,16 @@
+issue id="d57ab570-0866-4e26-9113-ca0dd956ba7d" {
+    title "MR Dashboard View"
+    description "Dedicated view for Merge Requests with columns for Author, Reviewers, Pipeline."
+    status "backlog"
+    effort 6
+    tags {
+        - "code-review"
+        - "sprint-2"
+        - "ui"
+    }
+    remotes {
+        gitlab "77"
+    }
+    created "2025-12-11T12:45:33.997+00:00"
+    updated "2025-12-11T18:51:51.383+00:00"
+}
