@@ -7,6 +7,7 @@
 mod git;
 mod issue;
 mod mr;
+mod panopticum;
 mod plugins;
 mod diff;
 mod fuzzy;
@@ -95,7 +96,24 @@ enum BranchAction {
     Create { name: String },
     /// Delete a branch
     Delete { name: String },
+    /// Manage remote branches
+    Remote {
+        #[command(subcommand)]
+        action: RemoteBranchAction,
+    },
 }
+
+#[derive(Subcommand)]
+enum RemoteBranchAction {
+    /// List remote branches
+    List,
+    /// Create/Push a remote branch
+    Create {
+        /// Branch name
+        name: String,
+    },
+}
+
 
 #[derive(Subcommand)]
 enum MrAction {
@@ -146,11 +164,15 @@ fn main() -> Result<()> {
     // Check if we should initialize
     let project_dir = project_root.join(storage::paths::PROJECT_DIR);
     if !project_dir.exists() {
-        // If no .project exists, we require a git repository
-        if crate::git::detect_repo(&project_root)?.is_none() {
-            println!("{} No git repository found.", "❌".red());
-            println!("   ProGit requires a git repository to initialize.");
-            println!("   Please run 'git init' first.");
+        // If no .project exists, we require either a git repository OR a PANOPTICUM.kdl
+        let has_git = crate::git::detect_repo(&project_root)?.is_some();
+        let has_panopticum = project_root.join("PANOPTICUM.kdl").exists();
+        
+        if !has_git && !has_panopticum {
+            println!("{} No git repository or PANOPTICUM.kdl found.", "❌".red());
+            println!("   ProGit requires either:");
+            println!("   - A git repository (run 'git init'), or");
+            println!("   - A PANOPTICUM.kdl file (infrastructure repo)");
             return Ok(());
         }
     }
@@ -170,9 +192,13 @@ fn main() -> Result<()> {
             let config_path = project_root.join(paths::config_file());
             let config = storage::config::load_config(&config_path)?;
 
-            let sync_config = config.sync.context(
+            let mut sync_config = config.sync.context(
                 "No sync configuration found. Please add a 'sync' block to .projects/config.kdl"
             )?;
+            
+            // Auto-configure based on remote
+            let cwd = std::env::current_dir()?;
+            auto_configure(&mut sync_config, &cwd);
 
             // Choose provider
             let provider = sync::create_provider(sync_config.clone());
@@ -255,12 +281,30 @@ fn main() -> Result<()> {
                     println!("{} Switched to branch {}", "✅".green(), name.green().bold());
                 }
                 Some(BranchAction::Create { name }) => {
-                    crate::git::create_branch(&cwd, &name)?;
-                    println!("{} Created and switched to branch {}", "✅".green(), name.green().bold());
+                    crate::git::create_branch(&project_root, &name)?;
+                    println!("{} Created and switched to branch {}", "✅".green(), name.cyan());
                 }
                 Some(BranchAction::Delete { name }) => {
-                    crate::git::delete_branch(&cwd, &name)?;
-                    println!("{} Deleted branch {}", "🗑️".red(), name.red());
+                    crate::git::delete_branch(&project_root, &name)?;
+                    println!("{} Deleted branch {}", "🗑️".green(), name.cyan());
+                }
+                Some(BranchAction::Remote { action }) => {
+                    match action {
+                        RemoteBranchAction::List => {
+                            let branches = crate::git::list_remote_branches(&project_root)?;
+                            println!("{} Remote Branches:", "🌐".blue());
+                            for branch in branches {
+                                println!("  - {}", branch);
+                            }
+                        }
+                        RemoteBranchAction::Create { name } => {
+                            // Default to create on "origin" for now
+                            match crate::git::create_remote_branch(&project_root, &name, None) {
+                                Ok(_) => println!("{} Pushed HEAD to new remote branch {}", "🚀".green(), name.cyan()),
+                                Err(e) => println!("{} Failed to create remote branch: {}", "❌".red(), e),
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -276,44 +320,8 @@ fn main() -> Result<()> {
                 "No sync configuration found. MR commands require a configured provider."
             )?;
 
-            // AUTO-DETECT: Check if git remote matches config, override if needed
-            if let Ok(Some(remote_url)) = crate::git::get_remote_url(&cwd, "origin") {
-                // Normalize URLs (remove .git suffix, trailing slashes) for comparison
-                let clean_remote = remote_url.trim_end_matches(".git").trim_end_matches('/');
-                let clean_config = sync_config.url.trim_end_matches(".git").trim_end_matches('/');
-                
-                if clean_remote != clean_config {
-                     // Detect Provider Type
-                     if remote_url.contains("gitlab") {
-                         sync_config.provider = "gitlab".to_string();
-                     } else if remote_url.contains("gitea") || 
-                               remote_url.contains("forgejo") || 
-                               remote_url.contains("codeberg") || // git.maiwald.work matched here implicitly or defaulted?
-                               // Fallback: assume Forgejo if not GitLab for known internal paths
-                               clean_remote.contains("maiwald.work") { 
-                         sync_config.provider = "forgejo".to_string();
-                     }
-
-                     // Parse URL components properly
-                     if let Some((base, owner, repo)) = crate::git::parse_git_url(&remote_url) {
-                        println!("{} Detected remote change: {} -> {}", "⚡".yellow(), sync_config.url, base);
-                        sync_config.url = base;
-                        sync_config.owner = owner.clone();
-                        sync_config.repo = repo.clone();
-                        println!("{} Auto-configured for {}/{} ({})", "🔧".yellow(), owner, repo, sync_config.provider);
-                     } else {
-                        // Fallback manual parsing if parse_git_url fails (e.g. non-standard URL)
-                        sync_config.url = remote_url.clone();
-                        let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
-                        if parts.len() >= 2 {
-                             let repo = parts.last().unwrap();
-                             let owner = parts.get(parts.len() - 2).unwrap();
-                             sync_config.owner = owner.to_string();
-                             sync_config.repo = repo.to_string();
-                        }
-                     }
-                }
-            }
+            // Auto-configure based on remote
+            auto_configure(&mut sync_config, &cwd);
 
             let provider = sync::create_provider(sync_config.clone());
             provider.login()?;
@@ -571,10 +579,76 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
     
     app.plugin_manager = Some(plugin_manager);
 
+    // ─── Panopticum Integration ───────────────────────────────────────────────
+    app.repo_path = project_root.clone();
+    app.is_panopticum_repo = crate::panopticum::is_panopticum_repo(&project_root);
+    
+    if app.is_panopticum_repo {
+        log::info!("🔱 Panopticum mode activated");
+        // Check if panoctl is available (lazy check - don't fail if missing)
+        if !crate::panopticum::is_panoctl_available(None) {
+            log::warn!("⚠️ panoctl binary not found in PATH");
+        }
+        // Create event channel for async operations
+        let (tx, rx) = crate::panopticum::create_event_channel();
+        app.pano_event_tx = Some(tx);
+        app.pano_event_rx = Some(rx);
+    }
+
     // Track UI areas for mouse events
     let mut ui_areas = UIAreas::default();
 
     loop {
+        // ─── Panopticum Event Polling ─────────────────────────────────────────
+        // Check for async panopticum results before rendering
+        if let Some(rx) = app.pano_event_rx.take() {
+            while let Ok(event) = rx.try_recv() {
+                match event {
+                    crate::panopticum::PanoEvent::Status(status) => {
+                        match &status {
+                            crate::panopticum::PanoStatus::OutputLine(line) => {
+                                app.pano_output.push(line.clone());
+                                // Show last line in status bar
+                                if let Some(last) = app.pano_output.last() {
+                                    app.set_status(last.clone());
+                                }
+                            }
+                            _ => app.pano_status = status,
+                        }
+                    }
+                    crate::panopticum::PanoEvent::ValidationComplete { success, message } => {
+                        if success {
+                            app.pano_status = crate::panopticum::PanoStatus::Success(message.clone());
+                            app.set_status(format!("✓ {}", message));
+                        } else {
+                            app.pano_status = crate::panopticum::PanoStatus::Error(message.clone());
+                            app.set_status(format!("✗ {}", message));
+                        }
+                    }
+                    crate::panopticum::PanoEvent::PlanComplete { success, output } => {
+                        if success {
+                            app.pano_status = crate::panopticum::PanoStatus::Success("Plan complete".into());
+                            app.set_status("✓ Plan completed successfully");
+                        } else {
+                            app.pano_status = crate::panopticum::PanoStatus::Error(output.clone());
+                            app.set_status(format!("✗ Plan failed"));
+                        }
+                    }
+                    crate::panopticum::PanoEvent::ApplyComplete { success, output } => {
+                        if success {
+                            app.pano_status = crate::panopticum::PanoStatus::Success("Apply complete".into());
+                            app.set_status("✓ Apply completed successfully");
+                        } else {
+                            app.pano_status = crate::panopticum::PanoStatus::Error(output.clone());
+                            app.set_status(format!("✗ Apply failed"));
+                        }
+                    }
+                }
+            }
+            // Put receiver back
+            app.pano_event_rx = Some(rx);
+        }
+
         // Draw
         terminal.draw(|frame| {
             ui_areas = render(frame, &mut app);
@@ -780,10 +854,13 @@ fn save_all_issues(
 fn find_project_root() -> Result<PathBuf> {
     let current = std::env::current_dir()?;
 
-    // Walk up looking for .git (repo root) or .project (existing setup)
+    // Walk up looking for .git (repo root), .project (existing setup), or PANOPTICUM.kdl (infra repo)
     let mut path = current.as_path();
     loop {
-        if path.join(".git").exists() || path.join(storage::paths::PROJECT_DIR).exists() || path.join(".projects").exists() {
+        if path.join(".git").exists() 
+            || path.join(storage::paths::PROJECT_DIR).exists() 
+            || path.join(".projects").exists()
+            || path.join("PANOPTICUM.kdl").exists() {
             return Ok(path.to_path_buf());
         }
         match path.parent() {
@@ -797,6 +874,7 @@ fn find_project_root() -> Result<PathBuf> {
 }
 
 /// Initialize the workspace (.project and .progit dirs)
+/// Initialize the workspace (.project and .progit dirs)
 fn initialize_workspace(root: &Path) -> Result<()> {
     let project_dir = root.join(storage::paths::PROJECT_DIR);
     let local_dir = root.join(storage::paths::LOCAL_DIR);
@@ -805,7 +883,10 @@ fn initialize_workspace(root: &Path) -> Result<()> {
     if !project_dir.exists() {
         println!("✨ Initializing .project/ ...");
         std::fs::create_dir(&project_dir)?;
-        std::fs::create_dir(project_dir.join("issues"))?;
+        let issues_dir = project_dir.join("issues");
+        if !issues_dir.exists() {
+            std::fs::create_dir(&issues_dir)?;
+        }
         
         // Try to detect git remote for config
         let mut sync_config = String::new();
@@ -859,6 +940,12 @@ theme "nord"
         std::fs::write(project_dir.join("config.kdl"), config_content)?;
         println!("   Created config.kdl ({})", provider_msg);
     }
+    
+    // Ensure issues dir exists if project dir was already there
+    let issues_dir = project_dir.join("issues");
+    if !issues_dir.exists() {
+        std::fs::create_dir(&issues_dir)?;
+    }
 
     if !local_dir.exists() {
         std::fs::create_dir(&local_dir)?;
@@ -881,4 +968,43 @@ theme "nord"
     }
 
     Ok(())
+}
+
+fn auto_configure(sync_config: &mut storage::config::SyncConfig, cwd: &std::path::Path) {
+    if let Ok(Some(remote_url)) = crate::git::get_remote_url(cwd, "origin") {
+        // Normalize URLs
+        let clean_remote = remote_url.trim_end_matches(".git").trim_end_matches('/');
+        let clean_config = sync_config.url.trim_end_matches(".git").trim_end_matches('/');
+        
+        if clean_remote != clean_config {
+             // Detect Provider Type
+             if remote_url.contains("gitlab") {
+                 sync_config.provider = "gitlab".to_string();
+             } else if remote_url.contains("gitea") || 
+                       remote_url.contains("forgejo") || 
+                       remote_url.contains("codeberg") ||
+                       clean_remote.contains("maiwald.work") { 
+                 sync_config.provider = "forgejo".to_string();
+             }
+
+             // Parse URL components properly
+             if let Some((base, owner, repo)) = crate::git::parse_git_url(&remote_url) {
+                println!("{} Detected remote change: {} -> {}", "⚡".yellow(), sync_config.url, base);
+                sync_config.url = base;
+                sync_config.owner = owner.clone();
+                sync_config.repo = repo.clone();
+                println!("{} Auto-configured for {}/{} ({})", "🔧".yellow(), owner, repo, sync_config.provider);
+             } else {
+                // Fallback manual parsing if parse_git_url fails (e.g. non-standard URL)
+                sync_config.url = remote_url.clone();
+                let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
+                if parts.len() >= 2 {
+                     let repo = parts.last().unwrap();
+                     let owner = parts.get(parts.len() - 2).unwrap();
+                     sync_config.owner = owner.to_string();
+                     sync_config.repo = repo.to_string();
+                }
+             }
+        }
+    }
 }

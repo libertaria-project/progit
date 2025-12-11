@@ -8,6 +8,7 @@ pub mod fuzzy;
 pub mod git;
 pub mod issue;
 pub mod mr;
+pub mod panopticum;
 pub mod plugins;
 pub mod rebase;
 pub mod storage;

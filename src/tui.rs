@@ -16,11 +16,12 @@ pub mod widget_detail;
 pub mod widget_issues;
 pub mod widget_kanban;
 pub mod widget_mr_create;
+pub mod widget_mr_list;
+pub mod widget_pano_log;
+pub mod widget_settings;
 pub mod widget_status;
 mod widget_debug;
 mod widget_fuzzy_palette;
-mod widget_mr_list;
-mod widget_settings;
 
 // Re-export public API
 pub use app::{App, DragState, InputMode, ViewMode};
@@ -302,6 +303,11 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Render fuzzy command palette overlay if open (Ctrl+P)
     if app.input_mode == InputMode::FuzzyPalette {
         widget_fuzzy_palette::render(frame, app, &colors);
+    }
+    
+    // Render panopticum log viewer modal if open
+    if app.show_pano_log {
+        widget_pano_log::render(frame, app);
     }
     
     areas

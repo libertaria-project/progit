@@ -4,10 +4,13 @@
 
 use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
+use crate::panopticum::{PanoEvent, PanoStatus};
 use crate::plugins::PluginManager;
 use crate::tui::theme::Theme;
 use crate::sync::SyncProvider;
 use crate::tui::style::ThemeEngine;
+use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, Sender};
 
 /// Current view mode
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -168,6 +171,32 @@ pub struct App {
     
     /// Selected fuzzy result index
     pub fuzzy_selected: usize,
+    
+    // ─── Panopticum Integration ───────────────────────────────────────────
+    
+    /// Repository root path
+    pub repo_path: PathBuf,
+    
+    /// Whether this is a Panopticum-enabled repo (PANOPTICUM.kdl exists)
+    pub is_panopticum_repo: bool,
+    
+    /// Custom path to panoctl binary (None = use PATH)
+    pub panoctl_binary_path: Option<String>,
+    
+    /// Current panopticum operation status
+    pub pano_status: PanoStatus,
+    
+    /// Output buffer for panopticum operations (for console view)
+    pub pano_output: Vec<String>,
+    
+    /// Channel sender for panopticum events (cloned to spawn functions)
+    pub pano_event_tx: Option<Sender<PanoEvent>>,
+    
+    /// Channel receiver for panopticum events (polled in main loop)
+    pub pano_event_rx: Option<Receiver<PanoEvent>>,
+    
+    /// Show panopticum log viewer modal
+    pub show_pano_log: bool,
 }
 
 impl Default for App {
@@ -221,6 +250,15 @@ impl App {
             fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
             fuzzy_query: String::new(),
             fuzzy_selected: 0,
+            // Panopticum
+            repo_path: PathBuf::new(),
+            is_panopticum_repo: false,
+            panoctl_binary_path: None,
+            pano_status: PanoStatus::Idle,
+            pano_output: Vec::new(),
+            pano_event_tx: None,
+            pano_event_rx: None,
+            show_pano_log: false,
         }
     }
 

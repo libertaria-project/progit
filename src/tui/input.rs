@@ -199,6 +199,13 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             KeyAction::Refresh
         }
         
+        // Command Palette
+        KeyCode::Char(':') => {
+            app.input_mode = InputMode::Command;
+            app.command_input.clear();
+            KeyAction::Refresh
+        }
+        
         KeyCode::Tab => {
             app.toggle_view();
             KeyAction::Refresh
@@ -552,6 +559,13 @@ fn handle_kanban_key(app: &mut App, key: KeyEvent) -> KeyAction {
             } else {
                 KeyAction::None
             }
+        }
+        
+        // Command Palette
+        KeyCode::Char(':') => {
+            app.input_mode = InputMode::Command;
+            app.command_input.clear();
+            KeyAction::Refresh
         }
 
         // Fuzzy Command Palette (Ctrl+P)
@@ -946,6 +960,12 @@ fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
 /// Main key event handler - dispatches based on input mode
 pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    // Panopticum log viewer takes priority (modal overlay)
+    if app.show_pano_log && key.code == KeyCode::Esc {
+        app.show_pano_log = false;
+        return KeyAction::Refresh;
+    }
+    
     match app.input_mode {
         InputMode::Normal => handle_normal_key(app, key),
         InputMode::Search => handle_search_key(app, key),
