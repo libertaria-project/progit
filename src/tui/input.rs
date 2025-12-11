@@ -1306,6 +1306,54 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 }
             }
 
+            // Handle MR list view
+            if app.view_mode == ViewMode::MRList {
+                // Calculate which row was clicked (offset for header/border)
+                // The MR list content starts at content.y + 3 (border + header row + separator)
+                let list_start_y = ui_areas.content.y + 3;
+                
+                if mouse.row >= list_start_y {
+                    let clicked_row = (mouse.row - list_start_y) as usize;
+                    
+                    // Check if valid row in MR list
+                    if clicked_row < app.mr_list.len() {
+                        // Select this row
+                        app.mr_selected = clicked_row;
+                        
+                        // Check for double-click to open diff view
+                        let mr_id = app.mr_list[clicked_row].id.to_string();
+                        let is_double_click = app.last_click_issue.as_ref() == Some(&mr_id)
+                            && now.saturating_sub(app.last_click_time) < 400;
+                        
+                        if is_double_click {
+                            // Open diff view for this MR (same as Enter key)
+                            if let Some(mr) = app.mr_list.get(app.mr_selected) {
+                                let diff_ref = format!("{}...{}", mr.target_branch, mr.source_branch);
+                                app.set_status(format!("Loading diff for {}...", mr.source_branch));
+                                
+                                let mut state = crate::diff::DiffState::new(diff_ref);
+                                match state.load() {
+                                    Ok(_) => {
+                                        app.diff_state = Some(state);
+                                        app.view_mode = ViewMode::Diff;
+                                    },
+                                    Err(e) => {
+                                        app.set_status(format!("Diff failed: {}", e));
+                                    }
+                                }
+                            }
+                            app.last_click_issue = None;
+                            return KeyAction::Refresh;
+                        } else {
+                            app.last_click_time = now;
+                            app.last_click_issue = Some(mr_id);
+                        }
+                        
+                        return KeyAction::Refresh;
+                    }
+                }
+            }
+
             KeyAction::None
         }
         MouseEventKind::Drag(MouseButton::Left) => {
