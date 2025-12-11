@@ -287,8 +287,14 @@ fn main() -> Result<()> {
                     } else {
                         println!("{} Open Merge Requests:", "🔀".green());
                         for mr in mrs {
-                            println!("  {} {} {}", 
-                                format!("!{}", mr.id).cyan(), 
+                            let id_display = if let Some(rid) = mr.remote_id {
+                                format!("!{}", rid)
+                            } else {
+                                format!("!{}", &mr.id[..8])
+                            };
+                            
+                            println!("  {:<6} {} {}", 
+                                id_display.cyan(), 
                                 mr.title.bold(), 
                                 format!("({} -> {})", mr.source_branch, mr.target_branch).dimmed()
                             );
