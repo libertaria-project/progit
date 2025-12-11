@@ -3,6 +3,7 @@
 //! This module re-exports the core functionality of ProGit.
 
 pub mod command;
+pub mod fuzzy;
 pub mod git;
 pub mod issue;
 pub mod mr;

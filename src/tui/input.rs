@@ -192,6 +192,14 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             KeyAction::Refresh
         }
 
+        // Fuzzy Command Palette (Ctrl+P)
+        KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input_mode = InputMode::FuzzyPalette;
+            app.fuzzy_query.clear();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+
         // Quit
         KeyCode::Char('q') => KeyAction::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => KeyAction::Quit,
@@ -328,6 +336,14 @@ fn handle_kanban_key(app: &mut App, key: KeyEvent) -> KeyAction {
             } else {
                 KeyAction::None
             }
+        }
+
+        // Fuzzy Command Palette (Ctrl+P)
+        KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input_mode = InputMode::FuzzyPalette;
+            app.fuzzy_query.clear();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
         }
 
         // Quit
@@ -578,6 +594,113 @@ pub fn handle_branch_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
     }
 }
 
+/// Handle keys in fuzzy palette mode
+fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            app.fuzzy_query.clear();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+        KeyCode::Down | KeyCode::Char('j') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let results = app.fuzzy_searcher.search(&app.fuzzy_query);
+            if !results.is_empty() {
+                app.fuzzy_selected = (app.fuzzy_selected + 1).min(results.len() - 1);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            app.fuzzy_selected = app.fuzzy_selected.saturating_sub(1);
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            // Execute selected item
+            let results = app.fuzzy_searcher.search(&app.fuzzy_query);
+            if let Some(result) = results.get(app.fuzzy_selected) {
+                use crate::fuzzy::FuzzyItem;
+                match &result.item {
+                    FuzzyItem::Issue { id, .. } => {
+                        app.open_detail(id);
+                        app.input_mode = InputMode::Normal;
+                    }
+                    FuzzyItem::Command { action, .. } => {
+                        app.input_mode = InputMode::Normal;
+                        // Execute command action
+                        match action.as_str() {
+                            "new_issue" => return KeyAction::CreateIssue(None),
+                            "toggle_view" => {
+                                app.toggle_view();
+                                return KeyAction::Refresh;
+                            }
+                            "sync" => return KeyAction::Sync,
+                            "cycle_theme" => {
+                                app.cycle_theme();
+                                return KeyAction::SaveTheme;
+                            }
+                            "settings" => {
+                                app.input_mode = InputMode::Settings;
+                                return KeyAction::Refresh;
+                            }
+                            "quit" => return KeyAction::Quit,
+                            "sort" => {
+                                // TODO: Implement sort menu
+                                return KeyAction::Refresh;
+                            }
+                            "branch" => {
+                                // TODO: Switch to branch dropdown
+                                app.input_mode = InputMode::BranchDropdown;
+                                return KeyAction::Refresh;
+                            }
+                            "mr" => {
+                                app.input_mode = InputMode::MRCreate;
+                                // Initialize MR draft if needed (simplified logic)
+                                if app.mr_draft.is_none() {
+                                    if let Some(ref repo) = app.repo_info {
+                                        app.mr_draft = Some(crate::mr::MergeRequest::new(
+                                            &repo.branch,
+                                            "main",
+                                            &repo.branch,
+                                        ));
+                                        app.mr_field = 1;
+                                        app.edit_buffer = repo.branch.clone();
+                                    }
+                                }
+                                return KeyAction::Refresh;
+                            }
+                            "search" => {
+                                app.input_mode = InputMode::Search;
+                                return KeyAction::Refresh;
+                            }
+                            _ => {}
+                        }
+                    }
+                    FuzzyItem::File { .. } => {
+                        // TODO: Open file in editor
+                        app.input_mode = InputMode::Normal;
+                    }
+                    FuzzyItem::Commit { .. } => {
+                        // TODO: Show commit details
+                        app.input_mode = InputMode::Normal;
+                    }
+                }
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Backspace => {
+            app.fuzzy_query.pop();
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+        KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.fuzzy_query.push(c);
+            app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
 /// Main key event handler - dispatches based on input mode
 pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match app.input_mode {
@@ -594,6 +717,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::MRCreate => handle_mr_create_key(app, key),
         InputMode::RepoFilter => handle_repo_filter_key(app, key),
         InputMode::Settings => handle_settings_key(app, key),
+        InputMode::FuzzyPalette => handle_fuzzy_palette_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -1106,5 +1230,6 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::MRCreate => "Tab:next field │ Enter:submit │ Esc:cancel",
         InputMode::RepoFilter => "j/k:nav │ Enter:select │ c:clear │ Esc:cancel",
         InputMode::Settings => "t:theme │ O/Esc:close",
+        InputMode::FuzzyPalette => "Type to search │ Enter:select │ Esc:close",
     }
 }

@@ -35,6 +35,7 @@ pub enum InputMode {
     MRCreate,        // Creating a merge request
     RepoFilter,      // Filtering by repository
     Settings,        // Settings pane
+    FuzzyPalette,    // Fuzzy command palette (Ctrl+P)
 }
 
 /// Mouse drag state
@@ -149,6 +150,15 @@ pub struct App {
     
     /// Plugin manager
     pub plugin_manager: Option<PluginManager>,
+    
+    /// Fuzzy searcher for command palette
+    pub fuzzy_searcher: crate::fuzzy::FuzzySearcher,
+    
+    /// Fuzzy palette query
+    pub fuzzy_query: String,
+    
+    /// Selected fuzzy result index
+    pub fuzzy_selected: usize,
 }
 
 impl Default for App {
@@ -196,6 +206,9 @@ impl App {
             mr_field: 0,
             show_debug_console: false,
             plugin_manager: None,
+            fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
+            fuzzy_query: String::new(),
+            fuzzy_selected: 0,
         }
     }
 
@@ -203,6 +216,7 @@ impl App {
     pub fn load_issues(&mut self, issues: Vec<Issue>) {
         self.issues = issues;
         self.update_available_repos(); // Update repo list for filtering
+        self.fuzzy_searcher.update_issues(&self.issues); // Update fuzzy search cache
         self.refresh_filter();
     }
 

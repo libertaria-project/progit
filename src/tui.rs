@@ -13,6 +13,7 @@ pub mod input;
 pub mod style;
 pub mod theme;
 pub mod widget_detail;
+pub mod widget_fuzzy_palette;
 pub mod widget_issues;
 pub mod widget_kanban;
 pub mod widget_mr_create;
@@ -275,6 +276,11 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Render settings pane overlay if open
     if app.input_mode == InputMode::Settings {
         widget_settings::render(frame, app, 0);
+    }
+    
+    // Render fuzzy command palette overlay if open (Ctrl+P)
+    if app.input_mode == InputMode::FuzzyPalette {
+        widget_fuzzy_palette::render(frame, app, &colors);
     }
     
     areas

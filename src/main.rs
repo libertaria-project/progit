@@ -8,6 +8,7 @@ mod git;
 mod issue;
 mod mr;
 mod plugins;
+mod fuzzy;
 mod storage;
 mod sync;
 mod tui;
