@@ -218,8 +218,13 @@ pub fn delete_branch(path: &Path, name: &str) -> Result<()> {
 
 /// Get origin repository URL
 pub fn get_origin_url(path: &Path) -> Result<Option<String>> {
+    get_remote_url(path, "origin")
+}
+
+/// Get URL for a specific remote
+pub fn get_remote_url(path: &Path, remote: &str) -> Result<Option<String>> {
     let repo = Git2Repo::open(path)?;
-    Ok(repo.find_remote("origin").ok().and_then(|remote| remote.url().map(|s| s.to_string())))
+    Ok(repo.find_remote(remote).ok().and_then(|r| r.url().map(|s| s.to_string())))
 }
 
 /// Parse git URL into (host, owner, repo)

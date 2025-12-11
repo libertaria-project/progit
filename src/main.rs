@@ -272,9 +272,45 @@ fn main() -> Result<()> {
             let cwd = std::env::current_dir()?;
             let repo_info = detect_repo(&cwd)?.context("Not a git repository")?;
 
-            let sync_config = config.sync.context(
+            let mut sync_config = config.sync.context(
                 "No sync configuration found. MR commands require a configured provider."
             )?;
+
+            // AUTO-DETECT: Check if git remote matches config, override if needed
+            if let Ok(Some(remote_url)) = crate::git::get_remote_url(&cwd, "origin") {
+                // Normalize URLs (remove .git suffix, trailing slashes) for comparison
+                let clean_remote = remote_url.trim_end_matches(".git").trim_end_matches('/');
+                let clean_config = sync_config.url.trim_end_matches(".git").trim_end_matches('/');
+                
+                if clean_remote != clean_config {
+                     println!("{} Detected remote change: {} -> {}", "⚡".yellow(), sync_config.url, remote_url);
+                     
+                     // Update URL
+                     sync_config.url = remote_url.clone();
+                     
+                     // Detect Provider Type
+                     if remote_url.contains("gitlab") {
+                         sync_config.provider = "gitlab".to_string();
+                     } else if remote_url.contains("gitea") || 
+                               remote_url.contains("forgejo") || 
+                               remote_url.contains("codeberg") ||
+                               remote_url.contains("git.maiwald.work") { // Known Forgeous instance
+                         sync_config.provider = "forgejo".to_string();
+                     }
+                     
+                     // Try to parse owner/repo from URL
+                     // URL formats: https://host/owner/repo.git or git@host:owner/repo.git
+                     let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
+                     if parts.len() >= 2 {
+                         let repo = parts.last().unwrap();
+                         let owner = parts.get(parts.len() - 2).unwrap();
+                         sync_config.owner = owner.to_string();
+                         sync_config.repo = repo.to_string();
+                         println!("{} Auto-configured for {}/{} ({})", "🔧".yellow(), owner, repo, sync_config.provider);
+                     }
+                }
+            }
+
             let provider = sync::create_provider(sync_config.clone());
             provider.login()?;
 
