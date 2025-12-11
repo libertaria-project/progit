@@ -283,30 +283,34 @@ fn main() -> Result<()> {
                 let clean_config = sync_config.url.trim_end_matches(".git").trim_end_matches('/');
                 
                 if clean_remote != clean_config {
-                     println!("{} Detected remote change: {} -> {}", "⚡".yellow(), sync_config.url, remote_url);
-                     
-                     // Update URL
-                     sync_config.url = remote_url.clone();
-                     
                      // Detect Provider Type
                      if remote_url.contains("gitlab") {
                          sync_config.provider = "gitlab".to_string();
                      } else if remote_url.contains("gitea") || 
                                remote_url.contains("forgejo") || 
-                               remote_url.contains("codeberg") ||
-                               remote_url.contains("git.maiwald.work") { // Known Forgeous instance
+                               remote_url.contains("codeberg") || // git.maiwald.work matched here implicitly or defaulted?
+                               // Fallback: assume Forgejo if not GitLab for known internal paths
+                               clean_remote.contains("maiwald.work") { 
                          sync_config.provider = "forgejo".to_string();
                      }
-                     
-                     // Try to parse owner/repo from URL
-                     // URL formats: https://host/owner/repo.git or git@host:owner/repo.git
-                     let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
-                     if parts.len() >= 2 {
-                         let repo = parts.last().unwrap();
-                         let owner = parts.get(parts.len() - 2).unwrap();
-                         sync_config.owner = owner.to_string();
-                         sync_config.repo = repo.to_string();
-                         println!("{} Auto-configured for {}/{} ({})", "🔧".yellow(), owner, repo, sync_config.provider);
+
+                     // Parse URL components properly
+                     if let Some((base, owner, repo)) = crate::git::parse_git_url(&remote_url) {
+                        println!("{} Detected remote change: {} -> {}", "⚡".yellow(), sync_config.url, base);
+                        sync_config.url = base;
+                        sync_config.owner = owner.clone();
+                        sync_config.repo = repo.clone();
+                        println!("{} Auto-configured for {}/{} ({})", "🔧".yellow(), owner, repo, sync_config.provider);
+                     } else {
+                        // Fallback manual parsing if parse_git_url fails (e.g. non-standard URL)
+                        sync_config.url = remote_url.clone();
+                        let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
+                        if parts.len() >= 2 {
+                             let repo = parts.last().unwrap();
+                             let owner = parts.get(parts.len() - 2).unwrap();
+                             sync_config.owner = owner.to_string();
+                             sync_config.repo = repo.to_string();
+                        }
                      }
                 }
             }
