@@ -7,29 +7,37 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Storage engine for managing issues
+/// Storage engine for managing issues and merge requests
 pub struct StorageEngine {
     /// Path to issues.json
     issues_path: PathBuf,
+    /// Path to mrs.json
+    mrs_path: PathBuf,
     /// Loaded issues (cached in memory)
     issues: Vec<Issue>,
+    /// Loaded merge requests (cached in memory)
+    mrs: Vec<crate::mr::MergeRequest>,
 }
 
 impl StorageEngine {
     /// Create a new storage engine for the given project root
     pub fn new(project_root: &Path) -> Self {
         let issues_path = project_root.join(".project").join("issues.json");
+        let mrs_path = project_root.join(".project").join("mrs.json");
         Self {
             issues_path,
+            mrs_path,
             issues: Vec::new(),
+            mrs: Vec::new(),
         }
     }
 
-    /// Load all issues from disk (supporting both single file and directory mode)
-    pub fn load(&mut self) -> Result<&[Issue]> {
+    /// Load all data from disk (supporting both single file and directory mode)
+    pub fn load(&mut self) -> Result<()> {
         self.issues.clear();
+        self.mrs.clear();
 
-        // 1. Load from aggregate issues.json (fast load)
+        // 1. Load Issues
         if self.issues_path.exists() {
             let content = fs::read_to_string(&self.issues_path)
                 .context("Failed to read issues.json")?;
@@ -38,8 +46,6 @@ impl StorageEngine {
             }
         }
 
-        // 2. Load from .project/issues/*.json (directory mode - overrides aggregate)
-        // This restores the "individual file" workflow
         let issues_dir = self.issues_path.parent().unwrap().join("issues");
         if issues_dir.exists() {
             for entry in fs::read_dir(issues_dir)? {
@@ -48,7 +54,6 @@ impl StorageEngine {
                 if path.extension().map_or(false, |ext| ext == "json") {
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(issue) = serde_json::from_str::<Issue>(&content) {
-                            // Upsert: replace if exists, add if new
                             if let Some(existing) = self.issues.iter_mut().find(|i| i.id == issue.id) {
                                 *existing = issue;
                             } else {
@@ -60,7 +65,35 @@ impl StorageEngine {
             }
         }
 
-        Ok(&self.issues)
+        // 2. Load Merge Requests
+        if self.mrs_path.exists() {
+            let content = fs::read_to_string(&self.mrs_path)
+                .context("Failed to read mrs.json")?;
+            if let Ok(mrs) = serde_json::from_str::<Vec<crate::mr::MergeRequest>>(&content) {
+                self.mrs = mrs;
+            }
+        }
+
+        let mrs_dir = self.mrs_path.parent().unwrap().join("mrs");
+        if mrs_dir.exists() {
+            for entry in fs::read_dir(mrs_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().map_or(false, |ext| ext == "json") {
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        if let Ok(mr) = serde_json::from_str::<crate::mr::MergeRequest>(&content) {
+                            if let Some(existing) = self.mrs.iter_mut().find(|m| m.id == mr.id) {
+                                *existing = mr;
+                            } else {
+                                self.mrs.push(mr);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Get all loaded issues
@@ -68,28 +101,41 @@ impl StorageEngine {
         &self.issues
     }
 
+    /// Get all loaded merge requests
+    pub fn mrs(&self) -> &[crate::mr::MergeRequest] {
+        &self.mrs
+    }
+
     /// Get mutable reference to issues
     pub fn issues_mut(&mut self) -> &mut Vec<Issue> {
         &mut self.issues
     }
 
-    /// Save all issues to disk (atomic write)
+    /// Get mutable reference to merge requests
+    pub fn mrs_mut(&mut self) -> &mut Vec<crate::mr::MergeRequest> {
+        &mut self.mrs
+    }
+
+    /// Save everything to disk (atomic write)
     pub fn save(&self) -> Result<()> {
         // Ensure parent directory exists
         if let Some(parent) = self.issues_path.parent() {
             fs::create_dir_all(parent)?;
         }
 
-        // Write to temp file first
-        let tmp_path = self.issues_path.with_extension("json.tmp");
-        let content = serde_json::to_string_pretty(&self.issues)
+        // 1. Save Issues
+        let tmp_issues = self.issues_path.with_extension("json.tmp");
+        let issues_content = serde_json::to_string_pretty(&self.issues)
             .context("Failed to serialize issues")?;
-        fs::write(&tmp_path, &content)
-            .context("Failed to write temp file")?;
+        fs::write(&tmp_issues, &issues_content)?;
+        fs::rename(&tmp_issues, &self.issues_path)?;
 
-        // Atomic rename
-        fs::rename(&tmp_path, &self.issues_path)
-            .context("Failed to rename temp file")?;
+        // 2. Save Merge Requests
+        let tmp_mrs = self.mrs_path.with_extension("json.tmp");
+        let mrs_content = serde_json::to_string_pretty(&self.mrs)
+            .context("Failed to serialize mrs")?;
+        fs::write(&tmp_mrs, &mrs_content)?;
+        fs::rename(&tmp_mrs, &self.mrs_path)?;
 
         Ok(())
     }
@@ -100,6 +146,16 @@ impl StorageEngine {
             *existing = issue;
         } else {
             self.issues.push(issue);
+        }
+        self.save()
+    }
+
+    /// Add or update an MR
+    pub fn upsert_mr(&mut self, mr: crate::mr::MergeRequest) -> Result<()> {
+        if let Some(existing) = self.mrs.iter_mut().find(|m| m.id == mr.id) {
+            *existing = mr;
+        } else {
+            self.mrs.push(mr);
         }
         self.save()
     }

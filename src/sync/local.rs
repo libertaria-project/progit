@@ -136,6 +136,9 @@ impl SyncProvider for LocalProvider {
                     updated: chrono::Utc::now(),
                     merged_at: None,
                     is_draft: branch.starts_with("draft/") || branch.starts_with("wip/"),
+                    approvals: 0,
+                    upvotes: 0,
+                    downvotes: 0,
                 });
             }
         }

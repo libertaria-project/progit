@@ -38,6 +38,9 @@ pub struct RepoInfo {
 
     /// All available remotes
     pub remotes: Vec<RemoteInfo>,
+    
+    /// Repository name (e.g. "progit")
+    pub repo_name: String,
 }
 
 /// Remote information
@@ -60,6 +63,7 @@ impl Default for RepoInfo {
             untracked: 0,
             branches: Vec::new(),
             remotes: Vec::new(),
+            repo_name: "unknown".to_string(),
         }
     }
 }
@@ -88,6 +92,9 @@ pub fn detect_repo(start_path: &Path) -> Result<Option<RepoInfo>> {
     // Get repository path
     if let Some(workdir) = repo.workdir() {
         info.path = workdir.to_string_lossy().to_string();
+        info.repo_name = workdir.file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
     }
 
     // Get current branch

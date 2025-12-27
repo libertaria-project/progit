@@ -12,6 +12,7 @@ pub mod app;
 pub mod input;
 pub mod style;
 pub mod theme;
+pub mod widget_dashboard;
 pub mod widget_detail;
 pub mod widget_issues;
 pub mod widget_kanban;
@@ -33,6 +34,7 @@ pub use widget_kanban::KanbanAreas;
 use crate::git::render_remote_dropdown;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, BorderType},
     Frame,
@@ -59,12 +61,18 @@ pub struct UIAreas {
     pub detail_close_btn: Option<Rect>,
     /// Help icon area in status bar
     pub help_icon: Option<Rect>,
+    /// Dashboard Tab
+    pub tab_dashboard: Option<Rect>,
     /// Tab: Issues (clickable)
     pub tab_issues: Option<Rect>,
     /// Tab: Kanban (clickable)
     pub tab_kanban: Option<Rect>,
+    /// Tab: MRs
+    pub tab_mrs: Option<Rect>,
     /// Tab: Settings (clickable, right-aligned)
     pub tab_settings: Option<Rect>,
+    /// Diff view file list area (left pane)
+    pub diff_file_list: Option<Rect>,
 }
 
 /// Render the entire UI, returns UI areas for mouse handling
@@ -94,30 +102,45 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     areas.git_branch = branch_area;
     areas.git_remote = remote_area;
 
-
     // Render view based on mode - with clickable tab title bar
-    // Create the tabbed title: [📋 Issues] [📊 Kanban] ... [⚙ Settings]
+    // Create the tabbed title: [🏠 Dash] [📋 Issues] [📊 Kanban] [🔀 MRs] ... [⚙ Settings]
+    let dash_label = " 🏠 Dash ";
     let issues_label = " 📋 Issues ";
     let kanban_label = " 📊 Kanban ";
+    let mrs_label = " 🔀 MRs ";
     let settings_label = " ⚙ Settings ";
     
     // Calculate tab widths for click detection
     let tab_start_x = areas.content.x + 1; // After border
+    let dash_tab_width = dash_label.chars().count() as u16 + 2;
     let issues_tab_width = issues_label.chars().count() as u16 + 2;
     let kanban_tab_width = kanban_label.chars().count() as u16 + 2;
+    let mrs_tab_width = mrs_label.chars().count() as u16 + 2;
     let settings_tab_width = settings_label.chars().count() as u16 + 2;
     
     // Store tab areas for mouse hit detection
-    areas.tab_issues = Some(Rect {
+    areas.tab_dashboard = Some(Rect {
         x: tab_start_x,
+        y: areas.content.y,
+        width: dash_tab_width,
+        height: 1,
+    });
+    areas.tab_issues = Some(Rect {
+        x: tab_start_x + dash_tab_width + 1,
         y: areas.content.y,
         width: issues_tab_width,
         height: 1,
     });
     areas.tab_kanban = Some(Rect {
-        x: tab_start_x + issues_tab_width + 1, // +1 for separator
+        x: tab_start_x + dash_tab_width + issues_tab_width + 2,
         y: areas.content.y,
         width: kanban_tab_width,
+        height: 1,
+    });
+    areas.tab_mrs = Some(Rect {
+        x: tab_start_x + dash_tab_width + issues_tab_width + kanban_tab_width + 3,
+        y: areas.content.y,
+        width: mrs_tab_width,
         height: 1,
     });
     
@@ -131,34 +154,43 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     });
 
     // Build title spans with active/inactive styling
-    let (issues_style, kanban_style, mr_style) = match app.view_mode {
+    let (dash_style, issues_style, kanban_style, mr_style) = match app.view_mode {
+        ViewMode::Dashboard => (
+            colors.accent().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            colors.dim(),
+            colors.dim(),
+            colors.dim(),
+        ),
         ViewMode::List => (
-            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
+            colors.accent().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
             colors.dim(),
             colors.dim(),
         ),
         ViewMode::Kanban => (
             colors.dim(),
-            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
+            colors.accent().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
             colors.dim(),
         ),
         ViewMode::MRList => (
             colors.dim(),
             colors.dim(),
-            colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED),
+            colors.dim(),
+            colors.accent().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         ),
-        ViewMode::Diff => (colors.dim(), colors.dim(), colors.dim()),
+        ViewMode::Diff => (colors.dim(), colors.dim(), colors.dim(), colors.dim()),
     };
     
     // Settings style (highlighted if in settings mode)
     let settings_style = if app.input_mode == InputMode::Settings {
-        colors.accent().add_modifier(ratatui::style::Modifier::BOLD | ratatui::style::Modifier::UNDERLINED)
+        colors.accent().add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
     } else {
         colors.dim()
     };
 
     // Calculate padding for right-alignment
-    let left_content_len = issues_label.len() + 1 + kanban_label.len() + format!(" ({} total) ", app.issues.len()).len();
+    let left_content_len = dash_label.len() + 1 + issues_label.len() + 1 + kanban_label.len() + 1 + mrs_label.len() + format!(" ({} total) ", app.issues.len()).len();
     let total_width = areas.content.width as usize - 2; // Minus borders
     let padding = if total_width > left_content_len + settings_label.len() {
         total_width - left_content_len - settings_label.len()
@@ -167,12 +199,14 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     };
 
     let title_spans = vec![
+        Span::styled(dash_label, dash_style),
+        Span::raw("│"),
         Span::styled(issues_label, issues_style),
         Span::raw("│"),
         Span::styled(kanban_label, kanban_style),
         Span::raw("│"),
-        Span::styled(" MRs ", mr_style),
-        Span::styled(format!(" ({} total) ", app.issues.len()), colors.dim()),
+        Span::styled(mrs_label, mr_style),
+        Span::styled(format!(" ({} issues) ", app.issues.len()), colors.dim()),
         Span::raw(" ".repeat(padding)),
         Span::styled(settings_label, settings_style),
     ];
@@ -188,6 +222,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
 
     // Render the actual view content
     areas.kanban = match app.view_mode {
+        ViewMode::Dashboard => {
+            widget_dashboard::render(frame, inner, app);
+            KanbanAreas::default()
+        }
         ViewMode::List => {
             widget_issues::render(frame, inner, app);
             KanbanAreas::default()
@@ -200,10 +238,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
              KanbanAreas::default()
         }
         ViewMode::Diff => {
-            if let Some(ref state) = app.diff_state {
-                crate::diff::render_diff(frame, inner, state);
-            }
-            KanbanAreas::default()
+             if let Some(ref state) = app.diff_state {
+                 areas.diff_file_list = crate::diff::render_diff(frame, inner, state);
+             }
+             KanbanAreas::default()
         }
     };
 

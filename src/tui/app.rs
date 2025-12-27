@@ -9,6 +9,7 @@ use crate::plugins::PluginManager;
 use crate::tui::theme::Theme;
 use crate::sync::SyncProvider;
 use crate::tui::style::ThemeEngine;
+use crate::mr::MergeRequest;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -16,6 +17,7 @@ use std::sync::mpsc::{Receiver, Sender};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ViewMode {
     #[default]
+    Dashboard,
     List,
     Kanban,
     Diff,
@@ -270,13 +272,18 @@ impl App {
         self.refresh_filter();
     }
 
-    /// Load MRs from provider
-    pub fn load_mrs(&mut self) -> anyhow::Result<()> {
+    /// Load MRs into the app
+    pub fn load_mrs(&mut self, mrs: Vec<MergeRequest>) {
+        self.mr_list = mrs;
+        self.mr_selected = 0;
+    }
+
+    /// Refresh MRs from provider
+    pub fn refresh_mrs(&mut self) -> anyhow::Result<()> {
         if let Some(ref provider) = self.sync_provider {
             match provider.list_mrs() {
                 Ok(mrs) => {
-                    self.mr_list = mrs;
-                    self.mr_selected = 0;
+                    self.load_mrs(mrs);
                     self.set_status(format!("Loaded {} MRs", self.mr_list.len()));
                     Ok(())
                 }
@@ -286,8 +293,6 @@ impl App {
                 }
             }
         } else {
-            // Try to auto-initialize local provider if none?
-            // For now just error
             self.set_status("No sync provider configured".to_string());
             Ok(())
         }
@@ -380,15 +385,16 @@ impl App {
     /// Toggle view mode
     pub fn toggle_view(&mut self) {
         let new_mode = match self.view_mode {
+            ViewMode::Dashboard => ViewMode::List,
             ViewMode::List => ViewMode::Kanban,
             ViewMode::Kanban => ViewMode::MRList,
-            ViewMode::MRList => ViewMode::List,
+            ViewMode::MRList => ViewMode::Dashboard,
             ViewMode::Diff => ViewMode::List,
         };
         
         // Auto-load MRs when switching to MR list view
         if new_mode == ViewMode::MRList && self.mr_list.is_empty() {
-            let _ = self.load_mrs();
+            let _ = self.refresh_mrs();
         }
         
         self.view_mode = new_mode;

@@ -157,11 +157,14 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) -> Option<Rect> {
 /// Get context-aware help text
 pub fn help_text(app: &App) -> String {
     match app.view_mode {
+        crate::tui::ViewMode::Dashboard => {
+             "Tab:list  S:sync  O:settings  q:quit".to_string()
+        }
         crate::tui::ViewMode::List => {
-             "n:new  space:status  e:edit  /:search  s:sync  t:theme  ?:help".to_string()
+             "n:new  space:status  e:edit  /:search  s:sync  d:diff  t:theme  ?:help".to_string()
         }
         crate::tui::ViewMode::Kanban => {
-             "n:new  H/L:move  space:status  enter:details  s:sync  ?:help".to_string()
+             "n:new  H/L:move  space:status  enter:details  s:sync  d:diff  ?:help".to_string()
         }
         crate::tui::ViewMode::Diff => {
              "j/k:scroll  J/K:files  space:collapse  q:close".to_string()

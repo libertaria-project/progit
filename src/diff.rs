@@ -1,43 +1,50 @@
-// SPDX-License-Identifier: EUPL-1.2
-// Copyright (c) 2025 Markus Maiwald
-
-//! Advanced Diff Viewer
-//!
-//! Parses and renders git diffs with syntax highlighting support (via style).
-
-use anyhow::{Result, Context};
+use anyhow::{Result, Context, anyhow};
 use ratatui::{
-    buffer::Buffer,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, StatefulWidget, Widget},
+    widgets::{Block, Borders},
 };
-use std::process::Command;
+use git2::{Repository, DiffOptions};
+use syntect::parsing::SyntaxSet;
+use syntect::highlighting::{ThemeSet, Style as SyntectStyle};
+use syntect::easy::HighlightLines;
+use std::path::{Path};
+use once_cell::sync::Lazy;
+
+static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| SyntaxSet::load_defaults_newlines());
+static THEME_SET: Lazy<ThemeSet> = Lazy::new(|| ThemeSet::load_defaults());
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiffLineType {
     Context,
     Add,
     Delete,
-    Header,     // Meta headers like "diff --git..."
-    HunkHeader, // @@ ... @@
+    Header,
+    HunkHeader,
 }
 
 #[derive(Debug, Clone)]
 pub struct DiffLine {
     pub content: String,
     pub line_type: DiffLineType,
+    pub line_number: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AlignedLine {
+    pub left: Option<DiffLine>,
+    pub right: Option<DiffLine>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FileDiff {
     pub path: String,
     pub is_binary: bool,
-    pub lines: Vec<DiffLine>,
-    pub collapsed: bool,
+    pub lines: Vec<AlignedLine>,
     pub additions: usize,
     pub deletions: usize,
+    pub collapsed: bool, // Added field
 }
 
 #[derive(Debug, Clone)]
@@ -58,243 +65,235 @@ impl DiffState {
         }
     }
 
-    pub fn load(&mut self) -> Result<()> {
-        let mut cmd = Command::new("git");
-        cmd.arg("diff");
-        
-        // Handle argument parsing (e.g. if it has spaces or is "HEAD~1")
-        // For now, treat reference as raw args. 
-        // If reference is empty, it diffs working tree.
-        if !self.reference.is_empty() {
-             for part in self.reference.split_whitespace() {
-                 cmd.arg(part);
-             }
-        }
+    pub fn load(&mut self, repo_root: &Path) -> Result<()> {
+        let repo = Repository::open(repo_root).context("Failed to open repository")?;
+        let mut opts = DiffOptions::new();
+        opts.context_lines(3);
+        opts.interhunk_lines(1);
 
-        let output = cmd.output().context("Failed to run git diff")?;
-        let content = String::from_utf8_lossy(&output.stdout);
-        self.parse(&content);
+        let diff = if self.reference.is_empty() {
+            repo.diff_index_to_workdir(None, Some(&mut opts))?
+        } else {
+            let obj = repo.revparse_single(&self.reference)?;
+            let tree = obj.as_tree().ok_or_else(|| anyhow!("Reference is not a tree"))?;
+            repo.diff_tree_to_workdir_with_index(Some(&tree), Some(&mut opts))?
+        };
+
+        self.parse_git2_diff(&diff)?;
+        self.align_lines();
         Ok(())
     }
 
-    fn parse(&mut self, content: &str) {
+    fn parse_git2_diff(&mut self, diff: &git2::Diff) -> Result<()> {
         self.files.clear();
-        let mut current_file: Option<FileDiff> = None;
-
-        for line in content.lines() {
-            if line.starts_with("diff --git") {
-                if let Some(f) = current_file.take() {
-                    self.files.push(f);
-                }
-                // Parse "diff --git a/src/main.rs b/src/main.rs"
-                // Or "diff --git a/file b/file"
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                // Usually file path is at the end. We take the last part and strip b/
-                let raw_path = parts.last().unwrap_or(&"unknown");
-                let path = if raw_path.starts_with("b/") {
-                    &raw_path[2..]
-                } else {
-                    raw_path
-                }
-                .to_string();
-
-                current_file = Some(FileDiff {
+        
+        // Use a temporary vector to avoid borrow checker issues with closures
+        let mut file_diffs: Vec<FileDiff> = Vec::new();
+        
+        // We'll iterate manually or use print/print_callback if foreach is too troublesome
+        // But Diff::foreach is designed for this. We just need to handle state correctly.
+        // We can use RefCell for the files vector to allow interior mutability
+        
+        use std::cell::RefCell;
+        let files_cell = RefCell::new(&mut file_diffs);
+        
+        diff.foreach(
+            &mut |delta, _| {
+                let path = delta.new_file().path().and_then(|p| p.to_str()).unwrap_or("unknown").to_string();
+                files_cell.borrow_mut().push(FileDiff {
                     path,
-                    is_binary: false,
+                    is_binary: delta.flags().contains(git2::DiffFlags::BINARY),
                     lines: Vec::new(),
-                    collapsed: false,
                     additions: 0,
                     deletions: 0,
+                    collapsed: false,
                 });
-            } else if let Some(ref mut file) = current_file {
-                 if line.starts_with("index ") || line.starts_with("new file") || line.starts_with("deleted file") {
-                     // Meta info, skip for display cleanliness? 
-                     // Or add as Header
-                     continue;
-                 }
-                 if line.starts_with("--- ") || line.starts_with("+++ ") {
-                     continue;
-                 }
-                 if line.starts_with("Binary files") {
-                     file.is_binary = true;
-                     file.lines.push(DiffLine { content: line.to_string(), line_type: DiffLineType::Header });
-                     continue;
-                 }
+                true
+            },
+            None,
+            None,
+            Some(&mut |_, _, line| {
+                let mut files = files_cell.borrow_mut();
+                if let Some(file) = files.last_mut() {
+                    let content = String::from_utf8_lossy(line.content()).to_string();
+                    let (line_type, left, right) = match line.origin() {
+                        '+' => {
+                            file.additions += 1;
+                            (DiffLineType::Add, None, line.new_lineno())
+                        },
+                        '-' => {
+                            file.deletions += 1;
+                            (DiffLineType::Delete, line.old_lineno(), None)
+                        },
+                        ' ' => (DiffLineType::Context, line.old_lineno(), line.new_lineno()),
+                        'H' => (DiffLineType::HunkHeader, None, None),
+                        _ => (DiffLineType::Header, None, None),
+                    };
 
-                let line_type = if line.starts_with("@@") {
-                    DiffLineType::HunkHeader
-                } else if line.starts_with('+') {
-                    file.additions += 1;
-                    DiffLineType::Add
-                } else if line.starts_with('-') {
-                    file.deletions += 1;
-                    DiffLineType::Delete
-                } else {
-                    DiffLineType::Context
-                };
+                    let diff_line = DiffLine {
+                        content,
+                        line_type: line_type.clone(),
+                        line_number: left.or(right).map(|n| n as usize),
+                    };
 
-                file.lines.push(DiffLine {
-                    content: line.to_string(),
-                    line_type,
-                });
+                    match line_type {
+                        DiffLineType::Add => {
+                            file.lines.push(AlignedLine { left: None, right: Some(diff_line) });
+                        },
+                        DiffLineType::Delete => {
+                            file.lines.push(AlignedLine { left: Some(diff_line), right: None });
+                        },
+                        _ => {
+                            file.lines.push(AlignedLine { left: Some(diff_line.clone()), right: Some(diff_line) });
+                        }
+                    }
+                }
+                true
+            }),
+        )?;
+
+        self.files = file_diffs;
+        Ok(())
+    }
+
+    pub fn align_lines(&mut self) {
+        for file in &mut self.files {
+            let mut aligned = Vec::new();
+            let mut left_buffer = Vec::new();
+            let mut right_buffer = Vec::new();
+
+            let lines = std::mem::take(&mut file.lines);
+            for al in lines {
+                match (al.left, al.right) {
+                    (Some(l), None) => left_buffer.push(l),
+                    (None, Some(r)) => right_buffer.push(r),
+                    (l, r) => {
+                        Self::flush_buffers_static(&mut aligned, &mut left_buffer, &mut right_buffer);
+                        aligned.push(AlignedLine { left: l, right: r });
+                    }
+                }
             }
+            Self::flush_buffers_static(&mut aligned, &mut left_buffer, &mut right_buffer);
+            file.lines = aligned;
         }
-        if let Some(f) = current_file {
-            self.files.push(f);
+    }
+
+    // Static helper to avoid self-borrowing issues
+    fn flush_buffers_static(aligned: &mut Vec<AlignedLine>, left: &mut Vec<DiffLine>, right: &mut Vec<DiffLine>) {
+        let max = std::cmp::max(left.len(), right.len());
+        for i in 0..max {
+            aligned.push(AlignedLine {
+                left: left.get(i).cloned(),
+                right: right.get(i).cloned(),
+            });
         }
+        left.clear();
+        right.clear();
     }
 }
 
-// Widget Implementation via function for now (simpler integration in tui.rs)
-pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) {
+pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Option<Rect> {
     use ratatui::widgets::{List, ListItem, Paragraph};
-    
+    use ratatui::layout::{Layout, Constraint, Direction};
+
     if state.files.is_empty() {
         f.render_widget(
             Paragraph::new("No changes detected.")
                 .block(Block::default().borders(Borders::ALL).title(" Diff ")),
             area
         );
-        return;
+        return None;
     }
 
-    // Since we want a foldable view, let's construct a list of items where some are headers and some are content
-    // But dealing with massive scroll lists is tricky.
-    // Simpler: Just render the *selected* file's diff?
-    // Or render a list of files on the left, and diff on right?
-    // "Unified" View: Just big scrollable list of all files.
-    
-    // Let's do: List of content lines.
-    let mut items: Vec<ListItem> = Vec::new();
-    
-    for (idx, file) in state.files.iter().enumerate() {
-        // File Header
-        let is_selected = idx == state.selected_file;
-        let header_style = if is_selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
-        };
-        
-        let icon = if file.collapsed { "▶" } else { "▼" };
-        let stats = format!("+{} -{}", file.additions, file.deletions);
-        let header_content = format!("{} {}  ({})", icon, file.path, stats);
-        
-        items.push(ListItem::new(Line::from(vec![
-            Span::styled(header_content, header_style)
-        ])));
-
-        if !file.collapsed {
-            if file.is_binary {
-                items.push(ListItem::new(Line::from(Span::raw("  <Binary File Details Hidden>"))));
-            } else {
-                for line in &file.lines {
-                    let (fg, bg) = match line.line_type {
-                        DiffLineType::Add => (Color::Green, Color::Black),
-                        DiffLineType::Delete => (Color::Red, Color::Black),
-                        DiffLineType::HunkHeader => (Color::Cyan, Color::Black),
-                        _ => (Color::Reset, Color::Reset),
-                    };
-                    
-                    // Highlight full background would be nicer but ratatui ListItems bg covers whole width?
-                    // Let's try to just color text for start, maybe bg for +/- char.
-                    
-                    let mut spans = Vec::new();
-                    // Colored prefix (+/-)
-                    let prefix = if line.content.len() > 0 { &line.content[0..1] } else { " " };
-                    let rest = if line.content.len() > 1 { &line.content[1..] } else { "" };
-                    
-                    if line.line_type == DiffLineType::Add {
-                        spans.push(Span::styled(prefix, Style::default().bg(Color::Green).fg(Color::Black)));
-                        spans.push(Span::styled(rest, Style::default().fg(Color::Green)));
-                    } else if line.line_type == DiffLineType::Delete {
-                        spans.push(Span::styled(prefix, Style::default().bg(Color::Red).fg(Color::Black)));
-                        spans.push(Span::styled(rest, Style::default().fg(Color::Red)));
-                    } else if line.line_type == DiffLineType::HunkHeader {
-                         spans.push(Span::styled(&line.content, Style::default().fg(Color::Cyan)));
-                    } else {
-                         spans.push(Span::raw(&line.content));
-                    }
-                    
-                    items.push(ListItem::new(Line::from(spans)));
-                }
-            }
-        }
-    }
-    
-    // We need stateful list to handle scrolling if we use List widget
-    // But we are managing selection via `state.selected_file` which is file index, not line index.
-    // This mismatch makes a single List hard.
-    
-    // Better Approach: 
-    // Two Panes: Left = File List, Right = Diff Content
-    // This is "Advanced".
-    
-    let chunks = ratatui::layout::Layout::default()
-        .direction(ratatui::layout::Direction::Horizontal)
-        .constraints([ratatui::layout::Constraint::Percentage(30), ratatui::layout::Constraint::Percentage(70)])
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
         .split(area);
-        
-    // Left: File List
-    let files: Vec<ListItem> = state.files.iter().enumerate().map(|(i, f)| {
+
+    let files: Vec<ListItem> = state.files.iter().enumerate().map(|(i, file)| {
         let style = if i == state.selected_file {
-            Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };
-        ListItem::new(format!("{} (+{}/-{})", f.path, f.additions, f.deletions)).style(style)
+        let icon = if file.collapsed { "▶" } else { "▼" };
+        ListItem::new(format!("{} {} (+{}/-{})", icon, file.path, file.additions, file.deletions)).style(style)
     }).collect();
-    
+
     let file_list = List::new(files)
         .block(Block::default().borders(Borders::ALL).title(" Files "));
-        
     f.render_widget(file_list, chunks[0]);
-    
-    // Right: Content
+
     if let Some(file) = state.files.get(state.selected_file) {
-        let content_items: Vec<ListItem> = file.lines.iter().map(|line| {
-             let mut spans = Vec::new();
-             if line.line_type == DiffLineType::Add {
-                // Green
-                spans.push(Span::styled(&line.content, Style::default().fg(Color::Green)));
-             } else if line.line_type == DiffLineType::Delete {
-                // Red
-                spans.push(Span::styled(&line.content, Style::default().fg(Color::Red)));
-             } else if line.line_type == DiffLineType::HunkHeader {
-                spans.push(Span::styled(&line.content, Style::default().fg(Color::Cyan)));
-             } else {
-                spans.push(Span::raw(&line.content));
-             }
-             ListItem::new(Line::from(spans))
-        }).collect();
-        
-        let content_list = List::new(content_items)
-            .block(Block::default().borders(Borders::ALL).title(format!(" Diff: {} ", file.path)));
-            
-        // We need a Scroll offset for the content
-        // We'll trust the user to keybind scrolling.
-        // We need `ListState` to scroll.
-        // We'll just start at `state.scroll`
-        
-        // Ratatui List doesn't take raw offset easily without State.
-        // We'll create a transient ListState.
-        let mut list_state = ratatui::widgets::ListState::default();
-        list_state.select(Some(state.scroll as usize)); // Using select as scroll anchor? No, ListState uses offset.
-        // select(idx) scrolls to make regular items visible.
-        // offset is internal.
-        
-        // Actually for pure content viewing, Paragraph is better if we just dump lines?
-        // But Paragraph doesn't do syntax coloring easily line-by-line as generic as List.
-        // List is fine.
-        
-        // Hack: Scroll behavior.
-        // `f.render_widget` renders. `render_stateful_widget`.
-        // If we want to scroll, we should adjust `state.scroll` and pass it.
-        // BUT `List` widget tracks *selected item*.
-        // We want to scroll the *view*.
-        // If we use `select(state.scroll)`, it highlights that line. That's fine! 
-        // It acts as a cursor in the diff.
-        
-        f.render_stateful_widget(content_list, chunks[1], &mut list_state);
+        if file.collapsed {
+            f.render_widget(
+                Paragraph::new("File collapsed.")
+                    .block(Block::default().borders(Borders::ALL).title(" Content ")),
+                chunks[1]
+            );
+            return Some(chunks[0]); // Return file list area
+        }
+
+        let diff_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(chunks[1]);
+
+        let syntax = SYNTAX_SET.find_syntax_for_file(&file.path).unwrap_or(None).unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
+        let theme = &THEME_SET.themes["base16-ocean.dark"];
+
+        let mut left_lines = Vec::new();
+        let mut right_lines = Vec::new();
+
+        let mut highlighter = HighlightLines::new(syntax, theme);
+
+        for line in &file.lines {
+            left_lines.push(render_diff_line(&line.left, &mut highlighter));
+            right_lines.push(render_diff_line(&line.right, &mut highlighter));
+        }
+
+        let left_para = Paragraph::new(left_lines)
+            .block(Block::default().borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM).title(" OLD "))
+            .scroll((state.scroll, 0));
+        let right_para = Paragraph::new(right_lines)
+            .block(Block::default().borders(Borders::ALL).title(" NEW "))
+            .scroll((state.scroll, 0));
+
+        f.render_widget(left_para, diff_chunks[0]);
+        f.render_widget(right_para, diff_chunks[1]);
+    }
+    Some(chunks[0]) // Return file list area
+}
+
+fn render_diff_line(line: &Option<DiffLine>, highlighter: &mut HighlightLines) -> Line<'static> {
+    match line {
+        Some(l) => {
+            let style = match l.line_type {
+                DiffLineType::Add => Style::default().bg(Color::Rgb(0, 50, 0)),
+                DiffLineType::Delete => Style::default().bg(Color::Rgb(50, 0, 0)),
+                DiffLineType::HunkHeader => Style::default().fg(Color::Cyan),
+                _ => Style::default(),
+            };
+
+            let line_num = match l.line_number {
+                Some(n) => format!("{:4} ", n),
+                None => "     ".to_string(),
+            };
+
+            let spans = if l.line_type == DiffLineType::HunkHeader || l.line_type == DiffLineType::Header {
+                vec![Span::styled(l.content.clone(), style)]
+            } else {
+                let ranges: Vec<(SyntectStyle, &str)> = highlighter.highlight_line(&l.content, &SYNTAX_SET).unwrap_or_default();
+                let mut s = vec![Span::styled(line_num, Style::default().fg(Color::DarkGray))];
+                for (style_syn, text) in ranges {
+                    let fg = Color::Rgb(style_syn.foreground.r, style_syn.foreground.g, style_syn.foreground.b);
+                    s.push(Span::styled(text.to_string(), style.fg(fg)));
+                }
+                s
+            };
+
+            Line::from(spans)
+        },
+        None => Line::from(Span::styled(" ".repeat(100), Style::default().bg(Color::Rgb(20, 20, 20)))),
     }
 }

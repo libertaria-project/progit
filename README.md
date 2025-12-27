@@ -21,7 +21,7 @@ We're not just an issue tracker. We're building a **complete forge alternative**
 - 🚧 **Code Review in Terminal** (Coming - comment on diffs without browser)
 - 🚧 **CI/CD Pipeline Viewer** (Coming - watch builds in real-time)
 - 🚧 **Wiki/Docs Management** (Coming - markdown files, git-tracked)
-- 🚧 **Plugin System** (Coming - extend with Lua/WASM)
+- 🚧 **[Plugin System](docs/SDK.md)** (Coming - extend with Lua/WASM)
 
 Store your issues as **JSON files** directly in your git repository. Track them, diff them, review them in pull requests. Your issues are YOUR data, versioned alongside your code, accessible forever—even if GitHub shuts down tomorrow.
 

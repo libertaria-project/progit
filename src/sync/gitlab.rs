@@ -366,6 +366,25 @@ impl SyncProvider for GitLabProvider {
             
         let mut mrs = Vec::new();
         for gl_mr in gl_mrs {
+            let created_at = gl_mr["created_at"].as_str()
+                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(Utc::now);
+
+            let updated_at = gl_mr["updated_at"].as_str()
+                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(Utc::now);
+                
+            let state_str = gl_mr["state"].as_str().unwrap_or("opened");
+            let state = match state_str {
+                "opened" | "open" => crate::mr::MRState::Open,
+                "merged" => crate::mr::MRState::Merged,
+                "closed" => crate::mr::MRState::Closed,
+                "locked" => crate::mr::MRState::Closed, // Map locked to closed for now
+                _ => crate::mr::MRState::Open,
+            };
+
             let mr = crate::mr::MergeRequest {
                 id: uuid::Uuid::new_v4().to_string(),
                 remote_id: gl_mr["iid"].as_u64(),
@@ -373,16 +392,19 @@ impl SyncProvider for GitLabProvider {
                 target_branch: gl_mr["target_branch"].as_str().unwrap_or_default().to_string(),
                 title: gl_mr["title"].as_str().unwrap_or_default().to_string(),
                 description: gl_mr["description"].as_str().unwrap_or_default().to_string(),
-                state: crate::mr::MRState::Open,  // Simplified for now
+                state,
                 author: gl_mr["author"]["username"].as_str().map(|s| s.to_string()),
-                assignees: vec![],  // TODO: parse assignees
-                labels: vec![],     // TODO: parse labels
+                assignees: vec![],  // TODO
+                labels: vec![],     // TODO
                 linked_issues: vec![],
                 web_url: gl_mr["web_url"].as_str().map(|s| s.to_string()),
-                created: chrono::Utc::now(), // TODO: parse timestamp
-                updated: chrono::Utc::now(),
+                created: created_at,
+                updated: updated_at,
                 merged_at: None,
-                is_draft: gl_mr["draft"].as_bool().unwrap_or(false),
+                is_draft: gl_mr["draft"].as_bool().unwrap_or(false) || gl_mr["work_in_progress"].as_bool().unwrap_or(false),
+                approvals: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32, // Use upvotes as proxy for now
+                upvotes: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32,
+                downvotes: gl_mr["downvotes"].as_u64().unwrap_or(0) as u32,
             };
             mrs.push(mr);
         }
@@ -414,10 +436,19 @@ impl SyncProvider for GitLabProvider {
             labels: vec![],
             linked_issues: vec![],
             web_url: gl_mr["web_url"].as_str().map(|s| s.to_string()),
-            created: chrono::Utc::now(),
-            updated: chrono::Utc::now(),
+            created: gl_mr["created_at"].as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(chrono::Utc::now),
+            updated: gl_mr["updated_at"].as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(chrono::Utc::now),
             merged_at: None,
             is_draft: gl_mr["draft"].as_bool().unwrap_or(false),
+            approvals: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32,
+            upvotes: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32,
+            downvotes: gl_mr["downvotes"].as_u64().unwrap_or(0) as u32,
         })
     }
     

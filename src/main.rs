@@ -203,62 +203,77 @@ fn main() -> Result<()> {
             // Choose provider
             let provider = sync::create_provider(sync_config.clone());
 
-            // Sync command handling
+            // Sync command handling - use modern StorageEngine (issues.json)
+            let mut engine = storage::engine::StorageEngine::new(&project_root);
+            engine.load()?;
+
             match action {
                 Some(SyncAction::Push) => {
-                    // Load all issues
-                    let kdl_dir = project_root.join(paths::issues_dir());
-                    let cache_path = project_root.join(paths::cache_file());
-                    let mut issues = load_issues(&kdl_dir, &cache_path)?;
+                    let mut issues = engine.issues().to_vec();
                     
                     println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
                     provider.login()?;
                     
-                    println!("{} Pushing issues...", "🔄".blue());
+                    println!("{} Pushing {} issues to remote...", "🔄".blue(), issues.len());
                     provider.push(&mut issues)?;
                     
                     // Save issues back to persist new remote IDs
-                    println!("{} Saving {} issues with remote links...", "💾".green(), issues.len());
-                    for issue in &issues {
-                        save_issue(issue, &kdl_dir, &cache_path)?;
-                    }
+                    *engine.issues_mut() = issues.clone();
+                    engine.save()?;
+                    println!("{} Saved {} issues with remote links.", "💾".green(), issues.len());
                     
                     // Delete remote issues not in local
                     let deleted = provider.delete_missing(&issues)?;
                     if deleted > 0 {
-                        println!("{} Deleted {} remote issues.", "🗑️".red(), deleted);
+                        println!("{} Deleted {} orphaned remote issues.", "🗑️".red(), deleted);
                     }
                     
-                    println!("{} Push complete - Links saved.", "✅".green());
+                    println!("{} Push complete.", "✅".green());
                 }
                 Some(SyncAction::Pull) => {
-                    let kdl_dir = project_root.join(paths::issues_dir());
-                    let cache_path = project_root.join(paths::cache_file());
-                    
-                    // Load local issues for deduplication matching
-                    let local_issues = load_issues(&kdl_dir, &cache_path)?;
+                    let local_issues = engine.issues().to_vec();
                     
                     println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
                     provider.login()?;
                     
-                    println!("{} Pulling issues...", "🔄".blue());
+                    println!("{} Pulling issues from remote...", "🔄".blue());
                     let remote_issues = provider.pull()?;
                     
                     println!("{} Pulled {} issues. Merging...", "📥".blue(), remote_issues.len());
                     
                     let provider_name = &sync_config.provider;
-                    println!("{} Using provider '{}' for basic deduplication.", "🔎".cyan(), provider_name);
-                    
                     let merged_issues = sync::merge_issues(&local_issues, remote_issues, provider_name);
                     
                     // Save merged set
-                    println!("{} Saving {} merged issues...", "💾".green(), merged_issues.len());
-                    for issue in merged_issues {
-                        save_issue(&issue, &kdl_dir, &cache_path)?;
-                    }
+                    *engine.issues_mut() = merged_issues.clone();
+                    engine.save()?;
+                    println!("{} Saved {} merged issues.", "💾".green(), merged_issues.len());
                     println!("{} Pull complete.", "✅".green());
                 }
-                None => {}
+                None => {
+                    // Default: bidirectional sync (push then pull)
+                    let mut issues = engine.issues().to_vec();
+                    
+                    println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
+                    provider.login()?;
+                    
+                    // Push first
+                    println!("{} Pushing {} local issues...", "⬆️".blue(), issues.len());
+                    provider.push(&mut issues)?;
+                    
+                    // Update engine with any new remote IDs
+                    *engine.issues_mut() = issues.clone();
+                    
+                    // Then pull
+                    println!("{} Pulling remote updates...", "⬇️".blue());
+                    let remote_issues = provider.pull()?;
+                    let merged = sync::merge_issues(engine.issues(), remote_issues, &sync_config.provider);
+                    
+                    *engine.issues_mut() = merged;
+                    engine.save()?;
+                    
+                    println!("{} Sync complete: {} issues.", "✅".green(), engine.issues().len());
+                }
             }
         }
         Some(Commands::Branch { action }) => {
@@ -411,31 +426,27 @@ fn main() -> Result<()> {
         }
         Some(Commands::Block { id }) => {
             let project_root = find_project_root()?;
-            let kdl_dir = project_root.join(paths::issues_dir());
-            let cache_path = project_root.join(paths::cache_file());
-            
-            let mut issues = load_issues(&kdl_dir, &cache_path)?;
+            let mut engine = storage::engine::StorageEngine::new(&project_root);
+            engine.load()?;
             
             // Find issue by full or short ID
-            if let Some(issue) = issues.iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
+            if let Some(issue) = engine.issues_mut().iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
                 issue.blocked = !issue.blocked;
                 issue.updated = chrono::Utc::now();
                 let blocked_str = if issue.blocked { "BLOCKED".red().bold() } else { "UNBLOCKED".green().bold() };
                 println!("{} Issue {} marked as {}", "🔥".yellow(), issue.short_id().bold(), blocked_str);
-                save_issue(issue, &kdl_dir, &cache_path)?;
+                engine.save()?;
             } else {
                 return Err(anyhow!("Issue '{}' not found", id));
             }
         }
         Some(Commands::Due { id, date }) => {
             let project_root = find_project_root()?;
-            let kdl_dir = project_root.join(paths::issues_dir());
-            let cache_path = project_root.join(paths::cache_file());
-            
-            let mut issues = load_issues(&kdl_dir, &cache_path)?;
+             let mut engine = storage::engine::StorageEngine::new(&project_root);
+            engine.load()?;
             
             // Find issue by full or short ID
-            if let Some(issue) = issues.iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
+            if let Some(issue) = engine.issues_mut().iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
                 if date.to_lowercase() == "clear" {
                     issue.due = None;
                     println!("{} Due date cleared for issue {}", "⏰".green(), issue.short_id().bold());
@@ -449,7 +460,7 @@ fn main() -> Result<()> {
                     println!("{} Due date set to {} for issue {}", "⏰".green(), date.cyan(), issue.short_id().bold());
                 }
                 issue.updated = chrono::Utc::now();
-                save_issue(issue, &kdl_dir, &cache_path)?;
+                engine.save()?;
             } else {
                 return Err(anyhow!("Issue '{}' not found", id));
             }
@@ -561,8 +572,9 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
         }
     }
 
-    // Load issues from engine
+    // Load data from engine
     app.load_issues(engine.issues().to_vec());
+    app.load_mrs(engine.mrs().to_vec());
 
     // Detect git repository from current working directory
     let cwd = std::env::current_dir()?;
@@ -713,6 +725,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                 KeyAction::DeleteIssue => {
                     // Delete the selected issue based on view mode
                     let issue_id = match app.view_mode {
+                        tui::ViewMode::Dashboard => None,
                         tui::ViewMode::List => app.selected_issue().map(|i| i.id.clone()),
                         tui::ViewMode::Kanban => app.kanban_selected_issue().map(|i| i.id.clone()),
                         tui::ViewMode::Diff => None,
@@ -754,22 +767,32 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                                 // 2. DELETE MISSING
                                 let _ = provider.delete_missing(&app.issues);
 
-                                // 3. PULL
+                                // 3. PULL ISSUES
                                 match provider.pull() {
                                     Ok(remote_issues) => {
-                                        // Merge using actual provider name
                                         let provider_name = app.sync_provider_name.as_deref().unwrap_or("gitlab");
                                         let merged = sync::merge_issues(&app.issues, remote_issues, provider_name);
                                         app.load_issues(merged.clone());
-                                        
                                         *engine.issues_mut() = merged;
-                                        if let Err(e) = engine.save() {
-                                            app.set_status(format!("Save failed: {}", e));
-                                        } else {
-                                            app.set_status("Sync Complete!");
-                                        }
                                     }
-                                    Err(e) => app.set_status(format!("Pull failed: {}", e)),
+                                    Err(e) => app.set_status(format!("Issues pull failed: {}", e)),
+                                }
+
+                                // 4. PULL MRS
+                                match provider.list_mrs() {
+                                    Ok(remote_mrs) => {
+                                         let provider_name = app.sync_provider_name.as_deref().unwrap_or("gitlab");
+                                         let merged = sync::merge_mrs(&app.mr_list, remote_mrs, provider_name);
+                                         app.load_mrs(merged.clone());
+                                         *engine.mrs_mut() = merged;
+                                         app.set_status("Sync Complete (Issues & MRs)!");
+                                    }
+                                    Err(e) => app.set_status(format!("MR pull failed: {}", e)),
+                                }
+
+                                // Final Save
+                                if let Err(e) = engine.save() {
+                                    app.set_status(format!("Save failed: {}", e));
                                 }
                             }
                         }

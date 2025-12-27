@@ -316,6 +316,9 @@ impl SyncProvider for ForgejoProvider {
                 updated: pr.updated_at,
                 merged_at: pr.merged_at,
                 is_draft: pr.draft.unwrap_or(false),
+                approvals: 0,
+                upvotes: 0,
+                downvotes: 0,
             };
             mrs.push(mr);
         }
@@ -363,6 +366,9 @@ impl SyncProvider for ForgejoProvider {
             updated: pr.updated_at,
             merged_at: pr.merged_at,
             is_draft: pr.draft.unwrap_or(false),
+            approvals: 0,
+            upvotes: 0,
+            downvotes: 0,
         })
     }
     

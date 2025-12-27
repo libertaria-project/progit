@@ -14,10 +14,10 @@
     "started": null,
     "completed": "2025-12-10T23:59:59Z",
     "blocked": false,
-    "created": "2025-12-11T19:16:36.008Z",
-    "updated": "2025-12-11T19:50:40.991818846Z",
+    "created": "2025-12-27T18:35:10.461Z",
+    "updated": "2025-12-27T19:02:29.402Z",
     "remotes": {
-      "gitlab": "81"
+      "gitlab": "91"
     },
     "repo": null
   },
@@ -36,10 +36,10 @@
     "started": null,
     "completed": "2025-12-10T23:59:59Z",
     "blocked": false,
-    "created": "2025-12-11T19:16:36.973Z",
-    "updated": "2025-12-11T19:50:48.151573043Z",
+    "created": "2025-12-27T18:35:11.261Z",
+    "updated": "2025-12-27T19:02:29.912Z",
     "remotes": {
-      "gitlab": "82"
+      "gitlab": "92"
     },
     "repo": null
   },
@@ -47,21 +47,21 @@
     "id": "progress-001",
     "title": "Write Panopticum Documentation",
     "description": "Create comprehensive docs",
-    "status": "in-progress",
+    "status": "backlog",
     "effort": 6,
     "tags": [
       "documentation"
     ],
-    "assignee": "voxis",
+    "assignee": null,
     "sprint": null,
-    "due": "2025-12-13T23:59:59Z",
+    "due": null,
     "started": "2025-12-11T19:00:00Z",
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T17:00:00Z",
-    "updated": "2025-12-11T19:25:00Z",
+    "created": "2025-12-27T18:35:12.178Z",
+    "updated": "2025-12-27T19:02:30.510Z",
     "remotes": {
-      "gitlab": "83"
+      "gitlab": "93"
     },
     "repo": null
   },
@@ -69,7 +69,7 @@
     "id": "progress-002",
     "title": "Implement Dedicated Ops Tab",
     "description": "ViewMode::Infrastructure",
-    "status": "in-progress",
+    "status": "backlog",
     "effort": 15,
     "tags": [
       "panopticum",
@@ -81,10 +81,10 @@
     "started": "2025-12-09T09:00:00Z",
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T19:16:39.247Z",
-    "updated": "2025-12-11T19:51:38.342269343Z",
+    "created": "2025-12-27T18:35:12.998Z",
+    "updated": "2025-12-27T19:02:31.018Z",
     "remotes": {
-      "gitlab": "84"
+      "gitlab": "94"
     },
     "repo": null
   },
@@ -92,7 +92,7 @@
     "id": "progress-003",
     "title": "Build panoctl Alpha Release",
     "description": "Complete core validation",
-    "status": "in-progress",
+    "status": "backlog",
     "effort": 21,
     "tags": [
       "blocker",
@@ -104,10 +104,10 @@
     "started": "2025-12-06T09:00:00Z",
     "completed": null,
     "blocked": true,
-    "created": "2025-12-11T19:16:40.116Z",
-    "updated": "2025-12-11T19:51:28.111305193Z",
+    "created": "2025-12-27T18:35:13.869Z",
+    "updated": "2025-12-27T19:02:31.387Z",
     "remotes": {
-      "gitlab": "85"
+      "gitlab": "95"
     },
     "repo": null
   },
@@ -123,14 +123,14 @@
     ],
     "assignee": null,
     "sprint": null,
-    "due": "2025-12-10T23:59:59Z",
+    "due": null,
     "started": "2025-12-03T00:00:00Z",
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T19:16:40.837Z",
-    "updated": "2025-12-11T19:51:18.768808960Z",
+    "created": "2025-12-27T18:35:14.687Z",
+    "updated": "2025-12-27T19:02:31.851Z",
     "remotes": {
-      "gitlab": "86"
+      "gitlab": "96"
     },
     "repo": null
   },
@@ -138,7 +138,7 @@
     "id": "backlog-002",
     "title": "Pre-Commit Validation Guillotine",
     "description": "Auto-validate on staged changes",
-    "status": "backlog",
+    "status": "in-progress",
     "effort": 6,
     "tags": [
       "git-hooks",
@@ -150,10 +150,10 @@
     "started": null,
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T19:16:41.699Z",
-    "updated": "2025-12-11T19:16:41.699Z",
+    "created": "2025-12-27T18:35:15.540Z",
+    "updated": "2025-12-27T19:02:32.270Z",
     "remotes": {
-      "gitlab": "87"
+      "gitlab": "97"
     },
     "repo": null
   },
@@ -173,10 +173,10 @@
     "started": null,
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T19:16:42.305Z",
-    "updated": "2025-12-11T19:16:42.305Z",
+    "created": "2025-12-27T18:35:16.143Z",
+    "updated": "2025-12-27T19:02:32.607Z",
     "remotes": {
-      "gitlab": "88"
+      "gitlab": "98"
     },
     "repo": null
   },
@@ -196,10 +196,10 @@
     "started": null,
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T19:16:43Z",
-    "updated": "2025-12-11T19:16:43Z",
+    "created": "2025-12-27T18:35:16.664Z",
+    "updated": "2025-12-27T19:02:32.993Z",
     "remotes": {
-      "gitlab": "89"
+      "gitlab": "99"
     },
     "repo": null
   },
@@ -219,10 +219,10 @@
     "started": null,
     "completed": null,
     "blocked": false,
-    "created": "2025-12-11T19:16:43.606Z",
-    "updated": "2025-12-11T19:16:43.606Z",
+    "created": "2025-12-27T18:35:17.181Z",
+    "updated": "2025-12-27T19:02:33.375Z",
     "remotes": {
-      "gitlab": "90"
+      "gitlab": "100"
     },
     "repo": null
   }

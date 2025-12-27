@@ -42,10 +42,43 @@ pub enum KeyAction {
 /// Handle a key event in normal mode
 pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match app.view_mode {
+        ViewMode::Dashboard => handle_dashboard_key(app, key),
         ViewMode::List => handle_list_key(app, key),
         ViewMode::Kanban => handle_kanban_key(app, key),
         ViewMode::Diff => handle_diff_key(app, key),
         ViewMode::MRList => handle_mr_list_key(app, key),
+    }
+}
+
+fn handle_dashboard_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Tab => {
+            app.toggle_view();
+            KeyAction::Refresh
+        }
+        KeyCode::Char('S') => KeyAction::Sync,
+        KeyCode::Char('O') => {
+            app.input_mode = InputMode::Settings;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('q') => KeyAction::Quit,
+        KeyCode::Char('d') => {
+            // Quick Diff: Show dirty changes
+            app.set_status("Loading local changes...");
+            let mut state = crate::diff::DiffState::new(String::new());
+             match state.load(&app.repo_path) {
+                Ok(_) => {
+                    app.diff_state = Some(state);
+                    app.view_mode = ViewMode::Diff;
+                    KeyAction::Refresh
+                },
+                Err(e) => {
+                    app.set_status(format!("No local changes: {}", e));
+                    KeyAction::Refresh
+                }
+            }
+        }
+        _ => KeyAction::None,
     }
 }
 
@@ -83,10 +116,11 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 let diff_ref = format!("{}...{}", mr.target_branch, mr.source_branch);
                 app.set_status(format!("Loading diff for {}...", mr.source_branch));
                 
-                let mut state = crate::diff::DiffState::new(diff_ref);
-                match state.load() {
+                let mut state = crate::diff::DiffState::new(diff_ref.clone());
+                match state.load(&app.repo_path) {
                     Ok(_) => {
                         app.diff_state = Some(state);
+                        app.set_status(format!("Diff: {}", diff_ref));
                         app.view_mode = ViewMode::Diff;
                         KeyAction::Refresh
                     },
@@ -101,7 +135,7 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
         }
         KeyCode::Char('r') => {
             app.set_status("Reloading MRs...");
-            if let Err(e) = app.load_mrs() {
+            if let Err(e) = app.refresh_mrs() {
                 app.set_status(format!("Failed: {}", e));
             }
             KeyAction::Refresh
@@ -141,7 +175,7 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             Ok(_) => {
                                 app.set_status(format!("👍 Review approved for MR !{} (LGTM)", remote_id));
                                 // Reload MRs to reflect changes
-                                let _ = app.load_mrs();
+                                let _ = app.refresh_mrs();
                             }
                             Err(e) => app.set_status(format!("❌ Failed to approve: {}", e)),
                         }
@@ -163,7 +197,7 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             Ok(_) => {
                                 app.set_status(format!("✅ Accepted & Merged MR !{}", remote_id));
                                 // Reload MRs to reflect changes
-                                let _ = app.load_mrs();
+                                let _ = app.refresh_mrs();
                             }
                             Err(e) => app.set_status(format!("❌ Failed to merge: {}", e)),
                         }
@@ -185,7 +219,7 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             Ok(_) => {
                                 app.set_status(format!("❌ Rejected MR !{} (closed without merge)", remote_id));
                                 // Reload MRs to reflect changes
-                                let _ = app.load_mrs();
+                                let _ = app.refresh_mrs();
                             }
                             Err(e) => app.set_status(format!("❌ Failed to reject: {}", e)),
                         }
@@ -306,9 +340,25 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
             KeyAction::Refresh
         }
+        KeyCode::Char('d') => {
+            // Quick Diff: Show dirty changes (working tree vs index)
+            app.set_status("Loading local changes...");
+            let mut state = crate::diff::DiffState::new(String::new());
+             match state.load(&app.repo_path) {
+                Ok(_) => {
+                    app.diff_state = Some(state);
+                    app.view_mode = ViewMode::Diff;
+                    KeyAction::Refresh
+                },
+                Err(e) => {
+                    app.set_status(format!("No local changes: {}", e));
+                    KeyAction::Refresh
+                }
+            }
+        }
         KeyCode::Char('n') => KeyAction::CreateIssue(None),
         KeyCode::Char('S') => KeyAction::Sync,
-        KeyCode::Char('d') => {
+        KeyCode::Char('D') => {
             app.input_mode = InputMode::Confirm;
             app.set_status("Delete issue? (y/n)");
             KeyAction::Refresh
@@ -513,9 +563,25 @@ fn handle_kanban_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 KeyAction::None
             }
         }
+        KeyCode::Char('d') => {
+            // Quick Diff: Show dirty changes
+            app.set_status("Loading local changes...");
+            let mut state = crate::diff::DiffState::new(String::new());
+             match state.load(&app.repo_path) {
+                Ok(_) => {
+                    app.diff_state = Some(state);
+                    app.view_mode = ViewMode::Diff;
+                    KeyAction::Refresh
+                },
+                Err(e) => {
+                    app.set_status(format!("No local changes: {}", e));
+                    KeyAction::Refresh
+                }
+            }
+        }
 
         // Delete
-        KeyCode::Char('d') => {
+        KeyCode::Char('D') => {
             app.input_mode = InputMode::Confirm;
             app.set_status("Delete issue? (y/n)");
             KeyAction::Refresh
@@ -778,7 +844,7 @@ pub fn handle_branch_dropdown_key(app: &mut App, key: KeyEvent) -> KeyAction {
              app.input_mode = InputMode::BranchCreate;
              KeyAction::Refresh
         }
-        KeyCode::Char('d') => {
+        KeyCode::Char('D') => {
             // Delete selected branch (not current, not "New Branch" option)
             if let Some(ref repo) = app.repo_info {
                 if app.selected_branch < repo.branches.len() {
@@ -1310,6 +1376,16 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 return KeyAction::None;
             }
 
+            // Click on Dashboard tab
+            if let Some(tab_area) = ui_areas.tab_dashboard {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.view_mode != ViewMode::Dashboard {
+                        app.view_mode = ViewMode::Dashboard;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
             // Click on Issues tab
             if let Some(tab_area) = ui_areas.tab_issues {
                 if point_in_rect(mouse.column, mouse.row, tab_area) {
@@ -1325,6 +1401,19 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 if point_in_rect(mouse.column, mouse.row, tab_area) {
                     if app.view_mode != ViewMode::Kanban {
                         app.view_mode = ViewMode::Kanban;
+                    }
+                    return KeyAction::Refresh;
+                }
+            }
+
+            // Click on MRs tab
+            if let Some(tab_area) = ui_areas.tab_mrs {
+                if point_in_rect(mouse.column, mouse.row, tab_area) {
+                    if app.view_mode != ViewMode::MRList {
+                        app.view_mode = ViewMode::MRList;
+                        if app.mr_list.is_empty() {
+                            let _ = app.refresh_mrs();
+                        }
                     }
                     return KeyAction::Refresh;
                 }
@@ -1347,6 +1436,26 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                 if point_in_rect(mouse.column, mouse.row, help_area) {
                     app.set_status(help_text(app));
                     return KeyAction::Refresh;
+                }
+            }
+
+            // Click on diff file list (left pane)
+            if let Some(file_list_area) = ui_areas.diff_file_list {
+                if point_in_rect(mouse.column, mouse.row, file_list_area) {
+                    if let Some(ref mut diff_state) = app.diff_state {
+                        // Calculate clicked file index
+                        // File list starts at file_list_area.y + 1 (border)
+                        let list_start_y = file_list_area.y + 1;
+                        if mouse.row >= list_start_y {
+                            let clicked_idx = (mouse.row - list_start_y) as usize;
+                            if clicked_idx < diff_state.files.len() {
+                                diff_state.selected_file = clicked_idx;
+                                diff_state.scroll = 0; // Reset scroll when switching files
+                                return KeyAction::Refresh;
+                            }
+                        }
+                    }
+                    return KeyAction::None;
                 }
             }
 
@@ -1455,7 +1564,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                                 app.set_status(format!("Loading diff for {}...", mr.source_branch));
                                 
                                 let mut state = crate::diff::DiffState::new(diff_ref);
-                                match state.load() {
+                                match state.load(&app.repo_path) {
                                     Ok(_) => {
                                         app.diff_state = Some(state);
                                         app.view_mode = ViewMode::Diff;
@@ -1505,6 +1614,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
         }
         MouseEventKind::ScrollDown => {
             match app.view_mode {
+                ViewMode::Dashboard => {}, // Nothing to scroll on dashboard
                 ViewMode::List => app.next(),
                 ViewMode::Kanban => app.kanban_down(),
                 ViewMode::Diff => {
@@ -1522,6 +1632,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
         }
         MouseEventKind::ScrollUp => {
             match app.view_mode {
+                ViewMode::Dashboard => {},
                 ViewMode::List => app.previous(),
                 ViewMode::Kanban => app.kanban_up(),
                 ViewMode::Diff => {
@@ -1545,6 +1656,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 pub fn help_text(app: &App) -> &'static str {
     match app.input_mode {
         InputMode::Normal => match app.view_mode {
+            ViewMode::Dashboard => "Tab:list │ S:sync │ O:settings │ q:quit",
             ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
             ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",

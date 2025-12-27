@@ -80,6 +80,11 @@ pub struct MergeRequest {
     
     /// Draft/WIP flag
     pub is_draft: bool,
+    
+    /// Review Stats (Approvals)
+    pub approvals: u32,
+    pub upvotes: u32,
+    pub downvotes: u32,
 }
 
 impl MergeRequest {
@@ -103,6 +108,9 @@ impl MergeRequest {
             updated: now,
             merged_at: None,
             is_draft: false,
+            approvals: 0,
+            upvotes: 0,
+            downvotes: 0,
         }
     }
 

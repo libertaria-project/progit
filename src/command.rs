@@ -71,7 +71,7 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
         "diff" => {
             let reference = if parts.len() > 1 { parts[1] } else { "" };
             let mut state = crate::diff::DiffState::new(reference.to_string());
-            match state.load() {
+            match state.load(&app.repo_path) {
                 Ok(_) => {
                     if state.files.is_empty() {
                          return CommandAction::Status("No changes detected".to_string());

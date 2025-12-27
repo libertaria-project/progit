@@ -122,3 +122,32 @@ pub fn merge_issues(local_issues: &[Issue], remote_issues: Vec<Issue>, provider_
     
     merged
 }
+
+/// Merge remote MRs into local MRs (timestamp-based)
+pub fn merge_mrs(local_mrs: &[MergeRequest], remote_mrs: Vec<MergeRequest>, provider_name: &str) -> Vec<MergeRequest> {
+    let mut merged = local_mrs.to_vec();
+    
+    for remote_mr in remote_mrs {
+        if let Some(remote_id) = remote_mr.remote_id {
+            // Check if we have this MR locally (by remote_id)
+            if let Some(existing_idx) = merged.iter().position(|m| m.remote_id == Some(remote_id)) {
+                // Update if remote is newer
+                if remote_mr.updated > merged[existing_idx].updated {
+                    log::info!("⬇ Updating local MR !{} (remote newer)", remote_id);
+                    let local_id = merged[existing_idx].id.clone();
+                    
+                    let mut updated = remote_mr.clone();
+                    updated.id = local_id; // Preserve local UUID
+                    
+                    merged[existing_idx] = updated;
+                }
+            } else {
+                // New MR from remote
+                log::info!("➕ Adding new remote MR !{}", remote_id);
+                merged.push(remote_mr);
+            }
+        }
+    }
+    
+    merged
+}
