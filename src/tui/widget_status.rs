@@ -172,5 +172,8 @@ pub fn help_text(app: &App) -> String {
         crate::tui::ViewMode::MRList => {
              "j/k:nav  enter:review  r:reload  q:back".to_string()
         }
+        crate::tui::ViewMode::Blame => {
+             "j/k:scroll  m:toggle mode  q:back".to_string()
+        }
     }
 }

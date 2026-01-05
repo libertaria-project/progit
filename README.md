@@ -64,6 +64,7 @@ repos {
   - 🎯 **Full Kanban Board** (drag-and-drop, visual status)
   - 📊 **Time Tracking** (due dates, effort estimates, velocity)
   - 🔀 **Browser-Free MR Creation** (press `M`, done)
+  - 🔍 **Git Blame View** (understand code authorship with dual perspectives)
   - 📦 **Multi-Repo Management** (one TUI, infinite repos)
   - 🔄 **Bidirectional Sync** (GitLab, Forgejo, GitHub coming soon)
   - ⚡ **Blazing Fast TUI** (Pure Rust, 5MB binary, no Electron bloat)
@@ -153,6 +154,13 @@ prog  # Creates .project/ (tracked) and .progit/ (ignored) automatically
   - `Enter` - Edit Field
   - `Space` - Cycle Status/Effort
   - `Esc` - Close
+
+### Blame View
+
+  - `Ctrl+P` then `b` - Open Blame for selected file
+  - `j/k` - Scroll through blame lines
+  - `m` - Toggle Manager/Lead Dev mode
+  - `q` - Close Blame view
 
 -----
 
@@ -264,6 +272,7 @@ src/
   - [x] Beautiful themes (Vibe, Nord, Gruvbox, etc.)
 
 ### **Phase 2: Code Review Liberation** 🚧 IN PROGRESS
+  - [x] Git Blame View (understand code authorship)
   - [ ] MR list view (see all open MRs)
   - [ ] Diff viewer in TUI
   - [ ] Comment on code lines (without browser)

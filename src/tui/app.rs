@@ -22,6 +22,7 @@ pub enum ViewMode {
     Kanban,
     Diff,
     MRList,
+    Blame,
 }
 
 /// Input mode
@@ -173,6 +174,9 @@ pub struct App {
     
     /// Selected fuzzy result index
     pub fuzzy_selected: usize,
+
+    /// Blame State
+    pub blame_state: Option<crate::tui::widget_blame::BlameState>,
     
     // ─── Panopticum Integration ───────────────────────────────────────────
     
@@ -261,6 +265,7 @@ impl App {
             pano_event_tx: None,
             pano_event_rx: None,
             show_pano_log: false,
+            blame_state: None,
         }
     }
 
@@ -390,6 +395,7 @@ impl App {
             ViewMode::Kanban => ViewMode::MRList,
             ViewMode::MRList => ViewMode::Dashboard,
             ViewMode::Diff => ViewMode::List,
+            ViewMode::Blame => ViewMode::List,
         };
         
         // Auto-load MRs when switching to MR list view
@@ -691,6 +697,29 @@ impl App {
     /// Count blockers
     pub fn blocker_count(&self) -> usize {
         self.issues.iter().filter(|i| i.is_blocker()).count()
+    }
+
+    /// Load blame for a file
+    pub fn load_blame(&mut self, file_path: &str) {
+        self.set_status(format!("Loading blame for {}...", file_path));
+        
+        let path_obj = std::path::Path::new(file_path);
+        // blame_file likely expects full path or relative to CWD if using git command
+        // But our git module uses Command::new("git").current_dir(repo_path)
+        // So we should pass path relative to repo root.
+        
+        match crate::git::blame::BlameInfo::new(file_path) {
+            Ok(info) => {
+                 let mut state = crate::tui::widget_blame::BlameState::default();
+                 state.info = Some(info);
+                 self.blame_state = Some(state);
+                 self.view_mode = ViewMode::Blame;
+                 self.set_status(format!("Blame: {}", file_path));
+            },
+            Err(e) => {
+                 self.set_status(format!("Failed to load blame: {}", e));
+            }
+        }
     }
 }
 

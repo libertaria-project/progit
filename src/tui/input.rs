@@ -47,6 +47,7 @@ pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> KeyAction {
         ViewMode::Kanban => handle_kanban_key(app, key),
         ViewMode::Diff => handle_diff_key(app, key),
         ViewMode::MRList => handle_mr_list_key(app, key),
+        ViewMode::Blame => handle_blame_key(app, key),
     }
 }
 
@@ -299,6 +300,66 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 }
             }
             KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in blame view
+fn handle_blame_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+             app.view_mode = ViewMode::List;
+             app.blame_state = None;
+             KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+             if let Some(ref mut state) = app.blame_state {
+                 if let Some(info) = &state.info {
+                     let max_lines = info.lines.len();
+                     let height = 20; // TODO: Get actual height? TableState handles scroll indices mostly
+                     // Ratatui TableState: select(index)
+                     let current = state.table_state.selected().unwrap_or(0);
+                     if current < max_lines.saturating_sub(1) {
+                         state.table_state.select(Some(current + 1));
+                     }
+                 }
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+             if let Some(ref mut state) = app.blame_state {
+                 let current = state.table_state.selected().unwrap_or(0);
+                 if current > 0 {
+                     state.table_state.select(Some(current - 1));
+                 }
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('g') => {
+             if let Some(ref mut state) = app.blame_state {
+                 state.table_state.select(Some(0));
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('G') => {
+             if let Some(ref mut state) = app.blame_state {
+                 if let Some(info) = &state.info {
+                     state.table_state.select(Some(info.lines.len().saturating_sub(1)));
+                 }
+             }
+             KeyAction::Refresh
+        }
+        KeyCode::Char('m') => {
+             // Toggle Mode
+             if let Some(ref mut state) = app.blame_state {
+                 use crate::tui::widget_blame::BlameMode;
+                 state.mode = match state.mode {
+                     BlameMode::Manager => BlameMode::LeadDev,
+                     BlameMode::LeadDev => BlameMode::Manager,
+                 };
+             }
+             KeyAction::Refresh
         }
         _ => KeyAction::None,
     }
@@ -1010,6 +1071,18 @@ fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
             KeyAction::Refresh
         }
+        KeyCode::Char('b') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+            // Blame selected file
+            let results = app.fuzzy_searcher.search(&app.fuzzy_query);
+            if let Some(result) = results.get(app.fuzzy_selected) {
+                 if let crate::fuzzy::FuzzyItem::File { path, .. } = &result.item {
+                     let p = path.clone();
+                     app.load_blame(&p);
+                     app.input_mode = InputMode::Normal;
+                 }
+            }
+            KeyAction::Refresh
+        }
         KeyCode::Backspace => {
             app.fuzzy_query.pop();
             app.fuzzy_selected = 0;
@@ -1627,6 +1700,12 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                         app.mr_selected = (app.mr_selected + 1) % app.mr_list.len();
                     }
                 }
+                ViewMode::Blame => {
+                    if let Some(ref mut state) = app.blame_state {
+                        let current = state.table_state.selected().unwrap_or(0);
+                        state.table_state.select(Some(current + 3));
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -1645,6 +1724,16 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                         app.mr_selected = app.mr_selected.checked_sub(1).unwrap_or(app.mr_list.len() - 1);
                     }
                 }
+                ViewMode::Blame => {
+                    if let Some(ref mut state) = app.blame_state {
+                        let current = state.table_state.selected().unwrap_or(0);
+                        if current > 3 {
+                            state.table_state.select(Some(current - 3));
+                        } else {
+                             state.table_state.select(Some(0));
+                        }
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -1661,6 +1750,7 @@ pub fn help_text(app: &App) -> &'static str {
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
             ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
             ViewMode::MRList => "j/k:nav │ Enter:diff │ a:approve(LGTM) │ m:accept+merge │ x:reject │ r:reload │ S:sync │ ?:help │ q:back",
+            ViewMode::Blame => "j/k:scroll │ m:toggle mode │ q:back",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",

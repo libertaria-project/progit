@@ -23,6 +23,7 @@ pub mod widget_settings;
 pub mod widget_status;
 mod widget_debug;
 mod widget_fuzzy_palette;
+pub mod widget_blame;
 
 // Re-export public API
 pub use app::{App, DragState, InputMode, ViewMode};
@@ -180,6 +181,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
             colors.accent().add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         ),
         ViewMode::Diff => (colors.dim(), colors.dim(), colors.dim(), colors.dim()),
+        ViewMode::Blame => (colors.dim(), colors.dim(), colors.dim(), colors.dim()),
     };
     
     // Settings style (highlighted if in settings mode)
@@ -241,6 +243,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
              if let Some(ref state) = app.diff_state {
                  areas.diff_file_list = crate::diff::render_diff(frame, inner, state);
              }
+             KanbanAreas::default()
+        }
+        ViewMode::Blame => {
+             crate::tui::widget_blame::render(frame, inner, app);
              KanbanAreas::default()
         }
     };

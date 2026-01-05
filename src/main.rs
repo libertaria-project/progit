@@ -730,6 +730,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                         tui::ViewMode::Kanban => app.kanban_selected_issue().map(|i| i.id.clone()),
                         tui::ViewMode::Diff => None,
                         tui::ViewMode::MRList => None,
+                        tui::ViewMode::Blame => None,
                     };
 
                     if let Some(id) = issue_id {

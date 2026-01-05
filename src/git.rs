@@ -5,6 +5,7 @@
 
 pub mod repository;
 pub mod widget_gitbar;
+pub mod blame;
 
 // Re-export public API
 pub use repository::{detect_repo, format_remote_url, refresh_repo, switch_branch, create_branch, delete_branch, list_remote_branches, create_remote_branch, get_origin_url, get_remote_url, parse_git_url, RemoteInfo, RepoInfo};
