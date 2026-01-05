@@ -3,7 +3,7 @@
 ProGit uses a **two-branch model** for pragmatic version control:
 
 ```
-feature/xyz → develop (active development)
+feature/xyz → branch/develop (active development)
               ↓
          (when stable)
               ↓
