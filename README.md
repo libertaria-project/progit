@@ -337,7 +337,17 @@ cargo test
 cargo fmt
 ```
 
-**License:** [EUPL-1.2](LICENCE) (Free as in Freedom).
+## ⚖️ Licensing: The Libertaria Model
+
+This project is governed by the **Libertaria License Suite**, enforcing total reciprocity for the core while enabling a flourishing ecosystem.
+
+| Component | License | Identifier | Principle |
+|-----------|---------|------------|-----------|
+| **ProGit Core** | Commonwealth License | **[LCL-1.0](LICENSE)** | **Strong Copyleft.** Service loophole closed. If you run it, you share it. |
+| **Plugin SDK** | Unbound License | **[LUL-1.0](LICENSE_SDK)** | **Permissive.** Build closed or open plugins. Zero friction adoption. |
+| **Enterprise** | Venture License | **[LVL-1.0](LICENSE_VENTURE)** | **Glass Box.** Closed source allowed, but build provenance is mandatory. |
+
+> *"Code for the common good, or not at all."*
 
 -----
 
