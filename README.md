@@ -337,17 +337,21 @@ cargo test
 cargo fmt
 ```
 
-## ⚖️ Licensing: The Libertaria Model
+## ⚖️ License: Libertaria Commonwealth (LCL-1.0)
 
-This project is governed by the **Libertaria License Suite**, enforcing total reciprocity for the core while enabling a flourishing ecosystem.
+**This software belongs to the tribe.** It is free to use, modify, and distribute, but you cannot privatize it.
 
-| Component | License | Identifier | Principle |
-|-----------|---------|------------|-----------|
-| **ProGit Core** | Commonwealth License | **[LCL-1.0](LICENSE)** | **Strong Copyleft.** Service loophole closed. If you run it, you share it. |
-| **Plugin SDK** | Unbound License | **[LUL-1.0](LICENSE_SDK)** | **Permissive.** Build closed or open plugins. Zero friction adoption. |
-| **Enterprise** | Venture License | **[LVL-1.0](LICENSE_VENTURE)** | **Glass Box.** Closed source allowed, but build provenance is mandatory. |
+We enforce **Total Reciprocity**:
+
+1.  **No Secrets:** If you modify this code, you must share your changes.
+2.  **No "Cloud" Loophole:** If you run this software as a Service (SaaS) or backend API, you **must** offer the source code to your users.
+3.  **Virality:** You cannot link this code into a closed-source application.
 
 > *"Code for the common good, or not at all."*
+
+For plugin developers: The [Plugin SDK](https://git.maiwald.work/SSSS/progit-plugin-sdk) is licensed under **LSL-1.0 (Sovereign)**, which allows you to build proprietary plugins.
+
+See the full [LICENSE](LICENSE) for legal text.
 
 -----
 
