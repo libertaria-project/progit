@@ -16,7 +16,7 @@ use ratatui::{
 
 /// Render the PO metrics bar at the top
 /// Returns empty rects for branch/remote areas (legacy compatibility)
-pub fn render(frame: &mut Frame, area: Rect, repo: Option<&RepoInfo>, colors: &ThemeColors, _dropdown_open: bool) -> (Rect, Rect) {
+pub fn render(frame: &mut Frame, area: Rect, _repo: Option<&RepoInfo>, colors: &ThemeColors, _dropdown_open: bool) -> (Rect, Rect) {
     render_pm_metrics_bar(frame, area, colors);
     (Rect::default(), Rect::default())
 }

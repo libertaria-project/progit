@@ -324,7 +324,7 @@ pub fn parse_git_url(url: &str) -> Option<(String, String, String)> {
 
 /// Check if current branch has unpushed commits
 pub fn has_unpushed_commits(path: &Path) -> Result<bool> {
-    let repo = Git2Repo::open(path)?;
+    let _repo = Git2Repo::open(path)?;
     if let Some(info) = detect_repo(path)? {
         Ok(info.ahead > 0)
     } else {
@@ -334,7 +334,7 @@ pub fn has_unpushed_commits(path: &Path) -> Result<bool> {
 
 /// Suggest a default target branch (usually main/master)
 pub fn suggest_target_branch(path: &Path) -> Result<String> {
-    let repo = Git2Repo::open(path)?;
+    let _repo = Git2Repo::open(path)?;
     
     // Try to find main or master
     for branch_name in &["main", "master", "develop"] {

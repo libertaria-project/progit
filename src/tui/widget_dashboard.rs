@@ -9,7 +9,7 @@ use ratatui::{
 
 pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let colors = app.theme.colors();
-    let engine = &app.theme_engine;
+    let _engine = &app.theme_engine;
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
