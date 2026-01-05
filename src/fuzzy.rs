@@ -12,7 +12,7 @@
 //! Target: <200ms to results, <3 keystrokes to execute
 
 use crate::issue::Issue;
-use std::cmp::Ordering;
+// No ordering needed
 
 /// Fuzzy search result
 #[derive(Debug, Clone)]

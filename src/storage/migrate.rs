@@ -5,7 +5,7 @@
 use crate::issue::Issue;
 use crate::storage::kdl;
 use crate::storage::engine::StorageEngine;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::fs;
 use std::path::Path;
 

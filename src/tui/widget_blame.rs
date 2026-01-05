@@ -1,13 +1,13 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
+    layout::{Constraint, Rect},
+    style::{Modifier, Style},
+    text::Span,
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame,
 };
-use crate::tui::app::{App, InputMode};
-use crate::tui::theme::ThemeColors;
-use crate::git::blame::{BlameInfo, BlameLine};
+use crate::tui::app::App;
+// ThemeColors unused here
+use crate::git::blame::BlameInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlameMode {

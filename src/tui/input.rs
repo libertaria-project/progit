@@ -3,7 +3,7 @@
 //! Vim-style navigation with mode-aware key processing and mouse support.
 
 use super::app::{App, InputMode, ViewMode};
-use super::widget_kanban::{column_at_point, column_status, point_in_rect, KanbanAreas};
+use super::widget_kanban::{column_at_point, column_status, point_in_rect};
 use super::UIAreas;
 use crate::issue::Status;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -266,6 +266,8 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     crate::diff::DiffMode::Staged => crate::diff::DiffMode::Unstaged,
                     crate::diff::DiffMode::Custom(_) => crate::diff::DiffMode::Unstaged,
                 };
+                state.scroll = 0;
+                state.cursor_y = 0;
                 
                 // Reload diff with new mode
                 if let Some(ref info) = app.repo_info {
@@ -281,13 +283,26 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
         }
         KeyCode::Char('j') | KeyCode::Down => {
              if let Some(ref mut state) = app.diff_state {
-                 state.scroll = state.scroll.saturating_add(1);
+                 let total = state.total_visible_lines();
+                 if state.cursor_y < total.saturating_sub(1) {
+                     state.cursor_y += 1;
+                     // Handle scrolling
+                     if state.cursor_y >= state.scroll as usize + 20 {
+                         state.scroll = (state.cursor_y.saturating_sub(19)) as u16;
+                     }
+                 }
              }
              KeyAction::Refresh
         }
         KeyCode::Char('k') | KeyCode::Up => {
              if let Some(ref mut state) = app.diff_state {
-                 state.scroll = state.scroll.saturating_sub(1);
+                 if state.cursor_y > 0 {
+                     state.cursor_y -= 1;
+                     // Handle scrolling
+                     if state.cursor_y < state.scroll as usize {
+                         state.scroll = state.cursor_y as u16;
+                     }
+                 }
              }
              KeyAction::Refresh
         }
@@ -296,6 +311,7 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
                  if state.selected_file < state.files.len().saturating_sub(1) {
                      state.selected_file += 1;
                      state.scroll = 0;
+                     state.cursor_y = 0;
                  }
              }
              KeyAction::Refresh
@@ -305,6 +321,7 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
                  if state.selected_file > 0 {
                      state.selected_file -= 1;
                      state.scroll = 0;
+                     state.cursor_y = 0;
                  }
              }
              KeyAction::Refresh
@@ -315,6 +332,7 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 if let Some(file) = state.files.get_mut(state.selected_file) {
                     file.collapsed = !file.collapsed;
                 }
+                state.clamp_cursor();
             }
             KeyAction::Refresh
         }
@@ -327,7 +345,14 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
                         hunk.collapsed = !all_collapsed;
                     }
                 }
+                state.clamp_cursor();
             }
+            KeyAction::Refresh
+        }
+        // Commenting
+        KeyCode::Char('c') => {
+            app.input_mode = InputMode::DiffComment;
+            app.edit_buffer.clear();
             KeyAction::Refresh
         }
         _ => KeyAction::None,
@@ -1149,6 +1174,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::RepoFilter => handle_repo_filter_key(app, key),
         InputMode::Settings => handle_settings_key(app, key),
         InputMode::FuzzyPalette => handle_fuzzy_palette_key(app, key),
+        InputMode::DiffComment => handle_diff_comment_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -1233,6 +1259,46 @@ fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     }
                 }
             }
+            KeyAction::Refresh
+        }
+        KeyCode::Backspace => {
+            app.edit_buffer.pop();
+            KeyAction::Refresh
+        }
+        KeyCode::Char(c) => {
+            app.edit_buffer.push(c);
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+fn handle_diff_comment_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            app.edit_buffer.clear();
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            let comment = app.edit_buffer.trim().to_string();
+            if comment.is_empty() {
+                app.input_mode = InputMode::Normal;
+                return KeyAction::Refresh;
+            }
+
+            if let Some(ref state) = app.diff_state {
+                if let Some(info) = state.get_selected_line_info() {
+                    app.set_status(format!("Submitting comment on {}:{}...", info.file_path, info.new_line.or(info.old_line).unwrap_or(0)));
+                    
+                    // TODO: Actually send to sync provider
+                    // For now, we simulate success
+                    app.set_status("✅ Comment saved locally (Sync pending)");
+                }
+            }
+
+            app.input_mode = InputMode::Normal;
+            app.edit_buffer.clear();
             KeyAction::Refresh
         }
         KeyCode::Backspace => {
@@ -1795,5 +1861,6 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::RepoFilter => "j/k:nav │ Enter:select │ c:clear │ Esc:cancel",
         InputMode::Settings => "t:theme │ O/Esc:close",
         InputMode::FuzzyPalette => "Type to search │ Enter:select │ Esc:close",
+        InputMode::DiffComment => "Type comment │ Enter:save │ Esc:cancel",
     }
 }

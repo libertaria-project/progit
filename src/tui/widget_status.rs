@@ -3,7 +3,7 @@
 //! Bottom bar showing git repo info, system metrics, and search/command input.
 
 use crate::tui::app::{App, InputMode};
-use crate::tui::theme::ThemeColors;
+// ThemeColors unused here
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,

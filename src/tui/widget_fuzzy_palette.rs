@@ -5,12 +5,12 @@
 //!
 //! The "Sublime Text Moment" - Ctrl+P to fuzzy search everything
 
-use crate::fuzzy::{FuzzyMatch, FuzzySearcher};
+// FuzzyMatch/FuzzySearcher unused here
 use crate::tui::app::App;
 use crate::tui::theme::ThemeColors;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,

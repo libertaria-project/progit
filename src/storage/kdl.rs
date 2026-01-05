@@ -5,7 +5,7 @@
 use crate::issue::{Effort, Issue, Status};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
+use kdl::{KdlDocument, KdlNode};
 use std::fs;
 use std::path::Path;
 

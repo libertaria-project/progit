@@ -3,7 +3,7 @@
 //! Configuration panel for theme, sync, and other options.
 
 use crate::tui::app::App;
-use crate::tui::theme::{Theme, ThemeColors};
+use crate::tui::theme::Theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,

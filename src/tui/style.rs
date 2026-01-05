@@ -6,7 +6,7 @@
 use ratatui::style::{Color, Modifier, Style};
 use std::collections::HashMap;
 use crate::storage::config::StyleConfig;
-use crate::tui::theme::ThemeColors;
+// ThemeColors unused
 
 /// Manages application styles with configuration overrides
 pub struct ThemeEngine {

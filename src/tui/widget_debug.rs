@@ -7,7 +7,7 @@ use ratatui::{
 use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 
 use crate::tui::app::App;
-use crate::tui::theme::ThemeColors;
+// ThemeColors unused here
 
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let colors = app.theme.colors();

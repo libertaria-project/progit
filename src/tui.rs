@@ -35,9 +35,9 @@ pub use widget_kanban::KanbanAreas;
 use crate::git::render_remote_dropdown;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, BorderType},
+    widgets::{Block, Borders, BorderType, Paragraph},
     Frame,
 };
 
@@ -317,7 +317,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Render detail pane overlay if open
     if matches!(app.input_mode, InputMode::DetailView | InputMode::DetailEdit) {
         if let Some(issue) = app.detail_issue() {
-            let edit_field = EditField::from_index(app.detail_field);
+            let edit_field = widget_detail::EditField::from_index(app.detail_field);
             let (detail_area, close_btn) = widget_detail::render(frame, issue, edit_field, &app.edit_buffer, &colors);
             areas.detail_pane = Some(detail_area);
             areas.detail_close_btn = Some(close_btn);
@@ -347,6 +347,43 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Render fuzzy command palette overlay if open (Ctrl+P)
     if app.input_mode == InputMode::FuzzyPalette {
         widget_fuzzy_palette::render(frame, app, &colors);
+    }
+
+    // Render Comment Input Box if open
+    if app.input_mode == InputMode::DiffComment {
+        let area = centered_rect(size, 60, 20);
+        frame.render_widget(ratatui::widgets::Clear, area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Add Code Comment (Esc to cancel, Enter to save) ")
+            .border_style(colors.accent());
+        
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        
+        // Show current line info summary
+        let mut lines = Vec::new();
+        if let Some(ref state) = app.diff_state {
+            if let Some(info) = state.get_selected_line_info() {
+                lines.push(Line::from(vec![
+                    Span::styled("File: ", colors.dim()),
+                    Span::styled(info.file_path.clone(), colors.normal().add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" :{}", info.new_line.or(info.old_line).unwrap_or(0)), colors.dim()),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::styled("Text: ", colors.dim()),
+                    Span::styled(info.content.trim().to_string(), colors.dim().add_modifier(Modifier::ITALIC)),
+                ]));
+                lines.push(Line::raw(""));
+            }
+        }
+        
+        lines.push(Line::from(Span::styled(&app.edit_buffer, colors.normal())));
+        // Cursor
+        lines.push(Line::from(Span::styled("█", colors.accent())));
+
+        let p = Paragraph::new(lines).wrap(ratatui::widgets::Wrap { trim: false });
+        frame.render_widget(p, inner);
     }
     
     // Render panopticum log viewer modal if open

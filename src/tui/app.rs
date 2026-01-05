@@ -44,6 +44,7 @@ pub enum InputMode {
     RepoFilter,      // Filtering by repository
     Settings,        // Settings pane
     FuzzyPalette,    // Fuzzy command palette (Ctrl+P)
+    DiffComment,     // Adding a comment to a diff line
 }
 
 /// Mouse drag state

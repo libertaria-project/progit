@@ -8,9 +8,9 @@
 use crate::tui::app::App;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, BorderType, Clear, Paragraph, Scrollbar, ScrollbarOrientation},
+    widgets::{Block, Borders, BorderType, Clear, Paragraph},
     Frame,
 };
 

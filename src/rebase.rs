@@ -8,13 +8,13 @@
 
 use anyhow::{Context, Result};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
@@ -22,7 +22,7 @@ use ratatui::{
 };
 use std::fs;
 use std::io;
-use std::path::Path;
+// Path unused
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Action {

@@ -170,6 +170,7 @@ prog  # Creates .project/ (tracked) and .progit/ (ignored) automatically
   - `J/K` - Previous/Next file in diff
   - `Space` - Toggle file collapsing
   - `h` - Toggle hunk folding
+  - `c` - Add comment to selected line
   - `Tab` - Toggle Staged/Unstaged mode
   - `q` / `Esc` - Close Diff view
 
@@ -285,8 +286,8 @@ src/
 ### **Phase 2: Code Review Liberation** 🚧 IN PROGRESS
   - [x] Git Blame View (Dual-perspective authorship)
   - [x] Staged/Unstaged Diff Viewer (with hunk folding)
-  - [ ] MR list view (see all open MRs)
-  - [ ] Comment on code lines (without browser)
+  - [x] MR list view (see all open MRs)
+  - [x] Comment on code lines (TUI interface ready)
   - [ ] Approve/reject MRs from terminal
   - [ ] Multi-provider sync (GitLab + Forgejo simultaneously)
 

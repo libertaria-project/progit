@@ -2,8 +2,8 @@ use crate::tui::app::App;
 use crate::mr::MRState;
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
+    style::Modifier,
+// Line/Span unused
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame,
 };

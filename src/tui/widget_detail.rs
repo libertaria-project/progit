@@ -3,7 +3,7 @@
 //! Full view of a single issue for viewing/editing.
 
 use crate::issue::{Effort, Issue, Status};
-use crate::tui::app::{App, InputMode};
+// App/InputMode unused here
 use crate::tui::theme::ThemeColors;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},

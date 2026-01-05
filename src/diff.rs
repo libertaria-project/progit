@@ -56,6 +56,14 @@ pub struct AlignedLine {
 }
 
 #[derive(Debug, Clone)]
+pub struct DiffLineInfo {
+    pub file_path: String,
+    pub old_line: Option<usize>,
+    pub new_line: Option<usize>,
+    pub content: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct Hunk {
     pub header: String,
     pub lines: Vec<AlignedLine>,
@@ -76,6 +84,7 @@ pub struct FileDiff {
 pub struct DiffState {
     pub files: Vec<FileDiff>,
     pub selected_file: usize,
+    pub cursor_y: usize, // New: line cursor inside current file
     pub scroll: u16,
     pub mode: DiffMode,
 }
@@ -89,6 +98,7 @@ impl DiffState {
         Self {
             files: Vec::new(),
             selected_file: 0,
+            cursor_y: 0,
             scroll: 0,
             mode,
         }
@@ -122,6 +132,57 @@ impl DiffState {
         self.parse_git2_diff(&diff)?;
         self.align_lines();
         Ok(())
+    }
+
+    pub fn total_visible_lines(&self) -> usize {
+        if let Some(file) = self.files.get(self.selected_file) {
+            if file.collapsed {
+                return 0;
+            }
+            file.hunks.iter()
+                .filter(|h| !h.collapsed)
+                .map(|h| h.lines.len())
+                .sum()
+        } else {
+            0
+        }
+    }
+
+    pub fn clamp_cursor(&mut self) {
+        let total = self.total_visible_lines();
+        if self.cursor_y >= total {
+            self.cursor_y = total.saturating_sub(1);
+        }
+    }
+
+    pub fn get_selected_line_info(&self) -> Option<DiffLineInfo> {
+        let file = self.files.get(self.selected_file)?;
+        if file.collapsed { return None; }
+
+        let mut current_idx = 0;
+        for hunk in &file.hunks {
+            if hunk.collapsed { continue; }
+            for line in &hunk.lines {
+                if current_idx == self.cursor_y {
+                    // Prefer right line (new) if available, otherwise left (old)
+                    let (old_line, new_line, content) = match (&line.left, &line.right) {
+                        (Some(l), Some(r)) => (l.line_number, r.line_number, r.content.clone()),
+                        (None, Some(r)) => (None, r.line_number, r.content.clone()),
+                        (Some(l), None) => (l.line_number, None, l.content.clone()),
+                        (None, None) => (None, None, String::new()),
+                    };
+                    
+                    return Some(DiffLineInfo {
+                        file_path: file.path.clone(),
+                        old_line,
+                        new_line,
+                        content,
+                    });
+                }
+                current_idx += 1;
+            }
+        }
+        None
     }
 
     fn parse_git2_diff(&mut self, diff: &git2::Diff) -> Result<()> {
@@ -326,12 +387,15 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
 
         let mut highlighter = HighlightLines::new(syntax, theme);
 
+        let mut current_line_idx = 0;
         // Iterate over all hunks and their lines
         for hunk in &file.hunks {
             if !hunk.collapsed {
                 for line in &hunk.lines {
-                    left_lines.push(render_diff_line(&line.left, &mut highlighter));
-                    right_lines.push(render_diff_line(&line.right, &mut highlighter));
+                    let is_selected = current_line_idx == state.cursor_y;
+                    left_lines.push(render_diff_line(&line.left, &mut highlighter, is_selected));
+                    right_lines.push(render_diff_line(&line.right, &mut highlighter, is_selected));
+                    current_line_idx += 1;
                 }
             }
         }
@@ -349,15 +413,19 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
     Some(chunks[0]) // Return file list area
 }
 
-fn render_diff_line(line: &Option<DiffLine>, highlighter: &mut HighlightLines) -> Line<'static> {
+fn render_diff_line(line: &Option<DiffLine>, highlighter: &mut HighlightLines, selected: bool) -> Line<'static> {
     match line {
         Some(l) => {
-            let style = match l.line_type {
+            let mut style = match l.line_type {
                 DiffLineType::Add => Style::default().bg(Color::Rgb(0, 50, 0)),
                 DiffLineType::Delete => Style::default().bg(Color::Rgb(50, 0, 0)),
                 DiffLineType::HunkHeader => Style::default().fg(Color::Cyan),
                 _ => Style::default(),
             };
+
+            if selected {
+                style = style.bg(Color::Rgb(60, 60, 60));
+            }
 
             let line_num = match l.line_number {
                 Some(n) => format!("{:4} ", n),
