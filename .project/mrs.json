@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "id": "2e2ace76-eabf-4d2f-b573-1ffc796ea1f2",
+    "remote_id": 2,
+    "source_branch": "develop",
+    "target_branch": "main",
+    "title": "develop",
+    "description": "",
+    "state": "open",
+    "author": "markus.maiwald",
+    "assignees": [],
+    "labels": [],
+    "linked_issues": [],
+    "web_url": "https://gitlab.dlabs.hu/markus.maiwald/progit-test/-/merge_requests/2",
+    "created": "2025-12-11T13:14:54.157Z",
+    "updated": "2025-12-11T13:14:55.346Z",
+    "merged_at": null,
+    "is_draft": false,
+    "approvals": 0,
+    "upvotes": 0,
+    "downvotes": 0
+  },
+  {
+    "id": "02b6bab2-19e1-40d8-bd2d-ab4839424b57",
+    "remote_id": 1,
+    "source_branch": "feature/better-colors",
+    "target_branch": "main",
+    "title": "better colors",
+    "description": "",
+    "state": "open",
+    "author": "markus.maiwald",
+    "assignees": [],
+    "labels": [],
+    "linked_issues": [],
+    "web_url": "https://gitlab.dlabs.hu/markus.maiwald/progit-test/-/merge_requests/1",
+    "created": "2025-12-10T12:47:08.417Z",
+    "updated": "2025-12-10T12:47:11.109Z",
+    "merged_at": null,
+    "is_draft": false,
+    "approvals": 0,
+    "upvotes": 0,
+    "downvotes": 0
+  }
+]

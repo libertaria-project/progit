@@ -334,7 +334,7 @@ pub fn has_unpushed_commits(path: &Path) -> Result<bool> {
 
 /// Suggest a default target branch (usually main/master)
 pub fn suggest_target_branch(path: &Path) -> Result<String> {
-    let _repo = Git2Repo::open(path)?;
+    let repo = Git2Repo::open(path)?;
     
     // Try to find main or master
     for branch_name in &["main", "master", "develop"] {

@@ -41,28 +41,97 @@ pub enum KeyAction {
 
 /// Handle a key event in normal mode
 pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> KeyAction {
-    match app.view_mode {
+    let action = match app.view_mode {
         ViewMode::Dashboard => handle_dashboard_key(app, key),
         ViewMode::List => handle_list_key(app, key),
         ViewMode::Kanban => handle_kanban_key(app, key),
         ViewMode::Diff => handle_diff_key(app, key),
         ViewMode::MRList => handle_mr_list_key(app, key),
         ViewMode::Blame => handle_blame_key(app, key),
+    };
+
+    if action != KeyAction::None {
+        return action;
+    }
+
+    // Global Fallback Keys
+    match key.code {
+        // Search
+        KeyCode::Char('/') => {
+            app.input_mode = InputMode::Search;
+            app.search_query.clear();
+            KeyAction::Refresh
+        }
+
+        // Command Palette
+        KeyCode::Char(':') => {
+            app.input_mode = InputMode::Command;
+            app.command_input.clear();
+            KeyAction::Refresh
+        }
+
+        // Fuzzy Palette (Ctrl+P)
+        KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.input_mode = InputMode::FuzzyPalette;
+            app.edit_buffer.clear();
+            app.refresh_fuzzy_palette();
+            KeyAction::Refresh
+        }
+
+        // View toggles
+        KeyCode::Tab => {
+            app.toggle_view();
+            KeyAction::Refresh
+        }
+
+        // Global Actions
+        KeyCode::Char('S') => KeyAction::Sync,
+        KeyCode::Char('q') => KeyAction::Quit,
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => KeyAction::Quit,
+        KeyCode::Char('O') => {
+            app.input_mode = InputMode::Settings;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('t') => {
+            app.cycle_theme();
+            KeyAction::SaveTheme
+        }
+        KeyCode::Char('?') => {
+            app.set_status(help_text(app));
+            KeyAction::Refresh
+        }
+
+        // Git dropdowns
+        KeyCode::Char('r') => {
+            if app.repo_info.is_some() {
+                app.input_mode = InputMode::RemoteDropdown;
+                KeyAction::Refresh
+            } else {
+                KeyAction::None
+            }
+        }
+        KeyCode::Char('b') => {
+            if app.repo_info.is_some() {
+                app.input_mode = InputMode::BranchDropdown;
+                KeyAction::Refresh
+            } else {
+                KeyAction::None
+            }
+        }
+        KeyCode::Char('f') => {
+            if !app.available_repos.is_empty() {
+                app.input_mode = InputMode::RepoFilter;
+                KeyAction::Refresh
+            } else {
+                KeyAction::None
+            }
+        }
+        _ => KeyAction::None,
     }
 }
 
 fn handle_dashboard_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match key.code {
-        KeyCode::Tab => {
-            app.toggle_view();
-            KeyAction::Refresh
-        }
-        KeyCode::Char('S') => KeyAction::Sync,
-        KeyCode::Char('O') => {
-            app.input_mode = InputMode::Settings;
-            KeyAction::Refresh
-        }
-        KeyCode::Char('q') => KeyAction::Quit,
         KeyCode::Char('d') => {
             // Quick Diff: Show dirty changes
             app.set_status("Loading local changes...");
@@ -142,28 +211,10 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             KeyAction::Refresh
         }
         
-        // Common keybindings
-        KeyCode::Char('O') => {
-            app.input_mode = InputMode::Settings;
-            KeyAction::Refresh
-        }
-        KeyCode::Char('b') => {
-            if app.repo_info.is_some() {
-                app.input_mode = InputMode::BranchDropdown;
-                KeyAction::Refresh
-            } else {
-                KeyAction::None
-            }
-        }
-        KeyCode::Char('S') => KeyAction::Sync,
         KeyCode::Char('?') => {
             use crate::tui::input::help_text;
             app.set_status(help_text(app));
             KeyAction::Refresh
-        }
-        KeyCode::Char('t') => {
-            app.cycle_theme();
-            KeyAction::SaveTheme
         }
         
         // MR-specific actions
@@ -472,74 +523,6 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
         }
         KeyCode::Char('n') => KeyAction::CreateIssue(None),
-        KeyCode::Char('S') => KeyAction::Sync,
-        KeyCode::Char('D') => {
-            app.input_mode = InputMode::Confirm;
-            app.set_status("Delete issue? (y/n)");
-            KeyAction::Refresh
-        }
-
-        // View toggles
-        KeyCode::Tab => {
-            app.toggle_view();
-            KeyAction::Refresh
-        }
-        KeyCode::Char('t') => {
-            app.cycle_theme();
-            KeyAction::SaveTheme
-        }
-
-        // Search
-        KeyCode::Char('/') => {
-            app.input_mode = InputMode::Search;
-            app.search_query.clear();
-            KeyAction::Refresh
-        }
-
-        // Command Palette
-        KeyCode::Char(':') => {
-            app.input_mode = InputMode::Command;
-            app.command_input.clear();
-            KeyAction::Refresh
-        }
-
-        // Git remotes dropdown
-        KeyCode::Char('r') => {
-            if app.repo_info.is_some() {
-                app.input_mode = InputMode::RemoteDropdown;
-                KeyAction::Refresh
-            } else {
-                KeyAction::None
-            }
-        }
-
-        // Git branch dropdown
-        KeyCode::Char('b') => {
-            if app.repo_info.is_some() {
-                app.input_mode = InputMode::BranchDropdown;
-                KeyAction::Refresh
-            } else {
-                KeyAction::None
-            }
-        }
-        
-        // Help
-        KeyCode::Char('?') => {
-            use crate::tui::widget_status::help_text;
-            app.set_status(help_text(app));
-            KeyAction::Refresh
-        }
-        
-        // Debug Console
-        KeyCode::F(8) => KeyAction::ToggleDebug,
-        
-        // Settings pane
-        KeyCode::Char('O') => {
-            app.input_mode = InputMode::Settings;
-            KeyAction::Refresh
-        }
-
-        // Create Merge Request
         KeyCode::Char('M') => {
             // Check for git repo first
             if app.repo_info.is_none() {
@@ -701,66 +684,6 @@ fn handle_kanban_key(app: &mut App, key: KeyEvent) -> KeyAction {
             app.set_status("Delete issue? (y/n)");
             KeyAction::Refresh
         }
-
-        // View toggles
-        KeyCode::Tab => {
-            app.toggle_view();
-            KeyAction::Refresh
-        }
-        KeyCode::Char('t') => {
-            app.cycle_theme();
-            KeyAction::SaveTheme
-        }
-
-        // Git dropdown
-        KeyCode::Char('r') => {
-            if app.repo_info.is_some() {
-                app.input_mode = InputMode::RemoteDropdown;
-                KeyAction::Refresh
-            } else {
-                KeyAction::None
-            }
-        }
-
-        // Git branch dropdown
-        KeyCode::Char('b') => {
-            if app.repo_info.is_some() {
-                app.input_mode = InputMode::BranchDropdown;
-                KeyAction::Refresh
-            } else {
-                KeyAction::None
-            }
-        }
-
-        // Repository filter dropdown
-        KeyCode::Char('f') => {
-            if !app.available_repos.is_empty() {
-                app.input_mode = InputMode::RepoFilter;
-                KeyAction::Refresh
-            } else {
-                KeyAction::None
-            }
-        }
-        
-        // Command Palette
-        KeyCode::Char(':') => {
-            app.input_mode = InputMode::Command;
-            app.command_input.clear();
-            KeyAction::Refresh
-        }
-
-        // Fuzzy Command Palette (Ctrl+P)
-        KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.input_mode = InputMode::FuzzyPalette;
-            app.fuzzy_query.clear();
-            app.fuzzy_selected = 0;
-            KeyAction::Refresh
-        }
-
-        // Quit
-        KeyCode::Char('q') => KeyAction::Quit,
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => KeyAction::Quit,
-
         _ => KeyAction::None,
     }
 }
