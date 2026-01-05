@@ -69,8 +69,12 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
             ])
         },
         "diff" => {
-            let reference = if parts.len() > 1 { parts[1] } else { "" };
-            let mut state = crate::diff::DiffState::new(reference.to_string());
+            let mode = if parts.len() > 1 { 
+                crate::diff::DiffMode::Custom(parts[1].to_string()) 
+            } else { 
+                crate::diff::DiffMode::Unstaged 
+            };
+            let mut state = crate::diff::DiffState::new_with_mode(mode);
             match state.load(&app.repo_path) {
                 Ok(_) => {
                     if state.files.is_empty() {

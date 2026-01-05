@@ -64,7 +64,9 @@ repos {
   - 🎯 **Full Kanban Board** (drag-and-drop, visual status)
   - 📊 **Time Tracking** (due dates, effort estimates, velocity)
   - 🔀 **Browser-Free MR Creation** (press `M`, done)
-  - 🔍 **Git Blame View** (understand code authorship with dual perspectives)
+  - 🔍 **Git Blame View** (dual-perspective authorship attribution)
+  - 🌓 **Staged/Unstaged Diffs** (side-by-side view with `Tab` toggle)
+  - 📐 **Hunk Folding** (collapse/expand diff hunks with `h`)
   - 📦 **Multi-Repo Management** (one TUI, infinite repos)
   - 🔄 **Bidirectional Sync** (GitLab, Forgejo, GitHub coming soon)
   - ⚡ **Blazing Fast TUI** (Pure Rust, 5MB binary, no Electron bloat)
@@ -161,6 +163,15 @@ prog  # Creates .project/ (tracked) and .progit/ (ignored) automatically
   - `j/k` - Scroll through blame lines
   - `m` - Toggle Manager/Lead Dev mode
   - `q` - Close Blame view
+
+### Diff View
+
+  - `j/k` - Scroll diff lines
+  - `J/K` - Previous/Next file in diff
+  - `Space` - Toggle file collapsing
+  - `h` - Toggle hunk folding
+  - `Tab` - Toggle Staged/Unstaged mode
+  - `q` / `Esc` - Close Diff view
 
 -----
 
@@ -272,9 +283,9 @@ src/
   - [x] Beautiful themes (Vibe, Nord, Gruvbox, etc.)
 
 ### **Phase 2: Code Review Liberation** 🚧 IN PROGRESS
-  - [x] Git Blame View (understand code authorship)
+  - [x] Git Blame View (Dual-perspective authorship)
+  - [x] Staged/Unstaged Diff Viewer (with hunk folding)
   - [ ] MR list view (see all open MRs)
-  - [ ] Diff viewer in TUI
   - [ ] Comment on code lines (without browser)
   - [ ] Approve/reject MRs from terminal
   - [ ] Multi-provider sync (GitLab + Forgejo simultaneously)

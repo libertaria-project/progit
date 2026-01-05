@@ -10,10 +10,28 @@ use syntect::parsing::SyntaxSet;
 use syntect::highlighting::{ThemeSet, Style as SyntectStyle};
 use syntect::easy::HighlightLines;
 use std::path::{Path};
+use std::cell::RefCell;
 use once_cell::sync::Lazy;
 
 static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| SyntaxSet::load_defaults_newlines());
 static THEME_SET: Lazy<ThemeSet> = Lazy::new(|| ThemeSet::load_defaults());
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DiffMode {
+    Unstaged,  // Working directory vs index (git diff)
+    Staged,    // Index vs HEAD (git diff --cached)
+    Custom(String), // Custom comparison (e.g., branch vs HEAD)
+}
+
+impl DiffMode {
+    pub fn as_str(&self) -> &str {
+        match self {
+            DiffMode::Unstaged => "Unstaged",
+            DiffMode::Staged => "Staged",
+            DiffMode::Custom(ref s) => s,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiffLineType {
@@ -38,13 +56,20 @@ pub struct AlignedLine {
 }
 
 #[derive(Debug, Clone)]
+pub struct Hunk {
+    pub header: String,
+    pub lines: Vec<AlignedLine>,
+    pub collapsed: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct FileDiff {
     pub path: String,
     pub is_binary: bool,
-    pub lines: Vec<AlignedLine>,
+    pub hunks: Vec<Hunk>, // Changed from lines to hunks
     pub additions: usize,
     pub deletions: usize,
-    pub collapsed: bool, // Added field
+    pub collapsed: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -52,18 +77,23 @@ pub struct DiffState {
     pub files: Vec<FileDiff>,
     pub selected_file: usize,
     pub scroll: u16,
-    pub reference: String,
+    pub mode: DiffMode,
 }
 
 impl DiffState {
-    pub fn new(reference: String) -> Self {
+    pub fn new() -> Self {
+        Self::new_with_mode(DiffMode::Unstaged)
+    }
+
+    pub fn new_with_mode(mode: DiffMode) -> Self {
         Self {
             files: Vec::new(),
             selected_file: 0,
             scroll: 0,
-            reference,
+            mode,
         }
     }
+
 
     pub fn load(&mut self, repo_root: &Path) -> Result<()> {
         let repo = Repository::open(repo_root).context("Failed to open repository")?;
@@ -71,12 +101,22 @@ impl DiffState {
         opts.context_lines(3);
         opts.interhunk_lines(1);
 
-        let diff = if self.reference.is_empty() {
-            repo.diff_index_to_workdir(None, Some(&mut opts))?
-        } else {
-            let obj = repo.revparse_single(&self.reference)?;
-            let tree = obj.as_tree().ok_or_else(|| anyhow!("Reference is not a tree"))?;
-            repo.diff_tree_to_workdir_with_index(Some(&tree), Some(&mut opts))?
+        let diff = match &self.mode {
+            DiffMode::Unstaged => {
+                // Working directory vs index
+                repo.diff_index_to_workdir(None, Some(&mut opts))?
+            }
+            DiffMode::Staged => {
+                // Index vs HEAD (staged changes)
+                let head = repo.head()?.peel_to_tree()?;
+                let index = repo.index()?;
+                repo.diff_tree_to_index(Some(&head), Some(&index), Some(&mut opts))?
+            }
+            DiffMode::Custom(ref_name) => {
+                let obj = repo.revparse_single(ref_name)?;
+                let tree = obj.as_tree().ok_or_else(|| anyhow!("Reference is not a tree"))?;
+                repo.diff_tree_to_workdir_with_index(Some(&tree), Some(&mut opts))?
+            }
         };
 
         self.parse_git2_diff(&diff)?;
@@ -87,34 +127,57 @@ impl DiffState {
     fn parse_git2_diff(&mut self, diff: &git2::Diff) -> Result<()> {
         self.files.clear();
         
+        // Temporary struct for parsing
+        struct TempFile {
+            path: String,
+            is_binary: bool,
+            hunks: Vec<Hunk>,
+            additions: usize,
+            deletions: usize,
+        }
+        
         // Use a temporary vector to avoid borrow checker issues with closures
-        let mut file_diffs: Vec<FileDiff> = Vec::new();
-        
-        // We'll iterate manually or use print/print_callback if foreach is too troublesome
-        // But Diff::foreach is designed for this. We just need to handle state correctly.
-        // We can use RefCell for the files vector to allow interior mutability
-        
-        use std::cell::RefCell;
-        let files_cell = RefCell::new(&mut file_diffs);
+        let mut temp_files: Vec<TempFile> = Vec::new();
+        let files_cell = RefCell::new(&mut temp_files);
         
         diff.foreach(
             &mut |delta, _| {
                 let path = delta.new_file().path().and_then(|p| p.to_str()).unwrap_or("unknown").to_string();
-                files_cell.borrow_mut().push(FileDiff {
+                files_cell.borrow_mut().push(TempFile {
                     path,
                     is_binary: delta.flags().contains(git2::DiffFlags::BINARY),
-                    lines: Vec::new(),
+                    hunks: Vec::new(),
                     additions: 0,
                     deletions: 0,
-                    collapsed: false,
                 });
                 true
             },
             None,
-            None,
+            Some(&mut |_, hunk| {
+                let mut files = files_cell.borrow_mut();
+                if let Some(file) = files.last_mut() {
+                    let header = String::from_utf8_lossy(hunk.header()).to_string();
+                    file.hunks.push(Hunk {
+                        header,
+                        lines: Vec::new(),
+                        collapsed: false,
+                    });
+                }
+                true
+            }),
             Some(&mut |_, _, line| {
                 let mut files = files_cell.borrow_mut();
                 if let Some(file) = files.last_mut() {
+                    if file.hunks.is_empty() {
+                        // Fallback: create a dummy hunk if none exists
+                        file.hunks.push(Hunk {
+                            header: String::from("@@"),
+                            lines: Vec::new(),
+                            collapsed: false,
+                        });
+                    }
+
+                    let hunk = file.hunks.last_mut().unwrap();
                     let content = String::from_utf8_lossy(line.content()).to_string();
                     let (line_type, left, right) = match line.origin() {
                         '+' => {
@@ -138,13 +201,13 @@ impl DiffState {
 
                     match line_type {
                         DiffLineType::Add => {
-                            file.lines.push(AlignedLine { left: None, right: Some(diff_line) });
+                            hunk.lines.push(AlignedLine { left: None, right: Some(diff_line) });
                         },
                         DiffLineType::Delete => {
-                            file.lines.push(AlignedLine { left: Some(diff_line), right: None });
+                            hunk.lines.push(AlignedLine { left: Some(diff_line), right: None });
                         },
                         _ => {
-                            file.lines.push(AlignedLine { left: Some(diff_line.clone()), right: Some(diff_line) });
+                            hunk.lines.push(AlignedLine { left: Some(diff_line.clone()), right: Some(diff_line) });
                         }
                     }
                 }
@@ -152,17 +215,30 @@ impl DiffState {
             }),
         )?;
 
-        self.files = file_diffs;
+        // Convert temp files to FileDiff
+        self.files = temp_files.into_iter().map(|temp| FileDiff {
+            path: temp.path,
+            is_binary: temp.is_binary,
+            hunks: temp.hunks,
+            additions: temp.additions,
+            deletions: temp.deletions,
+            collapsed: false,
+        }).collect();
+        
         Ok(())
     }
 
+
+
+
     pub fn align_lines(&mut self) {
         for file in &mut self.files {
-            let mut aligned = Vec::new();
-            let mut left_buffer = Vec::new();
-            let mut right_buffer = Vec::new();
+            for hunk in &mut file.hunks {
+                let mut aligned = Vec::new();
+                let mut left_buffer = Vec::new();
+                let mut right_buffer = Vec::new();
 
-            let lines = std::mem::take(&mut file.lines);
+                let lines = std::mem::take(&mut hunk.lines);
             for al in lines {
                 match (al.left, al.right) {
                     (Some(l), None) => left_buffer.push(l),
@@ -174,7 +250,8 @@ impl DiffState {
                 }
             }
             Self::flush_buffers_static(&mut aligned, &mut left_buffer, &mut right_buffer);
-            file.lines = aligned;
+                hunk.lines = aligned;
+            }
         }
     }
 
@@ -197,9 +274,10 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
     use ratatui::layout::{Layout, Constraint, Direction};
 
     if state.files.is_empty() {
+        let title = format!(" Diff ({}) - No Changes ", state.mode.as_str());
         f.render_widget(
             Paragraph::new("No changes detected.")
-                .block(Block::default().borders(Borders::ALL).title(" Diff ")),
+                .block(Block::default().borders(Borders::ALL).title(title)),
             area
         );
         return None;
@@ -220,8 +298,9 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
         ListItem::new(format!("{} {} (+{}/-{})", icon, file.path, file.additions, file.deletions)).style(style)
     }).collect();
 
+    let file_title = format!(" Files ({}) ", state.mode.as_str());
     let file_list = List::new(files)
-        .block(Block::default().borders(Borders::ALL).title(" Files "));
+        .block(Block::default().borders(Borders::ALL).title(file_title));
     f.render_widget(file_list, chunks[0]);
 
     if let Some(file) = state.files.get(state.selected_file) {
@@ -247,9 +326,14 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
 
         let mut highlighter = HighlightLines::new(syntax, theme);
 
-        for line in &file.lines {
-            left_lines.push(render_diff_line(&line.left, &mut highlighter));
-            right_lines.push(render_diff_line(&line.right, &mut highlighter));
+        // Iterate over all hunks and their lines
+        for hunk in &file.hunks {
+            if !hunk.collapsed {
+                for line in &hunk.lines {
+                    left_lines.push(render_diff_line(&line.left, &mut highlighter));
+                    right_lines.push(render_diff_line(&line.right, &mut highlighter));
+                }
+            }
         }
 
         let left_para = Paragraph::new(left_lines)

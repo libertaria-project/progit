@@ -66,7 +66,7 @@ fn handle_dashboard_key(app: &mut App, key: KeyEvent) -> KeyAction {
         KeyCode::Char('d') => {
             // Quick Diff: Show dirty changes
             app.set_status("Loading local changes...");
-            let mut state = crate::diff::DiffState::new(String::new());
+            let mut state = crate::diff::DiffState::new_with_mode(crate::diff::DiffMode::Unstaged);
              match state.load(&app.repo_path) {
                 Ok(_) => {
                     app.diff_state = Some(state);
@@ -117,7 +117,7 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 let diff_ref = format!("{}...{}", mr.target_branch, mr.source_branch);
                 app.set_status(format!("Loading diff for {}...", mr.source_branch));
                 
-                let mut state = crate::diff::DiffState::new(diff_ref.clone());
+                let mut state = crate::diff::DiffState::new_with_mode(crate::diff::DiffMode::Custom(diff_ref.clone()));
                 match state.load(&app.repo_path) {
                     Ok(_) => {
                         app.diff_state = Some(state);
@@ -257,6 +257,23 @@ fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
 /// Handle keys in diff view
 fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match key.code {
+        // Tab: Toggle between Staged and Unstaged
+        KeyCode::Tab => {
+            if let Some(ref mut state) = app.diff_state {
+                // Toggle mode
+                state.mode = match state.mode {
+                    crate::diff::DiffMode::Unstaged => crate::diff::DiffMode::Staged,
+                    crate::diff::DiffMode::Staged => crate::diff::DiffMode::Unstaged,
+                    crate::diff::DiffMode::Custom(_) => crate::diff::DiffMode::Unstaged,
+                };
+                
+                // Reload diff with new mode
+                if let Some(ref info) = app.repo_info {
+                    let _ = state.load(std::path::Path::new(&info.path));
+                }
+            }
+            KeyAction::Refresh
+        }
         KeyCode::Esc | KeyCode::Char('q') => {
              app.view_mode = ViewMode::List;
              app.diff_state = None;
@@ -297,6 +314,18 @@ fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
             if let Some(ref mut state) = app.diff_state {
                 if let Some(file) = state.files.get_mut(state.selected_file) {
                     file.collapsed = !file.collapsed;
+                }
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('h') => {
+            if let Some(ref mut state) = app.diff_state {
+                if let Some(file) = state.files.get_mut(state.selected_file) {
+                    // Toggle all hunks
+                    let all_collapsed = file.hunks.iter().all(|h| h.collapsed);
+                    for hunk in &mut file.hunks {
+                        hunk.collapsed = !all_collapsed;
+                    }
                 }
             }
             KeyAction::Refresh
@@ -404,7 +433,7 @@ fn handle_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
         KeyCode::Char('d') => {
             // Quick Diff: Show dirty changes (working tree vs index)
             app.set_status("Loading local changes...");
-            let mut state = crate::diff::DiffState::new(String::new());
+            let mut state = crate::diff::DiffState::new_with_mode(crate::diff::DiffMode::Unstaged);
              match state.load(&app.repo_path) {
                 Ok(_) => {
                     app.diff_state = Some(state);
@@ -627,7 +656,7 @@ fn handle_kanban_key(app: &mut App, key: KeyEvent) -> KeyAction {
         KeyCode::Char('d') => {
             // Quick Diff: Show dirty changes
             app.set_status("Loading local changes...");
-            let mut state = crate::diff::DiffState::new(String::new());
+            let mut state = crate::diff::DiffState::new_with_mode(crate::diff::DiffMode::Unstaged);
              match state.load(&app.repo_path) {
                 Ok(_) => {
                     app.diff_state = Some(state);
@@ -1636,7 +1665,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                                 let diff_ref = format!("{}...{}", mr.target_branch, mr.source_branch);
                                 app.set_status(format!("Loading diff for {}...", mr.source_branch));
                                 
-                                let mut state = crate::diff::DiffState::new(diff_ref);
+                                let mut state = crate::diff::DiffState::new_with_mode(crate::diff::DiffMode::Custom(diff_ref));
                                 match state.load(&app.repo_path) {
                                     Ok(_) => {
                                         app.diff_state = Some(state);
