@@ -34,13 +34,16 @@ issue {
 
     // 3. Verify the ID was written back to the file
     let content_after = fs::read_to_string(&ghost_path)?;
-    assert!(content_after.contains(&format!("id=\"{}\"", issue.id)), "File should now contain the generated ID");
+    assert!(
+        content_after.contains(&format!("id=\"{}\"", issue.id)),
+        "File should now contain the generated ID"
+    );
 
     // 4. Try to delete the issue using the generated ID
     // `delete_issue` scans the directory. It reads files.
     // If our fix works, it reads `ghost-issue.kdl`, sees the MATCHING ID (because it was persisted), and deletes it.
     let deleted = delete_issue(&issue.id, &kdl_dir, &cache_path)?;
-    
+
     assert!(deleted, "delete_issue should return true");
     assert!(!ghost_path.exists(), "Ghost file should be deleted");
 

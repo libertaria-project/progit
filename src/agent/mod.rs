@@ -7,6 +7,8 @@
 //! virtual branch agents.
 
 pub mod ollama;
+pub mod ops;
+pub mod context;
 
 use std::sync::mpsc::Sender;
 use serde::{Deserialize, Serialize};

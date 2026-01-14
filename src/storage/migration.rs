@@ -1,7 +1,7 @@
-use anyhow::{Result, Context};
+use super::paths;
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
-use super::paths;
 
 /// Check for old .projects directory and migrate if needed
 pub fn check_and_migrate(root: &Path) -> Result<bool> {
@@ -10,7 +10,9 @@ pub fn check_and_migrate(root: &Path) -> Result<bool> {
     let new_local_dir = root.join(paths::LOCAL_DIR);
 
     if old_dir.exists() {
-        println!("📦 Detected legacy .projects/ directory. Migrating to Split Core architecture...");
+        println!(
+            "📦 Detected legacy .projects/ directory. Migrating to Split Core architecture..."
+        );
 
         // Ensure new directories exist
         if !new_project_dir.exists() {
@@ -25,7 +27,7 @@ pub fn check_and_migrate(root: &Path) -> Result<bool> {
         let new_issues = new_project_dir.join("issues");
         if old_issues.exists() {
             if new_issues.exists() {
-                 println!("   ⚠️  Target issues dir already exists. Skipping move.");
+                println!("   ⚠️  Target issues dir already exists. Skipping move.");
             } else {
                 fs::rename(&old_issues, &new_issues).context("Failed to move issues")?;
                 println!("   ✅ Moved issues to .project/issues");
@@ -50,10 +52,10 @@ pub fn check_and_migrate(root: &Path) -> Result<bool> {
 
         // 4. Remove old directory if empty-ish
         // We might fail if there are other files, that's fine.
-        let _ = fs::remove_dir_all(&old_dir); 
+        let _ = fs::remove_dir_all(&old_dir);
         // Note: remove_dir_all deletes everything. Since we moved the important stuff, this cleans up empty dirs.
         // If users had other custom stuff there, it's gone. But .projects was ours.
-        
+
         println!("🚀 Migration complete.");
         return Ok(true);
     }

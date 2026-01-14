@@ -2,7 +2,7 @@
 //!
 //! Create, update, delete issues. All operations return new instances.
 
-use super::model::{Issue, Status, Effort};
+use super::model::{Effort, Issue, Status};
 use chrono::Utc;
 
 /// Update an issue's title
@@ -114,10 +114,10 @@ mod tests {
     fn test_cycle_status() {
         let issue = Issue::new("Test");
         assert_eq!(issue.status, Status::Backlog);
-        
+
         let cycled = cycle_status(&issue);
         assert_eq!(cycled.status, Status::InProgress);
-        
+
         let cycled2 = cycle_status(&cycled);
         assert_eq!(cycled2.status, Status::Done);
     }

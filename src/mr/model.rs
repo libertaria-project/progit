@@ -35,52 +35,52 @@ impl MRState {
 pub struct MergeRequest {
     /// Local ID (generated)
     pub id: String,
-    
+
     /// Remote MR number (GitLab IID, GitHub PR number)
     pub remote_id: Option<u64>,
-    
+
     /// Source branch
     pub source_branch: String,
-    
+
     /// Target branch (usually main/master)
     pub target_branch: String,
-    
+
     /// MR title
     pub title: String,
-    
+
     /// Description/body
     pub description: String,
-    
+
     /// Current state
     pub state: MRState,
-    
+
     /// Author username
     pub author: Option<String>,
-    
+
     /// Assignees
     pub assignees: Vec<String>,
-    
+
     /// Labels/tags
     pub labels: Vec<String>,
-    
+
     /// Linked issue ID(s)
     pub linked_issues: Vec<String>,
-    
+
     /// Remote URL (web link)
     pub web_url: Option<String>,
-    
+
     /// Created timestamp
     pub created: DateTime<Utc>,
-    
+
     /// Updated timestamp
     pub updated: DateTime<Utc>,
-    
+
     /// Merge timestamp (if merged)
     pub merged_at: Option<DateTime<Utc>>,
-    
+
     /// Draft/WIP flag
     pub is_draft: bool,
-    
+
     /// Review Stats (Approvals)
     pub approvals: u32,
     pub upvotes: u32,

@@ -90,7 +90,7 @@ impl Action {
             Action::Drop => Color::Red,
         }
     }
-    
+
     fn icon(&self) -> &'static str {
         match self {
             Action::Pick => "⛏️ ",
@@ -163,7 +163,7 @@ impl RebaseApp {
         }
         // Preserve comments? For now, we rewrite cleanly. Git preserves comments usually but this is Todo file.
         // It's better to just write the tasks.
-        
+
         fs::write(&self.path, content)
             .with_context(|| format!("Failed to write rebase file: {}", self.path))?;
         Ok(())
@@ -214,7 +214,7 @@ pub fn run(path: &str) -> Result<()> {
         if let Event::Key(key) = event::read()? {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => {
-                    // Abort? Or just quit without saving? 
+                    // Abort? Or just quit without saving?
                     // Git interprets empty file as abort usually, or we should ask.
                     // For now, let's treat Q as "Do nothing / Cancel" -> But users might want to abort rebase.
                     // Let's implement 'Ctrl+C' as abort.
@@ -227,12 +227,12 @@ pub fn run(path: &str) -> Result<()> {
                     res = Err(anyhow::anyhow!("Rebase aborted by user"));
                     break;
                 }
-                 KeyCode::Char('q') => {
-                    // Ask for confirmation to abort? Or just abort? 
+                KeyCode::Char('q') => {
+                    // Ask for confirmation to abort? Or just abort?
                     // Let's assume Abort for now, cleaner.
                     res = Err(anyhow::anyhow!("Rebase aborted by user"));
                     break;
-                 }
+                }
                 KeyCode::Enter => {
                     // Save and Exit
                     if let Err(e) = app.save() {
@@ -240,7 +240,7 @@ pub fn run(path: &str) -> Result<()> {
                     }
                     break;
                 }
-                
+
                 // Navigation
                 KeyCode::Char('j') | KeyCode::Down => {
                     if !app.entries.is_empty() {
@@ -250,11 +250,11 @@ pub fn run(path: &str) -> Result<()> {
                 KeyCode::Char('k') | KeyCode::Up => {
                     app.selected = app.selected.saturating_sub(1);
                 }
-                
+
                 // Move lines
                 KeyCode::Char('J') => app.move_down(), // Shift+J
                 KeyCode::Char('K') => app.move_up(),   // Shift+K
-                
+
                 // Cycle Actions
                 KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => {
                     if let Some(entry) = app.entries.get_mut(app.selected) {
@@ -262,11 +262,11 @@ pub fn run(path: &str) -> Result<()> {
                     }
                 }
                 KeyCode::Char('h') | KeyCode::Left => {
-                   if let Some(entry) = app.entries.get_mut(app.selected) {
+                    if let Some(entry) = app.entries.get_mut(app.selected) {
                         entry.action = entry.action.prev();
-                    } 
+                    }
                 }
-                
+
                 // Quick Actions
                 KeyCode::Char('p') => app.entries[app.selected].action = Action::Pick,
                 KeyCode::Char('r') => app.entries[app.selected].action = Action::Reword,
@@ -274,7 +274,7 @@ pub fn run(path: &str) -> Result<()> {
                 KeyCode::Char('s') => app.entries[app.selected].action = Action::Squash,
                 KeyCode::Char('f') => app.entries[app.selected].action = Action::Fixup,
                 KeyCode::Char('d') => app.entries[app.selected].action = Action::Drop,
-                
+
                 _ => {}
             }
         }
@@ -304,48 +304,59 @@ fn ui(f: &mut ratatui::Frame, app: &RebaseApp) {
 
     // Title
     let title = Paragraph::new(Line::from(vec![
-        Span::styled(" 🐑 Interactive Rebase ", Style::default().add_modifier(Modifier::BOLD).fg(Color::Magenta)),
+        Span::styled(
+            " 🐑 Interactive Rebase ",
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::Magenta),
+        ),
         Span::raw(format!("({})", app.entries.len())),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Magenta)));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Magenta)),
+    );
     f.render_widget(title, chunks[0]);
 
     // List
-    let items: Vec<ListItem> = app.entries.iter().enumerate().map(|(i, entry)| {
-        let style = if i == app.selected {
-            Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
+    let items: Vec<ListItem> = app
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let style = if i == app.selected {
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
 
-        let action_span = Span::styled(
-            format!("{} {:<6}", entry.action.icon(), entry.action.as_str()),
-            Style::default().fg(entry.action.color())
-        );
-        
-        let hash_span = Span::styled(
-            format!(" {} ", &entry.hash[..7.min(entry.hash.len())]),
-            Style::default().fg(Color::Yellow)
-        );
-        
-        let msg_span = Span::raw(&entry.message);
+            let action_span = Span::styled(
+                format!("{} {:<6}", entry.action.icon(), entry.action.as_str()),
+                Style::default().fg(entry.action.color()),
+            );
 
-        let line = Line::from(vec![
-            action_span,
-            hash_span,
-            msg_span
-        ]);
+            let hash_span = Span::styled(
+                format!(" {} ", &entry.hash[..7.min(entry.hash.len())]),
+                Style::default().fg(Color::Yellow),
+            );
 
-        ListItem::new(line).style(style)
-    }).collect();
+            let msg_span = Span::raw(&entry.message);
 
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title(" Commits "));
-    
+            let line = Line::from(vec![action_span, hash_span, msg_span]);
+
+            ListItem::new(line).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(Block::default().borders(Borders::ALL).title(" Commits "));
+
     // Auto-scroll logic: centered around selected
     let mut state = ratatui::widgets::ListState::default();
     state.select(Some(app.selected));
-    
+
     f.render_stateful_widget(list, chunks[1], &mut state);
 
     // Help

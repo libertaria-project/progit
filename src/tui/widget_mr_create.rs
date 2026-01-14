@@ -8,12 +8,18 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, BorderType, Clear, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
 
 /// Render the MR creation form as an overlay
-pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_buffer: &str, colors: &ThemeColors) -> Rect {
+pub fn render(
+    frame: &mut Frame,
+    mr: &MergeRequest,
+    current_field: usize,
+    edit_buffer: &str,
+    colors: &ThemeColors,
+) -> Rect {
     let area = frame.area();
 
     // Center the form (70% width, 60% height)
@@ -29,9 +35,10 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
 
     // Main block
     let block = Block::default()
-        .title(Line::from(vec![
-            Span::styled(" 🔀 Create Merge Request ", colors.accent()),
-        ]))
+        .title(Line::from(vec![Span::styled(
+            " 🔀 Create Merge Request ",
+            colors.accent(),
+        )]))
         .title_bottom(Line::from(vec![
             Span::styled(" Tab", colors.accent()),
             Span::raw(":next field "),
@@ -60,9 +67,10 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
         .split(inner);
 
     // Source branch (readonly, shown for context)
-    let source_field = Paragraph::new(Line::from(vec![
-        Span::styled(&mr.source_branch, colors.success().add_modifier(Modifier::BOLD)),
-    ]))
+    let source_field = Paragraph::new(Line::from(vec![Span::styled(
+        &mr.source_branch,
+        colors.success().add_modifier(Modifier::BOLD),
+    )]))
     .block(
         Block::default()
             .title(Span::styled(" Source Branch ", colors.dim()))
@@ -76,7 +84,14 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
     let target_selected = current_field == 0;
     let target_cursor = if target_selected { "█" } else { "" };
     let target_field = Paragraph::new(Line::from(vec![
-        Span::styled(if target_selected { edit_buffer } else { &mr.target_branch }, colors.normal()),
+        Span::styled(
+            if target_selected {
+                edit_buffer
+            } else {
+                &mr.target_branch
+            },
+            colors.normal(),
+        ),
         Span::styled(target_cursor, colors.accent()),
     ]))
     .block(
@@ -84,7 +99,11 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
             .title(Span::styled(" Target Branch ", colors.dim()))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(if target_selected { colors.accent() } else { colors.border() }),
+            .border_style(if target_selected {
+                colors.accent()
+            } else {
+                colors.border()
+            }),
     );
     frame.render_widget(target_field, chunks[1]);
 
@@ -92,7 +111,14 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
     let title_selected = current_field == 1;
     let title_cursor = if title_selected { "█" } else { "" };
     let title_field = Paragraph::new(Line::from(vec![
-        Span::styled(if title_selected { edit_buffer } else { &mr.title }, colors.normal()),
+        Span::styled(
+            if title_selected {
+                edit_buffer
+            } else {
+                &mr.title
+            },
+            colors.normal(),
+        ),
         Span::styled(title_cursor, colors.accent()),
     ]))
     .block(
@@ -100,7 +126,11 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
             .title(Span::styled(" Title ", colors.dim()))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(if title_selected { colors.accent() } else { colors.border() }),
+            .border_style(if title_selected {
+                colors.accent()
+            } else {
+                colors.border()
+            }),
     );
     frame.render_widget(title_field, chunks[2]);
 
@@ -109,7 +139,11 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
     let desc_cursor = if desc_selected { "█" } else { "" };
     let desc_field = Paragraph::new(format!(
         "{}{}",
-        if desc_selected { edit_buffer } else { &mr.description },
+        if desc_selected {
+            edit_buffer
+        } else {
+            &mr.description
+        },
         desc_cursor
     ))
     .style(colors.normal())
@@ -119,7 +153,11 @@ pub fn render(frame: &mut Frame, mr: &MergeRequest, current_field: usize, edit_b
             .title(Span::styled(" Description ", colors.dim()))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(if desc_selected { colors.accent() } else { colors.border() }),
+            .border_style(if desc_selected {
+                colors.accent()
+            } else {
+                colors.border()
+            }),
     );
     frame.render_widget(desc_field, chunks[3]);
 

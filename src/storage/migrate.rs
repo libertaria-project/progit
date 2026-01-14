@@ -3,8 +3,8 @@
 //! One-time migration from the old KDL-based storage to JSON-only.
 
 use crate::issue::Issue;
-use crate::storage::kdl;
 use crate::storage::engine::StorageEngine;
+use crate::storage::kdl;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
@@ -31,12 +31,12 @@ pub fn migrate_kdl_to_json(project_root: &Path) -> Result<usize> {
 
     // Read all KDL files
     let mut issues: Vec<Issue> = Vec::new();
-    
+
     if kdl_dir.exists() && kdl_dir.is_dir() {
         for entry in fs::read_dir(&kdl_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.extension().map_or(false, |ext| ext == "kdl") {
                 match kdl::read_kdl(&path) {
                     Ok(issue) => {

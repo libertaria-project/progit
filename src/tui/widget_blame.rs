@@ -1,3 +1,4 @@
+use crate::tui::app::App;
 use ratatui::{
     layout::{Constraint, Rect},
     style::{Modifier, Style},
@@ -5,7 +6,6 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame,
 };
-use crate::tui::app::App;
 // ThemeColors unused here
 use crate::git::blame::BlameInfo;
 
@@ -51,7 +51,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .title(Span::styled(" Git Blame ", colors.accent()))
         .title_alignment(ratatui::layout::Alignment::Center)
         .border_style(colors.normal());
-        
+
     let inner_area = block.inner(area);
     frame.render_widget(block, area);
 
@@ -98,40 +98,45 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     };
 
     // Rows
-    let rows: Vec<Row> = info.lines.iter().map(|line| {
-        let base_style = match state.mode {
-             BlameMode::Manager => {
-                // Highlight recent changes? For now just normal.
-                colors.normal()
-             },
-             BlameMode::LeadDev => colors.normal(),
-        };
+    let rows: Vec<Row> = info
+        .lines
+        .iter()
+        .map(|line| {
+            let base_style = match state.mode {
+                BlameMode::Manager => {
+                    // Highlight recent changes? For now just normal.
+                    colors.normal()
+                }
+                BlameMode::LeadDev => colors.normal(),
+            };
 
-        match state.mode {
-            BlameMode::Manager => {
-                let date_str = line.author_time.format("%Y-%m-%d").to_string();
-                Row::new(vec![
-                    Cell::from(line.line_number.to_string()).style(colors.dim()),
-                    Cell::from(line.author.clone()),
-                    Cell::from(date_str),
-                    Cell::from(line.content.clone()),
-                ])
-            },
-            BlameMode::LeadDev => {
-                let hash_short = if line.commit_hash.len() > 8 {
-                    &line.commit_hash[0..8]
-                } else {
-                    &line.commit_hash
-                };
-                Row::new(vec![
-                    Cell::from(line.line_number.to_string()).style(colors.dim()),
-                    Cell::from(hash_short.to_string()).style(colors.warning()),
-                    Cell::from(line.author.clone()),
-                    Cell::from(line.content.clone()),
-                ])
+            match state.mode {
+                BlameMode::Manager => {
+                    let date_str = line.author_time.format("%Y-%m-%d").to_string();
+                    Row::new(vec![
+                        Cell::from(line.line_number.to_string()).style(colors.dim()),
+                        Cell::from(line.author.clone()),
+                        Cell::from(date_str),
+                        Cell::from(line.content.clone()),
+                    ])
+                }
+                BlameMode::LeadDev => {
+                    let hash_short = if line.commit_hash.len() > 8 {
+                        &line.commit_hash[0..8]
+                    } else {
+                        &line.commit_hash
+                    };
+                    Row::new(vec![
+                        Cell::from(line.line_number.to_string()).style(colors.dim()),
+                        Cell::from(hash_short.to_string()).style(colors.warning()),
+                        Cell::from(line.author.clone()),
+                        Cell::from(line.content.clone()),
+                    ])
+                }
             }
-        }.style(base_style)
-    }).collect();
+            .style(base_style)
+        })
+        .collect();
 
     let constraints = match state.mode {
         BlameMode::Manager => vec![

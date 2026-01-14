@@ -1,8 +1,8 @@
 use super::SyncProvider;
 use crate::issue::Issue;
+use crate::mr::{MRState, MergeRequest};
 use crate::storage::config::SyncConfig;
-use crate::mr::{MergeRequest, MRState};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use std::process::Command;
 
 /// Local Provider Implementation
@@ -25,11 +25,14 @@ impl LocalProvider {
             .args(args)
             .output()
             .context("Failed to run git command")?;
-            
+
         if !output.status.success() {
-            return Err(anyhow::anyhow!("Git command failed: {}", String::from_utf8_lossy(&output.stderr)));
+            return Err(anyhow::anyhow!(
+                "Git command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
-        
+
         Ok(String::from_utf8(output.stdout)?.trim().to_string())
     }
 }
@@ -56,25 +59,27 @@ impl SyncProvider for LocalProvider {
     }
 
     // Merge Request Operations (Branch Management)
-    
+
     fn create_mr(&self, mr: &MergeRequest) -> Result<u64> {
         // In local mode, creating an MR is essentially creating the branch if it doesn't exist
         // But usually, the branch exists first.
         // We'll just return a hash of the branch name as ID.
         // Or check if branch exists.
-        
-        let branch_exists = self.run_git(&["rev-parse", "--verify", &mr.source_branch]).is_ok();
-        
+
+        let branch_exists = self
+            .run_git(&["rev-parse", "--verify", &mr.source_branch])
+            .is_ok();
+
         if !branch_exists {
-            // Create branch? 
+            // Create branch?
             self.run_git(&["checkout", "-b", &mr.source_branch])?;
         }
-        
+
         // Return a pseudo-ID. We use a simple hash or just 0.
         // Since remote_id is u64, let's hash string.
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         mr.source_branch.hash(&mut hasher);
         Ok(hasher.finish())
@@ -83,32 +88,38 @@ impl SyncProvider for LocalProvider {
     fn list_mrs(&self) -> Result<Vec<MergeRequest>> {
         // 1. Get all branches
         let output = self.run_git(&["for-each-ref", "--format=%(refname:short)", "refs/heads/"])?;
-        
+
         let mut mrs = Vec::new();
         let branches: Vec<&str> = output.lines().collect();
-        
+
         for branch in branches {
             if branch == self.target_branch {
                 continue;
             }
-            
+
             // 2. Check if ahead of main (has commits to merge)
-            let ahead_check = self.run_git(&["rev-list", "--count", &format!("{}..{}", self.target_branch, branch)]);
-            
+            let ahead_check = self.run_git(&[
+                "rev-list",
+                "--count",
+                &format!("{}..{}", self.target_branch, branch),
+            ]);
+
             let commit_count = match ahead_check {
                 Ok(count) => count.parse::<u64>().unwrap_or(0),
                 Err(_) => 0, // Branch might be incompatible or error
             };
-            
+
             if commit_count > 0 {
                 // It's a valid "MR"
-                let last_commit_msg = self.run_git(&["log", "-1", "--format=%s", branch]).unwrap_or_default();
+                let last_commit_msg = self
+                    .run_git(&["log", "-1", "--format=%s", branch])
+                    .unwrap_or_default();
                 let author = self.run_git(&["log", "-1", "--format=%an", branch]).ok();
-                
+
                 // Determine state (merged?)
                 // If it's fully merged, `git branch --merged main` would show it.
                 // But if it has commits ahead, it's seemingly Open.
-                
+
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 use std::hash::{Hash, Hasher};
                 branch.hash(&mut hasher);
@@ -119,7 +130,7 @@ impl SyncProvider for LocalProvider {
                     remote_id: Some(id),
                     source_branch: branch.to_string(),
                     target_branch: self.target_branch.clone(),
-                    title: if branch.contains('/') { 
+                    title: if branch.contains('/') {
                         // beautify feat/foo -> "Feat: Foo"
                         branch.split('/').last().unwrap_or(branch).to_string()
                     } else {
@@ -142,7 +153,7 @@ impl SyncProvider for LocalProvider {
                 });
             }
         }
-        
+
         Ok(mrs)
     }
 
@@ -155,34 +166,34 @@ impl SyncProvider for LocalProvider {
     }
 
     fn update_mr(&self, _mr: &MergeRequest) -> Result<()> {
-        // Local: Maybe rename branch? 
+        // Local: Maybe rename branch?
         // For now, no-op.
         Ok(())
     }
-    
+
     fn approve_mr(&self, _remote_id: u64) -> Result<()> {
         // Local mode: no approval needed
         Ok(())
     }
-    
+
     fn merge_mr(&self, remote_id: u64) -> Result<()> {
         // Find the branch for this MR
         let mr = self.get_mr(remote_id)?;
-        
+
         // Merge the branch into target
         self.run_git(&["checkout", &self.target_branch])?;
         self.run_git(&["merge", "--no-ff", &mr.source_branch])?;
-        
+
         Ok(())
     }
-    
+
     fn close_mr(&self, remote_id: u64) -> Result<()> {
         // Find the branch for this MR
         let mr = self.get_mr(remote_id)?;
-        
+
         // Delete the branch (close without merging)
         self.run_git(&["branch", "-D", &mr.source_branch])?;
-        
+
         Ok(())
     }
 }

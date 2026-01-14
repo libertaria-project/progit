@@ -149,7 +149,7 @@ pub struct Issue {
     /// External references (e.g. "forgejo" -> "42")
     #[serde(default)]
     pub remotes: std::collections::HashMap<String, String>,
-    
+
     /// Repository ownership (for multi-repo setups)
     /// e.g., "frontend", "backend", "infra"
     #[serde(default)]
@@ -227,7 +227,7 @@ impl Issue {
         self.blocked = blocked;
         self
     }
-    
+
     /// Builder: set repository
     pub fn with_repo(mut self, repo: impl Into<String>) -> Self {
         self.repo = Some(repo.into());

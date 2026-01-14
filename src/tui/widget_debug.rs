@@ -1,7 +1,7 @@
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::{Block, Borders, BorderType},
+    widgets::{Block, BorderType, Borders},
     Frame,
 };
 use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
@@ -11,7 +11,7 @@ use crate::tui::app::App;
 
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let colors = app.theme.colors();
-    let engine = &app.theme_engine;    
+    let engine = &app.theme_engine;
 
     let debug_widget = TuiLoggerWidget::default()
         .block(

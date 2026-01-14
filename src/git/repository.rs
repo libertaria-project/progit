@@ -38,7 +38,7 @@ pub struct RepoInfo {
 
     /// All available remotes
     pub remotes: Vec<RemoteInfo>,
-    
+
     /// Repository name (e.g. "progit")
     pub repo_name: String,
 }
@@ -74,17 +74,17 @@ pub fn detect_repo(start_path: &Path) -> Result<Option<RepoInfo>> {
     let repo = match Git2Repo::discover(start_path) {
         Ok(r) => r,
         Err(e) => {
-             // Check for SHA256 error
-             if e.message().contains("sha256") {
-                 let mut info = RepoInfo::default();
-                 info.branch = "UNKNOWN (SHA-256)".to_string();
-                 info.remote_url = Some("Not supported by libgit2 yet".to_string());
-                 // Try to at least show the path
-                 info.path = start_path.to_string_lossy().to_string();
-                 return Ok(Some(info));
-             }
-             return Ok(None);
-        },
+            // Check for SHA256 error
+            if e.message().contains("sha256") {
+                let mut info = RepoInfo::default();
+                info.branch = "UNKNOWN (SHA-256)".to_string();
+                info.remote_url = Some("Not supported by libgit2 yet".to_string());
+                // Try to at least show the path
+                info.path = start_path.to_string_lossy().to_string();
+                return Ok(Some(info));
+            }
+            return Ok(None);
+        }
     };
 
     let mut info = RepoInfo::default();
@@ -92,7 +92,8 @@ pub fn detect_repo(start_path: &Path) -> Result<Option<RepoInfo>> {
     // Get repository path
     if let Some(workdir) = repo.workdir() {
         info.path = workdir.to_string_lossy().to_string();
-        info.repo_name = workdir.file_name()
+        info.repo_name = workdir
+            .file_name()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown".to_string());
     }
@@ -138,7 +139,10 @@ pub fn detect_repo(start_path: &Path) -> Result<Option<RepoInfo>> {
     if let (Some(remote_name), Ok(head)) = (&info.remote_name, repo.head()) {
         let upstream_name = format!("{}/{}", remote_name, info.branch);
         if let Ok(upstream) = repo.find_branch(&upstream_name, BranchType::Remote) {
-            if let (Ok(local_oid), Ok(upstream_ref)) = (head.target().context("No HEAD target"), upstream.get().target().context("No upstream target")) {
+            if let (Ok(local_oid), Ok(upstream_ref)) = (
+                head.target().context("No HEAD target"),
+                upstream.get().target().context("No upstream target"),
+            ) {
                 if let Ok((ahead, behind)) = repo.graph_ahead_behind(local_oid, upstream_ref) {
                     info.ahead = ahead;
                     info.behind = behind;
@@ -212,11 +216,11 @@ pub fn list_remote_branches(path: &Path) -> Result<Vec<String>> {
 
     if let Ok(iter) = repo.branches(Some(BranchType::Remote)) {
         for branch in iter.flatten() {
-             if let Ok(Some(name)) = branch.0.name() {
-                 // Remove "origin/" prefix for cleaner output, or keep full name?
-                 // Keeping full name is safer for clarity: "origin/HEAD", "origin/main"
-                 branches.push(name.to_string());
-             }
+            if let Ok(Some(name)) = branch.0.name() {
+                // Remove "origin/" prefix for cleaner output, or keep full name?
+                // Keeping full name is safer for clarity: "origin/HEAD", "origin/main"
+                branches.push(name.to_string());
+            }
         }
     }
     branches.sort();
@@ -226,7 +230,7 @@ pub fn list_remote_branches(path: &Path) -> Result<Vec<String>> {
 /// Create a remote branch by pushing current HEAD
 pub fn create_remote_branch(path: &Path, name: &str, remote: Option<&str>) -> Result<()> {
     let target_remote = remote.unwrap_or("origin");
-    
+
     // Check if branch name is valid (basic check)
     if name.contains(' ') || name.contains("..") {
         anyhow::bail!("Invalid branch name");
@@ -247,17 +251,17 @@ pub fn create_remote_branch(path: &Path, name: &str, remote: Option<&str>) -> Re
         let err = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("Failed to push branch: {}", err);
     }
-    
+
     // Refresh repo info (optional, but good practice)
     refresh_repo(path)?;
-    
+
     Ok(())
 }
 
 /// Delete a branch (cannot delete current branch)
 pub fn delete_branch(path: &Path, name: &str) -> Result<()> {
     let repo = Git2Repo::open(path)?;
-    
+
     // Check if it's the current branch
     if let Ok(head) = repo.head() {
         if let Some(current) = head.shorthand() {
@@ -266,7 +270,7 @@ pub fn delete_branch(path: &Path, name: &str) -> Result<()> {
             }
         }
     }
-    
+
     let mut branch = repo.find_branch(name, BranchType::Local)?;
     branch.delete()?;
     Ok(())
@@ -280,7 +284,10 @@ pub fn get_origin_url(path: &Path) -> Result<Option<String>> {
 /// Get URL for a specific remote
 pub fn get_remote_url(path: &Path, remote: &str) -> Result<Option<String>> {
     let repo = Git2Repo::open(path)?;
-    Ok(repo.find_remote(remote).ok().and_then(|r| r.url().map(|s| s.to_string())))
+    Ok(repo
+        .find_remote(remote)
+        .ok()
+        .and_then(|r| r.url().map(|s| s.to_string())))
 }
 
 /// Parse git URL into (host, owner, repo)
@@ -289,36 +296,36 @@ pub fn parse_git_url(url: &str) -> Option<(String, String, String)> {
     // https://github.com/user/repo.git
     // https://gitlab.com/group/subgroup/repo.git
     // git@github.com:user/repo.git
-    
+
     let trimmed = url.trim_end_matches(".git");
-    
+
     if trimmed.starts_with("http") {
         if let Some(pos) = trimmed.find("://") {
-            let core = &trimmed[pos+3..];
+            let core = &trimmed[pos + 3..];
             let parts: Vec<&str> = core.split('/').collect();
             if parts.len() >= 3 {
-                 // Format: domain.com/owner/repo or domain.com/group/sub/repo
-                 let host = format!("https://{}", parts[0]);
-                 let repo = parts.last().unwrap().to_string();
-                 // Join everything between domain and repo as "owner"
-                 let owner = parts[1..parts.len()-1].join("/");
-                 return Some((host, owner, repo));
+                // Format: domain.com/owner/repo or domain.com/group/sub/repo
+                let host = format!("https://{}", parts[0]);
+                let repo = parts.last().unwrap().to_string();
+                // Join everything between domain and repo as "owner"
+                let owner = parts[1..parts.len() - 1].join("/");
+                return Some((host, owner, repo));
             }
         }
     } else if trimmed.starts_with("git@") {
         let trimmed = trimmed.trim_start_matches("git@");
         if let Some(colon) = trimmed.find(':') {
             let host = &trimmed[..colon];
-            let path = &trimmed[colon+1..];
+            let path = &trimmed[colon + 1..];
             let parts: Vec<&str> = path.split('/').collect();
-             if parts.len() >= 2 {
-                 let repo = parts.last().unwrap().to_string();
-                 let owner = parts[..parts.len()-1].join("/");
-                 return Some(("https://".to_string() + host, owner, repo));
+            if parts.len() >= 2 {
+                let repo = parts.last().unwrap().to_string();
+                let owner = parts[..parts.len() - 1].join("/");
+                return Some(("https://".to_string() + host, owner, repo));
             }
         }
     }
-    
+
     None
 }
 
@@ -335,14 +342,14 @@ pub fn has_unpushed_commits(path: &Path) -> Result<bool> {
 /// Suggest a default target branch (usually main/master)
 pub fn suggest_target_branch(path: &Path) -> Result<String> {
     let repo = Git2Repo::open(path)?;
-    
+
     // Try to find main or master
     for branch_name in &["main", "master", "develop"] {
         if repo.find_branch(branch_name, BranchType::Local).is_ok() {
             return Ok(branch_name.to_string());
         }
     }
-    
+
     // Fallback: return first branch that isn't current
     if let Ok(head) = repo.head() {
         if let Some(current) = head.shorthand() {
@@ -357,7 +364,7 @@ pub fn suggest_target_branch(path: &Path) -> Result<String> {
             }
         }
     }
-    
+
     // Ultimate fallback
     Ok("main".to_string())
 }

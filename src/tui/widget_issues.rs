@@ -35,15 +35,19 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 
     // Calculate dynamic column widths based on content
     // ID: min 8, max 15 based on actual IDs
-    let max_id_len = app.filtered.iter()
+    let max_id_len = app
+        .filtered
+        .iter()
         .filter_map(|&idx| app.issues.get(idx))
         .map(|i| i.short_id().len())
         .max()
         .unwrap_or(8)
         .clamp(8, 15) as u16;
-    
+
     // Repo: min 4, max 12 based on actual repo names
-    let max_repo_len = app.filtered.iter()
+    let max_repo_len = app
+        .filtered
+        .iter()
         .filter_map(|&idx| app.issues.get(idx))
         .filter_map(|i| i.repo.as_ref())
         .map(|r| r.len())
@@ -53,18 +57,18 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 
     // Column widths - dynamic where sensible
     let widths = [
-        Constraint::Length(max_id_len + 2),  // ID (dynamic)
-        Constraint::Percentage(35),          // Title (flex)
-        Constraint::Length(12),              // Status (fixed)
-        Constraint::Length(6),               // Effort (fixed)
-        Constraint::Length(max_repo_len + 2),// Repo (dynamic)
-        Constraint::Fill(1),                 // Tags (fill remaining)
+        Constraint::Length(max_id_len + 2),   // ID (dynamic)
+        Constraint::Percentage(35),           // Title (flex)
+        Constraint::Length(12),               // Status (fixed)
+        Constraint::Length(6),                // Effort (fixed)
+        Constraint::Length(max_repo_len + 2), // Repo (dynamic)
+        Constraint::Fill(1),                  // Tags (fill remaining)
     ];
 
     // Create table
     let border_style = engine.get("issues.border", colors.border());
     let selected_style = engine.get("issues.row.selected", colors.selected());
-    
+
     let table = Table::new(rows, widths)
         .header(header)
         .block(
@@ -84,11 +88,15 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 /// Create a row for an issue
-fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::style::ThemeEngine) -> Row<'a> {
+fn issue_row<'a>(
+    issue: &'a Issue,
+    colors: &ThemeColors,
+    engine: &crate::tui::style::ThemeEngine,
+) -> Row<'a> {
     // 1. Determine urgency first
     let is_blocker = issue.is_blocker();
     let is_overdue = issue.is_overdue();
-    
+
     // 2. Define the Base Style for the Row
     // Blocker = RED (Critical) - Use Theme RGB
     // Overdue = YELLOW/ORANGE (Warning) - Use Theme RGB
@@ -105,8 +113,8 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
 
     // 3. Define specific usage styles (only used if NOT urgent/overdue)
     let status_color = match issue.status {
-        Status::Backlog => colors.dim(),         // Grey
-        Status::InProgress => colors.success(),  // Green
+        Status::Backlog => colors.dim(),        // Grey
+        Status::InProgress => colors.success(), // Green
         Status::Done => Style::default().fg(ratatui::style::Color::Cyan), // Cyan
     };
 
@@ -117,14 +125,14 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
         Status::Done => "✔",
     };
 
-    let blocker_indicator = if is_blocker { 
-        "🔥 " 
-    } else if is_overdue { 
-        "⏰ " 
-    } else { 
-        "" 
+    let blocker_indicator = if is_blocker {
+        "🔥 "
+    } else if is_overdue {
+        "⏰ "
+    } else {
+        ""
     };
-    
+
     // 5. Repo Display
     let repo_display = issue.repo.as_deref().unwrap_or("-");
     let repo_style = if issue.repo.is_some() && !is_blocker && !is_overdue {
@@ -151,7 +159,11 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
         if i > 0 {
             tag_spans.push(Span::raw(" "));
         }
-        let tag_style = if is_blocker || is_overdue { base_style } else { colors.accent() };
+        let tag_style = if is_blocker || is_overdue {
+            base_style
+        } else {
+            colors.accent()
+        };
         tag_spans.push(Span::styled(format!("[ {} ]", tag), tag_style));
     }
     let tags_cell = if tag_spans.is_empty() {
@@ -162,24 +174,26 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
 
     // 7. Construct Cells
     let is_urgent = is_blocker || is_overdue;
-    
+
     let cells = [
         // ID: Dim unless urgent
-        Cell::from(issue.short_id().to_string()).style(if is_urgent { base_style } else { colors.dim() }),
-        
+        Cell::from(issue.short_id().to_string()).style(if is_urgent {
+            base_style
+        } else {
+            colors.dim()
+        }),
         // Title: ALWAYS base_style (Red if urgent, Normal otherwise)
         Cell::from(format!("{}{}", blocker_indicator, &issue.title)).style(base_style),
-        
         // Status: Inherit if urgent, else Status Color
-        Cell::from(format!("{} {}", status_icon, issue.status.as_str()))
-            .style(if is_urgent { base_style } else { status_color }),
-            
+        Cell::from(format!("{} {}", status_icon, issue.status.as_str())).style(if is_urgent {
+            base_style
+        } else {
+            status_color
+        }),
         // Effort: base_style
         Cell::from(format!("{}", issue.effort as u8)).style(base_style),
-        
         // Repo: Inherit if urgent, else Rainbow/Dim
         Cell::from(repo_display).style(repo_style),
-        
         // Tags
         tags_cell.style(base_style),
     ];
@@ -190,7 +204,11 @@ fn issue_row<'a>(issue: &'a Issue, colors: &ThemeColors, engine: &crate::tui::st
 /// Generate table title with stats
 fn table_title(app: &App) -> Line<'static> {
     let total = app.issues.len();
-    let done = app.issues.iter().filter(|i| i.status == Status::Done).count();
+    let done = app
+        .issues
+        .iter()
+        .filter(|i| i.status == Status::Done)
+        .count();
     let blockers = app.blocker_count();
 
     let mut spans = vec![

@@ -84,10 +84,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let cache_path = dir.path().join("issues.json");
 
-        let issues = vec![
-            Issue::new("Issue 1"),
-            Issue::new("Issue 2"),
-        ];
+        let issues = vec![Issue::new("Issue 1"), Issue::new("Issue 2")];
 
         write_cache(&issues, &cache_path).unwrap();
         let loaded = read_cache(&cache_path).unwrap();

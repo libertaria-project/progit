@@ -39,8 +39,8 @@ impl StorageEngine {
 
         // 1. Load Issues
         if self.issues_path.exists() {
-            let content = fs::read_to_string(&self.issues_path)
-                .context("Failed to read issues.json")?;
+            let content =
+                fs::read_to_string(&self.issues_path).context("Failed to read issues.json")?;
             if let Ok(issues) = serde_json::from_str::<Vec<Issue>>(&content) {
                 self.issues = issues;
             }
@@ -54,7 +54,9 @@ impl StorageEngine {
                 if path.extension().map_or(false, |ext| ext == "json") {
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(issue) = serde_json::from_str::<Issue>(&content) {
-                            if let Some(existing) = self.issues.iter_mut().find(|i| i.id == issue.id) {
+                            if let Some(existing) =
+                                self.issues.iter_mut().find(|i| i.id == issue.id)
+                            {
                                 *existing = issue;
                             } else {
                                 self.issues.push(issue);
@@ -67,8 +69,7 @@ impl StorageEngine {
 
         // 2. Load Merge Requests
         if self.mrs_path.exists() {
-            let content = fs::read_to_string(&self.mrs_path)
-                .context("Failed to read mrs.json")?;
+            let content = fs::read_to_string(&self.mrs_path).context("Failed to read mrs.json")?;
             if let Ok(mrs) = serde_json::from_str::<Vec<crate::mr::MergeRequest>>(&content) {
                 self.mrs = mrs;
             }
@@ -125,15 +126,15 @@ impl StorageEngine {
 
         // 1. Save Issues
         let tmp_issues = self.issues_path.with_extension("json.tmp");
-        let issues_content = serde_json::to_string_pretty(&self.issues)
-            .context("Failed to serialize issues")?;
+        let issues_content =
+            serde_json::to_string_pretty(&self.issues).context("Failed to serialize issues")?;
         fs::write(&tmp_issues, &issues_content)?;
         fs::rename(&tmp_issues, &self.issues_path)?;
 
         // 2. Save Merge Requests
         let tmp_mrs = self.mrs_path.with_extension("json.tmp");
-        let mrs_content = serde_json::to_string_pretty(&self.mrs)
-            .context("Failed to serialize mrs")?;
+        let mrs_content =
+            serde_json::to_string_pretty(&self.mrs).context("Failed to serialize mrs")?;
         fs::write(&tmp_mrs, &mrs_content)?;
         fs::rename(&tmp_mrs, &self.mrs_path)?;
 
@@ -164,7 +165,7 @@ impl StorageEngine {
     pub fn delete(&mut self, issue_id: &str) -> Result<bool> {
         let original_len = self.issues.len();
         self.issues.retain(|i| i.id != issue_id);
-        
+
         if self.issues.len() < original_len {
             self.save()?;
             Ok(true)

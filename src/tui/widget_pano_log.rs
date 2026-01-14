@@ -10,7 +10,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, BorderType, Clear, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
 };
 
@@ -27,8 +27,12 @@ pub fn render(frame: &mut Frame, app: &App) {
 
     // Determine border color based on status
     let border_style = match &app.pano_status {
-        crate::panopticum::PanoStatus::Running(_) => engine.get("pano.border.running", colors.accent()),
-        crate::panopticum::PanoStatus::Success(_) => engine.get("pano.border.success", colors.success()),
+        crate::panopticum::PanoStatus::Running(_) => {
+            engine.get("pano.border.running", colors.accent())
+        }
+        crate::panopticum::PanoStatus::Success(_) => {
+            engine.get("pano.border.success", colors.success())
+        }
         crate::panopticum::PanoStatus::Error(_) => engine.get("pano.border.error", colors.error()),
         _ => engine.get("pano.border", colors.dim()),
     };
@@ -69,7 +73,10 @@ pub fn render(frame: &mut Frame, app: &App) {
     let paragraph = Paragraph::new(output_lines)
         .block(
             Block::default()
-                .title(Span::styled(title, engine.get("pano.title", colors.header().add_modifier(Modifier::BOLD))))
+                .title(Span::styled(
+                    title,
+                    engine.get("pano.title", colors.header().add_modifier(Modifier::BOLD)),
+                ))
                 .title_bottom(footer)
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)

@@ -2,13 +2,13 @@
 //!
 //! Implements synchronization with Forgejo/Gitea instances.
 
-use anyhow::{Result, Context, anyhow};
+use crate::issue::{Effort, Issue, Status};
+use crate::storage::config::SyncConfig;
+use crate::sync::{keyring, SyncProvider};
+use anyhow::{anyhow, Context, Result};
+use chrono::{DateTime, Utc};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use crate::issue::{Issue, Status, Effort};
-use crate::sync::{SyncProvider, keyring};
-use crate::storage::config::SyncConfig;
-use chrono::{DateTime, Utc};
 
 pub struct ForgejoProvider {
     config: SyncConfig,
@@ -22,11 +22,8 @@ impl ForgejoProvider {
             .connect_timeout(std::time::Duration::from_secs(5))
             .build()
             .unwrap_or_else(|_| Client::new());
-            
-        Self {
-            config,
-            client,
-        }
+
+        Self { config, client }
     }
 
     fn get_token(&self) -> Result<String> {
@@ -40,11 +37,14 @@ impl ForgejoProvider {
         keyring::set_token(&self.config.url, &self.config.owner, &token)?;
         Ok(token)
     }
-    
+
     // API Models
-    
+
     fn base_url(&self) -> String {
-        format!("{}/api/v1/repos/{}/{}", self.config.url, self.config.owner, self.config.repo)
+        format!(
+            "{}/api/v1/repos/{}/{}",
+            self.config.url, self.config.owner, self.config.repo
+        )
     }
 }
 
@@ -75,10 +75,10 @@ struct ForgejoUser {
 struct CreateIssuePayload {
     title: String,
     body: String,
-    labels: Option<Vec<i64>>, // Label IDs needed? Or can we create by name? Forgejo usually needs IDs. 
-    // For MVP, we might skip labels or try to use names if API supports it (sometimes it does via specialized endpoints or just ignores unknown)
-    // Actually Forgejo/Gitea API for creating issue takes `labels` as []int64.
-    // Simplifying: We will put tags in the body for now or ignore them to start simple.
+    labels: Option<Vec<i64>>, // Label IDs needed? Or can we create by name? Forgejo usually needs IDs.
+                              // For MVP, we might skip labels or try to use names if API supports it (sometimes it does via specialized endpoints or just ignores unknown)
+                              // Actually Forgejo/Gitea API for creating issue takes `labels` as []int64.
+                              // Simplifying: We will put tags in the body for now or ignore them to start simple.
 }
 
 impl SyncProvider for ForgejoProvider {
@@ -91,24 +91,30 @@ impl SyncProvider for ForgejoProvider {
     fn pull(&self) -> Result<Vec<Issue>> {
         let token = self.get_token()?;
         let url = format!("{}/issues", self.base_url());
-        
+
         // Fetch open issues
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .header("Authorization", format!("token {}", token))
             .query(&[("state", "all")])
             .send()
             .context("Failed to fetch issues from Forgejo")?;
-            
+
         if !response.status().is_success() {
             return Err(anyhow!("API Error: {}", response.status()));
         }
-        
+
         let api_issues: Vec<ForgejoIssue> = response.json()?;
         let mut issues = Vec::new();
-        
+
         for api_issue in api_issues {
-            let status = if api_issue.state == "closed" { Status::Done } else { Status::Backlog };
-            
+            let status = if api_issue.state == "closed" {
+                Status::Done
+            } else {
+                Status::Backlog
+            };
+
             let mut remotes = std::collections::HashMap::new();
             remotes.insert(self.config.provider.clone(), api_issue.number.to_string());
 
@@ -128,20 +134,20 @@ impl SyncProvider for ForgejoProvider {
                 created: api_issue.created_at,
                 updated: api_issue.updated_at,
                 remotes,
-                repo: None,  // Will be set by multi-repo logic
+                repo: None, // Will be set by multi-repo logic
             };
             issues.push(issue);
         }
-        
+
         Ok(issues)
     }
 
     fn push(&self, issues: &mut [Issue]) -> Result<()> {
         let token = self.get_token()?;
         let base_url = format!("{}/issues", self.base_url());
-        
+
         // log::info!("📤 Synching {} issues with Forgejo...", issues.len());
-        
+
         for issue in issues {
             let payload = serde_json::json!({
                 "title": issue.title,
@@ -155,15 +161,17 @@ impl SyncProvider for ForgejoProvider {
                 // UPDATE existing issue
                 let url = format!("{}/{}", base_url, remote_id);
                 // log::info!("   Updating #{}: title='{}'", remote_id, issue.title);
-                
+
                 // Forgejo API: PATCH to update
-                let response = self.client.patch(&url)
+                let response = self
+                    .client
+                    .patch(&url)
                     .header("Authorization", format!("token {}", token))
                     .header("Content-Type", "application/json")
                     .json(&payload)
                     .send()
                     .context(format!("Failed to update issue #{}", remote_id))?;
-                
+
                 let status = response.status();
                 let resp_body = response.text().unwrap_or_default();
                 if status.is_success() {
@@ -178,8 +186,10 @@ impl SyncProvider for ForgejoProvider {
             } else {
                 // CREATE new issue
                 // log::info!("   Creating '{}'...", issue.title); // verbose
-                
-                let response = self.client.post(&base_url)
+
+                let response = self
+                    .client
+                    .post(&base_url)
                     .header("Authorization", format!("token {}", token))
                     .json(&payload)
                     .send()
@@ -188,12 +198,15 @@ impl SyncProvider for ForgejoProvider {
                 if response.status().is_success() {
                     let created_issue: ForgejoIssue = response.json()?;
                     // Link local issue to remote
-                    issue.remotes.insert(self.config.provider.clone(), created_issue.number.to_string());
+                    issue.remotes.insert(
+                        self.config.provider.clone(),
+                        created_issue.number.to_string(),
+                    );
                     // log::info!("   Linked to #{}", created_issue.number);
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -204,92 +217,103 @@ impl SyncProvider for ForgejoProvider {
         // so we need to construct the url correctly.
         // The pull() used .../issues, so deletion is .../issues/{index}
         let url_base = format!("{}/issues", self.base_url());
-        
+
         // Get all remote issue IIDs
         let remote_issues = self.pull()?;
-        let remote_ids: std::collections::HashSet<String> = remote_issues.iter()
+        let remote_ids: std::collections::HashSet<String> = remote_issues
+            .iter()
             .filter_map(|i| i.remotes.get(&self.config.provider).cloned())
             .collect();
-        
+
         // Get local issue IIDs (for this provider)
-        let local_ids: std::collections::HashSet<String> = local_issues.iter()
+        let local_ids: std::collections::HashSet<String> = local_issues
+            .iter()
             .filter_map(|i| i.remotes.get(&self.config.provider).cloned())
             .collect();
-        
+
         // IDs to delete = remote - local
         let to_delete: Vec<_> = remote_ids.difference(&local_ids).collect();
-        
+
         let mut deleted = 0;
         for iid in to_delete {
             let url = format!("{}/{}", url_base, iid);
             // log::info!("   🗑️  Deleting remote issue #{}", iid);
-            
-            let response = self.client.delete(&url)
+
+            let response = self
+                .client
+                .delete(&url)
                 .header("Authorization", format!("token {}", token))
                 .send()
                 .context(format!("Failed to delete issue #{}", iid))?;
-                
+
             if response.status().is_success() {
                 deleted += 1;
             } else {
-                log::error!("   ⚠️ Delete failed: {}", response.text().unwrap_or_default());
+                log::error!(
+                    "   ⚠️ Delete failed: {}",
+                    response.text().unwrap_or_default()
+                );
             }
         }
-        
+
         Ok(deleted)
     }
-    
+
     // Merge Request operations (Pull Requests in Forgejo/Gitea)
     fn create_mr(&self, mr: &crate::mr::MergeRequest) -> Result<u64> {
         let token = self.get_token()?;
         let url = format!("{}/pulls", self.base_url());
-        
+
         let payload = serde_json::json!({
             "title": mr.title,
             "head": mr.source_branch,
             "base": mr.target_branch,
             "body": mr.description,
         });
-        
-        let response = self.client.post(&url)
+
+        let response = self
+            .client
+            .post(&url)
             .header("Authorization", format!("token {}", token))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context("Failed to create pull request")?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().unwrap_or_default();
             return Err(anyhow!("Failed to create PR: {}", error_text));
         }
-        
+
         // Try to parse response, with better error message on failure
         let body = response.text().context("Failed to read response body")?;
         let pr: ForgejoPullRequest = serde_json::from_str(&body)
             .context(format!("Failed to parse PR response: {}", body))?;
         Ok(pr.number as u64)
     }
-    
+
     fn list_mrs(&self) -> Result<Vec<crate::mr::MergeRequest>> {
         let token = self.get_token()?;
         let url = format!("{}/pulls", self.base_url());
-        
-        let response = self.client.get(&url)
+
+        let response = self
+            .client
+            .get(&url)
             .header("Authorization", format!("token {}", token))
             .query(&[("state", "open")])
             .send()
             .context("Failed to fetch pull requests")?;
-        
+
         if !response.status().is_success() {
             return Err(anyhow!("API Error: {}", response.status()));
         }
-        
+
         // Parse with better error handling
         let body = response.text().context("Failed to read response")?;
-        let prs: Vec<ForgejoPullRequest> = serde_json::from_str(&body)
-            .context(format!("Failed to parse PRs: {}", body))?;
+        let prs: Vec<ForgejoPullRequest> =
+            serde_json::from_str(&body).context(format!("Failed to parse PRs: {}", body))?;
         let mut mrs = Vec::new();
-        
+
         for pr in prs {
             let state = if pr.merged {
                 crate::mr::MRState::Merged
@@ -298,7 +322,7 @@ impl SyncProvider for ForgejoProvider {
             } else {
                 crate::mr::MRState::Open
             };
-            
+
             let mr = crate::mr::MergeRequest {
                 id: uuid::Uuid::new_v4().to_string(),
                 remote_id: Some(pr.number as u64),
@@ -308,8 +332,18 @@ impl SyncProvider for ForgejoProvider {
                 description: pr.body.unwrap_or_default(),
                 state,
                 author: pr.user.map(|u| u.username),
-                assignees: pr.assignees.unwrap_or_default().into_iter().map(|a| a.username).collect(),
-                labels: pr.labels.unwrap_or_default().into_iter().map(|l| l.name).collect(),
+                assignees: pr
+                    .assignees
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|a| a.username)
+                    .collect(),
+                labels: pr
+                    .labels
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|l| l.name)
+                    .collect(),
                 linked_issues: Vec::new(),
                 web_url: Some(pr.html_url),
                 created: pr.created_at,
@@ -322,25 +356,27 @@ impl SyncProvider for ForgejoProvider {
             };
             mrs.push(mr);
         }
-        
+
         Ok(mrs)
     }
-    
+
     fn get_mr(&self, remote_id: u64) -> Result<crate::mr::MergeRequest> {
         let token = self.get_token()?;
         let url = format!("{}/pulls/{}", self.base_url(), remote_id);
-        
-        let response = self.client.get(&url)
+
+        let response = self
+            .client
+            .get(&url)
             .header("Authorization", format!("token {}", token))
             .send()
             .context(format!("Failed to fetch PR #{}", remote_id))?;
-        
+
         if !response.status().is_success() {
             return Err(anyhow!("API Error: {}", response.status()));
         }
-        
+
         let pr: ForgejoPullRequest = response.json()?;
-        
+
         let state = if pr.merged {
             crate::mr::MRState::Merged
         } else if pr.state == "closed" {
@@ -348,7 +384,7 @@ impl SyncProvider for ForgejoProvider {
         } else {
             crate::mr::MRState::Open
         };
-        
+
         Ok(crate::mr::MergeRequest {
             id: uuid::Uuid::new_v4().to_string(),
             remote_id: Some(pr.number as u64),
@@ -358,8 +394,18 @@ impl SyncProvider for ForgejoProvider {
             description: pr.body.unwrap_or_default(),
             state,
             author: pr.user.map(|u| u.username),
-            assignees: pr.assignees.unwrap_or_default().into_iter().map(|a| a.username).collect(),
-            labels: pr.labels.unwrap_or_default().into_iter().map(|l| l.name).collect(),
+            assignees: pr
+                .assignees
+                .unwrap_or_default()
+                .into_iter()
+                .map(|a| a.username)
+                .collect(),
+            labels: pr
+                .labels
+                .unwrap_or_default()
+                .into_iter()
+                .map(|l| l.name)
+                .collect(),
             linked_issues: Vec::new(),
             web_url: Some(pr.html_url),
             created: pr.created_at,
@@ -371,102 +417,110 @@ impl SyncProvider for ForgejoProvider {
             downvotes: 0,
         })
     }
-    
+
     fn update_mr(&self, mr: &crate::mr::MergeRequest) -> Result<()> {
         if let Some(remote_id) = mr.remote_id {
             let token = self.get_token()?;
             let url = format!("{}/pulls/{}", self.base_url(), remote_id);
-            
+
             let payload = serde_json::json!({
                 "title": mr.title,
                 "body": mr.description,
             });
-            
-            let response = self.client.patch(&url)
+
+            let response = self
+                .client
+                .patch(&url)
                 .header("Authorization", format!("token {}", token))
                 .header("Content-Type", "application/json")
                 .json(&payload)
                 .send()
                 .context(format!("Failed to update PR #{}", remote_id))?;
-            
+
             if !response.status().is_success() {
                 let error_text = response.text().unwrap_or_default();
                 return Err(anyhow!("Failed to update PR: {}", error_text));
             }
-            
+
             Ok(())
         } else {
             Err(anyhow!("Cannot update MR without remote_id"))
         }
     }
-    
+
     fn merge_mr(&self, remote_id: u64) -> Result<()> {
         let token = self.get_token()?;
         let url = format!("{}/pulls/{}/merge", self.base_url(), remote_id);
-        
+
         let payload = serde_json::json!({
             "Do": "merge",
         });
-        
-        let response = self.client.post(&url)
+
+        let response = self
+            .client
+            .post(&url)
             .header("Authorization", format!("token {}", token))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context(format!("Failed to merge PR #{}", remote_id))?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().unwrap_or_default();
             return Err(anyhow!("Failed to merge PR: {}", error_text));
         }
-        
+
         Ok(())
     }
-    
+
     fn close_mr(&self, remote_id: u64) -> Result<()> {
         let token = self.get_token()?;
         let url = format!("{}/pulls/{}", self.base_url(), remote_id);
-        
+
         let payload = serde_json::json!({
             "state": "closed",
         });
-        
-        let response = self.client.patch(&url)
+
+        let response = self
+            .client
+            .patch(&url)
             .header("Authorization", format!("token {}", token))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context(format!("Failed to close PR #{}", remote_id))?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().unwrap_or_default();
             return Err(anyhow!("Failed to close PR: {}", error_text));
         }
-        
+
         Ok(())
     }
-    
+
     fn approve_mr(&self, remote_id: u64) -> Result<()> {
         let token = self.get_token()?;
         let url = format!("{}/pulls/{}/reviews", self.base_url(), remote_id);
-        
+
         let payload = serde_json::json!({
             "event": "APPROVED",
             "body": "Approved via ProGit TUI",
         });
-        
-        let response = self.client.post(&url)
+
+        let response = self
+            .client
+            .post(&url)
             .header("Authorization", format!("token {}", token))
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context(format!("Failed to approve PR #{}", remote_id))?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().unwrap_or_default();
             return Err(anyhow!("Failed to approve PR: {}", error_text));
         }
-        
+
         Ok(())
     }
 }

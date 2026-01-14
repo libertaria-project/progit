@@ -25,7 +25,7 @@ impl SettingsField {
         // For now, only one field
         Self::Theme
     }
-    
+
     pub fn prev(self) -> Self {
         Self::Theme
     }
@@ -35,16 +35,16 @@ impl SettingsField {
 pub fn render(frame: &mut Frame, app: &App, selected_field: usize) -> Rect {
     let colors = app.theme.colors();
     let size = frame.area();
-    
+
     // Center the settings pane (60% width, 50% height)
     let area = centered_rect(size, 60, 50);
-    
+
     // Clear background
     frame.render_widget(Clear, area);
-    
+
     // Build content
     let mut lines = Vec::new();
-    
+
     // Theme selector
     let themes = ["Nord", "Gruvbox", "Dracula", "Cyberpunk", "Vibe"];
     let current_theme_idx = match app.theme {
@@ -54,11 +54,9 @@ pub fn render(frame: &mut Frame, app: &App, selected_field: usize) -> Rect {
         Theme::Cyberpunk => 3,
         Theme::Vibe => 4,
     };
-    
-    lines.push(Line::from(vec![
-        Span::styled("  Theme: ", colors.dim()),
-    ]));
-    
+
+    lines.push(Line::from(vec![Span::styled("  Theme: ", colors.dim())]));
+
     // Theme options as horizontal buttons
     let mut theme_spans = vec![Span::raw("    ")];
     for (i, &theme) in themes.iter().enumerate() {
@@ -69,7 +67,7 @@ pub fn render(frame: &mut Frame, app: &App, selected_field: usize) -> Rect {
         } else {
             colors.normal()
         };
-        
+
         if i == current_theme_idx {
             theme_spans.push(Span::styled(format!("[{}]", theme), style));
         } else {
@@ -78,11 +76,12 @@ pub fn render(frame: &mut Frame, app: &App, selected_field: usize) -> Rect {
         theme_spans.push(Span::raw(" "));
     }
     lines.push(Line::from(theme_spans));
-    
+
     lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::styled("  Keyboard shortcuts:", colors.dim()),
-    ]));
+    lines.push(Line::from(vec![Span::styled(
+        "  Keyboard shortcuts:",
+        colors.dim(),
+    )]));
     lines.push(Line::from(vec![
         Span::raw("    "),
         Span::styled("t", colors.accent()),
@@ -113,36 +112,40 @@ pub fn render(frame: &mut Frame, app: &App, selected_field: usize) -> Rect {
         Span::styled("Enter", colors.accent()),
         Span::raw(" - Open issue details"),
     ]));
-    
+
     lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::styled("  ─── Recommended Fonts ───", colors.dim()),
-    ]));
+    lines.push(Line::from(vec![Span::styled(
+        "  ─── Recommended Fonts ───",
+        colors.dim(),
+    )]));
     lines.push(Line::from(vec![
         Span::raw("    For best icon support, use a "),
         Span::styled("Nerd Font", colors.accent().add_modifier(Modifier::BOLD)),
         Span::raw(":"),
     ]));
-    lines.push(Line::from(vec![
-        Span::styled("    • JetBrainsMono Nerd Font", colors.normal()),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    • FiraCode Nerd Font", colors.normal()),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled("    • Hack Nerd Font", colors.normal()),
-    ]));
+    lines.push(Line::from(vec![Span::styled(
+        "    • JetBrainsMono Nerd Font",
+        colors.normal(),
+    )]));
+    lines.push(Line::from(vec![Span::styled(
+        "    • FiraCode Nerd Font",
+        colors.normal(),
+    )]));
+    lines.push(Line::from(vec![Span::styled(
+        "    • Hack Nerd Font",
+        colors.normal(),
+    )]));
     lines.push(Line::from(vec![
         Span::raw("    "),
         Span::styled("https://www.nerdfonts.com", colors.dim()),
     ]));
-    
+
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled("  Icon test: ", colors.dim()),
         Span::styled("       ", colors.accent()), // Nerd Font icons
     ]));
-    
+
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
         Span::styled("  Press ", colors.dim()),
@@ -151,17 +154,19 @@ pub fn render(frame: &mut Frame, app: &App, selected_field: usize) -> Rect {
         Span::styled("O", colors.accent()),
         Span::styled(" to close", colors.dim()),
     ]));
-    
-    let content = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title(Span::styled(" ⚙ Settings ", colors.accent().add_modifier(Modifier::BOLD)))
-                .borders(Borders::ALL)
-                .border_style(colors.accent()),
-        );
-    
+
+    let content = Paragraph::new(lines).block(
+        Block::default()
+            .title(Span::styled(
+                " ⚙ Settings ",
+                colors.accent().add_modifier(Modifier::BOLD),
+            ))
+            .borders(Borders::ALL)
+            .border_style(colors.accent()),
+    );
+
     frame.render_widget(content, area);
-    
+
     area
 }
 

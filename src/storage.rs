@@ -3,38 +3,38 @@
 //! Dual-format persistence: KDL (carbons) + JSON (silicons).
 //! All storage logic lives in `storage/` folder.
 
+pub mod cleaner;
+pub mod config;
+pub mod engine;
 pub mod json;
 pub mod kdl;
-pub mod sync;
-pub mod config;
-pub mod migration;
-pub mod cleaner;
-pub mod engine;
 pub mod migrate;
+pub mod migration;
+pub mod sync;
 
 // Re-export public API
+pub use cleaner::cleanup_duplicates;
+pub use config::{load_config, save_theme, Config, SyncConfig};
 pub use json::{read_cache, write_cache, IssueCache};
 pub use kdl::{issue_filename, parse_kdl, read_all_kdl, read_kdl, serialize_kdl, write_kdl};
-pub use sync::{delete_issue, load_issues, save_issue, sync_kdl_to_json};
-pub use config::{load_config, save_theme, Config, SyncConfig};
 pub use migration::check_and_migrate;
-pub use cleaner::cleanup_duplicates;
+pub use sync::{delete_issue, load_issues, save_issue, sync_kdl_to_json};
 
 /// Default paths relative to project root
 pub mod paths {
     use std::path::PathBuf;
 
     pub const PROJECT_DIR: &str = ".project"; // Synced
-    pub const LOCAL_DIR: &str = ".progit";   // Ignored
+    pub const LOCAL_DIR: &str = ".progit"; // Ignored
 
     pub fn issues_dir() -> PathBuf {
         PathBuf::from(PROJECT_DIR).join("issues")
     }
-    
+
     pub fn config_file() -> PathBuf {
         PathBuf::from(PROJECT_DIR).join("config.kdl")
     }
-    
+
     pub fn cache_file() -> PathBuf {
         PathBuf::from(LOCAL_DIR).join("issues.json") // Note: No .cache subdir needed inside .progit
     }

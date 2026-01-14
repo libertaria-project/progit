@@ -38,7 +38,7 @@ pub fn save_issue(issue: &Issue, kdl_dir: &Path, cache_path: &Path) -> Result<()
         for entry in std::fs::read_dir(kdl_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             // Skip non-kdl files
             if path.extension().map_or(true, |ext| ext != "kdl") {
                 continue;

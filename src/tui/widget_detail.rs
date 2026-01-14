@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, BorderType, Clear, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
 
@@ -74,7 +74,13 @@ impl EditField {
 
 /// Render the issue detail pane as an overlay
 /// Returns: (detail_area, close_button_area)
-pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buffer: &str, colors: &ThemeColors) -> (Rect, Rect) {
+pub fn render(
+    frame: &mut Frame,
+    issue: &Issue,
+    edit_field: EditField,
+    edit_buffer: &str,
+    colors: &ThemeColors,
+) -> (Rect, Rect) {
     let area = frame.area();
 
     // Center the detail pane (80% width, 80% height)
@@ -116,8 +122,8 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
     frame.render_widget(block, detail_area);
 
     // Render [X] close button
-    let close_widget = Paragraph::new(Span::styled("[X]", colors.warning()))
-        .alignment(Alignment::Center);
+    let close_widget =
+        Paragraph::new(Span::styled("[X]", colors.warning())).alignment(Alignment::Center);
     frame.render_widget(close_widget, close_btn);
 
     // Split into rows for each field
@@ -139,7 +145,11 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
         frame,
         chunks[0],
         "Title",
-        if edit_field == EditField::Title { edit_buffer } else { &issue.title },
+        if edit_field == EditField::Title {
+            edit_buffer
+        } else {
+            &issue.title
+        },
         edit_field == EditField::Title,
         colors,
     );
@@ -149,7 +159,11 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
         frame,
         chunks[1],
         "Description",
-        if edit_field == EditField::Description { edit_buffer } else { &issue.description },
+        if edit_field == EditField::Description {
+            edit_buffer
+        } else {
+            &issue.description
+        },
         edit_field == EditField::Description,
         colors,
     );
@@ -164,7 +178,11 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
         frame,
         status_effort[0],
         "Status",
-        if edit_field == EditField::Status { edit_buffer } else { issue.status.as_str() },
+        if edit_field == EditField::Status {
+            edit_buffer
+        } else {
+            issue.status.as_str()
+        },
         issue.status,
         edit_field == EditField::Status,
         colors,
@@ -175,7 +193,11 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
         frame,
         status_effort[1],
         "Effort",
-        if edit_field == EditField::Effort { edit_buffer } else { &effort_str },
+        if edit_field == EditField::Effort {
+            edit_buffer
+        } else {
+            &effort_str
+        },
         issue.effort,
         edit_field == EditField::Effort,
         colors,
@@ -187,7 +209,11 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
         frame,
         chunks[3],
         "Assignee",
-        if edit_field == EditField::Assignee { edit_buffer } else { assignee_display },
+        if edit_field == EditField::Assignee {
+            edit_buffer
+        } else {
+            assignee_display
+        },
         edit_field == EditField::Assignee,
         colors,
     );
@@ -202,7 +228,11 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
         frame,
         chunks[4],
         "Tags",
-        if edit_field == EditField::Tags { edit_buffer } else { &tags_display },
+        if edit_field == EditField::Tags {
+            edit_buffer
+        } else {
+            &tags_display
+        },
         edit_field == EditField::Tags,
         colors,
     );
@@ -210,35 +240,60 @@ pub fn render(frame: &mut Frame, issue: &Issue, edit_field: EditField, edit_buff
     // Time tracking row (Due / Started / Completed)
     let time_row = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+        .constraints([
+            Constraint::Percentage(33),
+            Constraint::Percentage(34),
+            Constraint::Percentage(33),
+        ])
         .split(chunks[5]);
 
-    let due_display = issue.due.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or("(none)".to_string());
+    let due_display = issue
+        .due
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or("(none)".to_string());
     render_field(
         frame,
         time_row[0],
         "⏰ Due",
-        if edit_field == EditField::DueDate { edit_buffer } else { &due_display },
+        if edit_field == EditField::DueDate {
+            edit_buffer
+        } else {
+            &due_display
+        },
         edit_field == EditField::DueDate,
         colors,
     );
 
-    let started_display = issue.started.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or("(none)".to_string());
+    let started_display = issue
+        .started
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or("(none)".to_string());
     render_field(
         frame,
         time_row[1],
         "▶ Started",
-        if edit_field == EditField::StartedDate { edit_buffer } else { &started_display },
+        if edit_field == EditField::StartedDate {
+            edit_buffer
+        } else {
+            &started_display
+        },
         edit_field == EditField::StartedDate,
         colors,
     );
 
-    let completed_display = issue.completed.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or("(none)".to_string());
+    let completed_display = issue
+        .completed
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or("(none)".to_string());
     render_field(
         frame,
         time_row[2],
         "✓ Completed",
-        if edit_field == EditField::CompletedDate { edit_buffer } else { &completed_display },
+        if edit_field == EditField::CompletedDate {
+            edit_buffer
+        } else {
+            &completed_display
+        },
         edit_field == EditField::CompletedDate,
         colors,
     );

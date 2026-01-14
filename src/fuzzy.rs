@@ -41,10 +41,7 @@ pub enum FuzzyItem {
         action: String,
     },
     /// File match
-    File {
-        path: String,
-        modified: bool,
-    },
+    File { path: String, modified: bool },
     /// Commit match
     Commit {
         hash: String,
@@ -58,7 +55,9 @@ impl FuzzyItem {
     pub fn display_text(&self) -> String {
         match self {
             FuzzyItem::Issue { id, title, .. } => format!("#{} {}", &id[..8.min(id.len())], title),
-            FuzzyItem::Command { name, description, .. } => format!("{}: {}", name, description),
+            FuzzyItem::Command {
+                name, description, ..
+            } => format!("{}: {}", name, description),
             FuzzyItem::File { path, modified } => {
                 if *modified {
                     format!("* {}", path)
@@ -266,12 +265,18 @@ impl FuzzySearcher {
                 query_idx += 1;
 
                 // Bonus for consecutive matches
-                if positions.len() > 1 && positions[positions.len() - 1] == positions[positions.len() - 2] + 1 {
+                if positions.len() > 1
+                    && positions[positions.len() - 1] == positions[positions.len() - 2] + 1
+                {
                     score += 5;
                 }
 
                 // Bonus for start of word
-                if i == 0 || text_chars.get(i - 1).map_or(false, |&c| c == ' ' || c == '/' || c == '-') {
+                if i == 0
+                    || text_chars
+                        .get(i - 1)
+                        .map_or(false, |&c| c == ' ' || c == '/' || c == '-')
+                {
                     score += 10;
                 }
 
@@ -356,7 +361,7 @@ mod tests {
     fn test_search_returns_sorted() {
         let mut searcher = FuzzySearcher::new();
         let results = searcher.search("new");
-        
+
         // Should return results sorted by score
         for i in 1..results.len() {
             assert!(results[i - 1].score >= results[i].score);

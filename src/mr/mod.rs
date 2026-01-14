@@ -4,4 +4,4 @@
 
 pub mod model;
 
-pub use model::{MergeRequest, MRState};
+pub use model::{MRState, MergeRequest};

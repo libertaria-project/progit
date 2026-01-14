@@ -2,10 +2,10 @@
 //!
 //! Parses `git blame --porcelain` output into structured data.
 
+use anyhow::{Context, Result};
+use chrono::{DateTime, TimeZone, Utc};
 use std::collections::HashMap;
 use std::process::Command;
-use chrono::{DateTime, TimeZone, Utc};
-use anyhow::{Result, Context};
 
 /// A single line of blame
 #[derive(Debug, Clone)]
@@ -36,7 +36,10 @@ impl BlameInfo {
             .context("Failed to run git blame")?;
 
         if !output.status.success() {
-            return Err(anyhow::anyhow!("git blame failed: {}", String::from_utf8_lossy(&output.stderr)));
+            return Err(anyhow::anyhow!(
+                "git blame failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
 
         let raw = String::from_utf8(output.stdout)?;
@@ -53,17 +56,17 @@ impl BlameInfo {
 fn parse_blame_porcelain(output: &str) -> Result<Vec<BlameLine>> {
     let mut lines = Vec::new();
     let mut commit_cache: HashMap<String, CommitInfo> = HashMap::new();
-    
+
     let mut current_commit_hash = String::new();
     let mut current_orig_line = 0;
     let mut current_final_line = 0;
-    
+
     // Iterate line by line
     for line in output.lines() {
         if line.starts_with('\t') {
             // This is the content line, usually the end of a block for one line of code
             let content = line[1..].to_string();
-            
+
             // Reconstruct the line info
             if let Some(info) = commit_cache.get(&current_commit_hash) {
                 lines.push(BlameLine {
@@ -77,7 +80,7 @@ fn parse_blame_porcelain(output: &str) -> Result<Vec<BlameLine>> {
                     content,
                 });
             } else {
-                // This shouldn't happen if porcelain output is standard, 
+                // This shouldn't happen if porcelain output is standard,
                 // because headers come before content
             }
             continue;
@@ -93,7 +96,7 @@ fn parse_blame_porcelain(output: &str) -> Result<Vec<BlameLine>> {
                 current_commit_hash = cols[0].to_string();
                 current_orig_line = cols[1].parse().unwrap_or(0);
                 current_final_line = cols[2].parse().unwrap_or(0);
-                
+
                 // If we don't have this commit cached, we expect following headers
                 if !commit_cache.contains_key(&current_commit_hash) {
                     commit_cache.insert(current_commit_hash.clone(), CommitInfo::default());
@@ -113,7 +116,7 @@ fn parse_blame_porcelain(output: &str) -> Result<Vec<BlameLine>> {
                 "author-time" => {
                     let ts: i64 = value.parse().unwrap_or(0);
                     info.time = Utc.timestamp_opt(ts, 0).unwrap();
-                },
+                }
                 "summary" => info.summary = value.to_string(),
                 _ => {}
             }
@@ -154,12 +157,12 @@ filename src/main.rs
 ";
         let lines = parse_blame_porcelain(output).unwrap();
         assert_eq!(lines.len(), 2);
-        
+
         // Line 1
         assert_eq!(lines[0].content, "use std::io;");
         assert_eq!(lines[0].author, "Markus Maiwald");
         assert_eq!(lines[0].line_number, 1);
-        
+
         // Line 2
         assert_eq!(lines[1].content, "");
         assert_eq!(lines[1].line_number, 2);

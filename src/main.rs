@@ -80,12 +80,65 @@ enum Commands {
         #[command(subcommand)]
         action: Option<MrAction>,
     },
+    /// Manage plugins
+    Plugin {
+        #[command(subcommand)]
+        action: PluginAction,
+    },
     /// Internal: Interactive rebase editor (triggered by git)
     #[command(hide = true)]
     RebaseEditor {
         /// Path to the git-rebase-todo file
         path: String,
     },
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+    /// List installed plugins
+    List,
+    /// Install a plugin from registry or git URL
+    Install {
+        /// Plugin name or git URL (with --git flag)
+        name: String,
+        /// Specific version to install
+        #[arg(short, long)]
+        version: Option<String>,
+        /// Install from git URL directly
+        #[arg(long)]
+        git: bool,
+    },
+    /// Remove an installed plugin
+    Remove {
+        /// Plugin name to remove
+        name: String,
+    },
+    /// Update installed plugins
+    Update {
+        /// Specific plugin to update (updates all if not specified)
+        name: Option<String>,
+    },
+    /// Search the plugin registry
+    Search {
+        /// Search query
+        query: String,
+    },
+    /// Show plugin information
+    Info {
+        /// Plugin name
+        name: String,
+    },
+    /// Update the local plugin index
+    Index {
+        #[command(subcommand)]
+        action: IndexAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum IndexAction {
+    /// Update the local plugin index from remote
+    Update,
 }
 
 #[derive(Subcommand)]
@@ -562,6 +615,47 @@ fn main() -> Result<()> {
                 return Err(anyhow!("Issue '{}' not found", id));
             }
         }
+        Some(Commands::Plugin { action }) => {
+            match action {
+                PluginAction::List => {
+                    plugins::cli::list(&project_root)?;
+                }
+                PluginAction::Install { name, version, git } => {
+                    let git_url = if git { Some(name.as_str()) } else { None };
+                    let plugin_name = if git {
+                        // Extract name from URL
+                        name.rsplit('/').next().unwrap_or(&name).trim_end_matches(".git")
+                    } else {
+                        &name
+                    };
+                    plugins::cli::install(
+                        &project_root,
+                        plugin_name,
+                        version.as_deref(),
+                        git_url,
+                    )?;
+                }
+                PluginAction::Remove { name } => {
+                    plugins::cli::remove(&project_root, &name)?;
+                }
+                PluginAction::Update { name } => {
+                    plugins::cli::update(&project_root, name.as_deref())?;
+                }
+                PluginAction::Search { query } => {
+                    plugins::cli::search(&project_root, &query)?;
+                }
+                PluginAction::Info { name } => {
+                    plugins::cli::info(&project_root, &name)?;
+                }
+                PluginAction::Index { action: index_action } => {
+                    match index_action {
+                        IndexAction::Update => {
+                            plugins::cli::index_update(&project_root)?;
+                        }
+                    }
+                }
+            }
+        }
         Some(Commands::RebaseEditor { path }) => {
             crate::rebase::run(&path)?;
         }
@@ -795,9 +889,21 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                          // For now, simple indicator
                          // app.set_status(format!("🤖 Typing... {}", token)); // Too noisy
                     }
-                    AgentEvent::Completed(_id, response) => {
-                         app.set_status("🤖 Agent finished!");
-                         // TODO: Store response in session history
+                    AgentEvent::Completed(id, response) => {
+                         app.set_status("🤖 Agent finished! Applying changes...");
+                         
+                         if let Some(manager) = &mut app.vbranch_manager {
+                             use crate::agent::ops::apply_agent_patch;
+                             match apply_agent_patch(manager, &id, &response) {
+                                 Ok(count) => {
+                                     app.set_status(format!("✅ Agent applied {} new hunk(s)", count));
+                                 }
+                                 Err(e) => {
+                                     log::error!("Agent apply error: {}", e);
+                                     app.set_status(format!("❌ Failed to apply agent patch: {}", e));
+                                 }
+                             }
+                         }
                     }
                     AgentEvent::Error(_id, err) => {
                          app.set_status(format!("⚠️ Agent error: {}", err));

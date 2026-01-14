@@ -550,17 +550,39 @@ fn handle_lanes_key(app: &mut App, key: KeyEvent) -> KeyAction {
                      use crate::agent::ollama::OllamaClient;
                      
                      let tx = app.agent_event_tx.clone().unwrap();
-                     let session_id = branch_id;
+                     let session_id = branch_id.clone();
+                     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
                      
+                     // Gather context in the main thread (block UI slightly? No, spawn thread)
+                     let context_res = if let Some(manager) = &app.vbranch_manager {
+                         if let Some(branch) = manager.get(&branch_id) {
+                             use crate::agent::context::gather_context;
+                             gather_context(branch, &project_root).ok()
+                         } else {
+                             None
+                         }
+                     } else { None };
+
                      std::thread::spawn(move || {
                          let client = OllamaClient::default();
+                         
+                         let mut prompt = String::new();
+                         if let Some(ctx) = context_res {
+                             prompt.push_str(&ctx.to_prompt_string());
+                             prompt.push_str("\n");
+                         }
+                         
+                         prompt.push_str("Task: Analyze the code above. If there are obvious improvements or refactoring opportunities, implement them. Return the result as a Unified Diff wrapped in a markdown code block (```diff). Only change what is necessary.");
+                         
                          let req = AgentRequest {
-                             prompt: "Analyze the current git hunks and suggest a refactor.".to_string(),
+                             prompt,
+                             // System prompt to set persona
+                             system_prompt: Some("You are a senior Rust developer. You act on a codebase by returning Unified Diffs. Always verify your diff headers match the file paths provided in the context.".to_string()),
                              ..Default::default()
                          };
                          
-                         if let Err(_e) = client.stream_completion(req, tx, session_id) {
-                             // log error
+                         if let Err(e) = client.stream_completion(req, tx.clone(), session_id.clone()) {
+                              let _ = tx.send(crate::agent::AgentEvent::Error(session_id, e.to_string()));
                          }
                      });
                      app.set_status("🤖 Agent started thinking...");

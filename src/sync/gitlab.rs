@@ -1,5 +1,5 @@
-use super::{SyncProvider, keyring};
-use crate::issue::{Issue, Status, Effort};
+use super::{keyring, SyncProvider};
+use crate::issue::{Effort, Issue, Status};
 use crate::storage::config::SyncConfig;
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
@@ -20,11 +20,8 @@ impl GitLabProvider {
             .connect_timeout(std::time::Duration::from_secs(5))
             .build()
             .unwrap_or_else(|_| Client::new());
-             
-        Self {
-            config,
-            client,
-        }
+
+        Self { config, client }
     }
 
     fn get_token(&self) -> Result<String> {
@@ -32,7 +29,7 @@ impl GitLabProvider {
         if let Ok(token) = keyring::get_token(&self.config.url, &self.config.owner) {
             return Ok(token);
         }
-        
+
         // If interactive, prompt
         self.login_interactive()
     }
@@ -43,19 +40,19 @@ impl GitLabProvider {
         keyring::set_token(&self.config.url, &self.config.owner, &token)?;
         Ok(token)
     }
-    
+
     // Convert project path (owner/repo) to URL or ID
     // GitLab uses integer IDs often, but also URL encoding
     fn api_url(&self, path: &str) -> String {
         let base = if self.config.url.ends_with('/') {
-            &self.config.url[..self.config.url.len()-1]
+            &self.config.url[..self.config.url.len() - 1]
         } else {
             &self.config.url
         };
         // Encode project path: owner/repo -> owner%2Frepo
         let project_path = format!("{}/{}", self.config.owner, self.config.repo);
         let encoded_path = urlencoding::encode(&project_path);
-        
+
         format!("{}/api/v4/projects/{}/{}", base, encoded_path, path)
     }
 
@@ -63,22 +60,28 @@ impl GitLabProvider {
     fn lookup_user_id(&self, username: &str) -> Result<Option<i64>> {
         let token = self.get_token()?;
         let base = if self.config.url.ends_with('/') {
-            &self.config.url[..self.config.url.len()-1]
+            &self.config.url[..self.config.url.len() - 1]
         } else {
             &self.config.url
         };
-        
-        let url = format!("{}/api/v4/users?username={}", base, urlencoding::encode(username));
-        
-        let response = self.client.get(&url)
+
+        let url = format!(
+            "{}/api/v4/users?username={}",
+            base,
+            urlencoding::encode(username)
+        );
+
+        let response = self
+            .client
+            .get(&url)
             .header("PRIVATE-TOKEN", &token)
             .send()
             .context("Failed to lookup user")?;
-            
+
         if !response.status().is_success() {
             return Ok(None);
         }
-        
+
         let users: Vec<GitLabUser> = response.json().unwrap_or_default();
         Ok(users.first().map(|u| u.id))
     }
@@ -87,11 +90,11 @@ impl GitLabProvider {
 // GitLab API Models
 #[derive(Debug, Serialize, Deserialize)]
 struct GitLabIssue {
-    iid: i64,          // Internal ID (visible to user)
-    project_id: i64,   // Global Project ID
+    iid: i64,        // Internal ID (visible to user)
+    project_id: i64, // Global Project ID
     title: String,
     description: Option<String>,
-    state: String,     // "opened", "closed"
+    state: String, // "opened", "closed"
     labels: Vec<String>,
     assignee: Option<GitLabUser>,
     assignees: Option<Vec<GitLabUser>>, // GitLab supports multiple
@@ -110,10 +113,12 @@ struct GitLabUser {
 impl SyncProvider for GitLabProvider {
     fn login(&self) -> Result<()> {
         let token = self.get_token()?;
-        
+
         // Verify token with simple user call
         let url = format!("{}/api/v4/user", self.config.url);
-        let response = self.client.get(&url)
+        let response = self
+            .client
+            .get(&url)
             .header("PRIVATE-TOKEN", &token)
             .send()
             .context("Failed to connect to GitLab")?;
@@ -125,9 +130,12 @@ impl SyncProvider for GitLabProvider {
                 keyring::delete_token(&self.config.url, &self.config.owner)?;
                 return self.login(); // Recursive retry with prompt
             }
-            return Err(anyhow!("GitLab authentication failed: {}", response.status()));
+            return Err(anyhow!(
+                "GitLab authentication failed: {}",
+                response.status()
+            ));
         }
-        
+
         // log::info!("✅ Authenticated with GitLab");
         Ok(())
     }
@@ -135,30 +143,34 @@ impl SyncProvider for GitLabProvider {
     fn pull(&self) -> Result<Vec<Issue>> {
         let token = self.get_token()?;
         let url = self.api_url("issues?state=all&per_page=100"); // Fetch all issues
-        
+
         // log::info!("📥 Fetching issues from GitLab...");
-        
-        let response = self.client.get(&url)
+
+        let response = self
+            .client
+            .get(&url)
             .header("PRIVATE-TOKEN", &token)
             .send()
             .context("Failed to fetch issues")?;
-            
-        let gl_issues: Vec<GitLabIssue> = response.json()
-            .context("Failed to parse GitLab response")?;
-            
+
+        let gl_issues: Vec<GitLabIssue> =
+            response.json().context("Failed to parse GitLab response")?;
+
         let mut issues = Vec::new();
-        
+
         for gl_issue in gl_issues {
             let status = match gl_issue.state.as_str() {
                 "closed" => Status::Done,
                 _ => Status::Backlog, // Default to backlog for open
             };
-            
+
             let mut remotes = HashMap::new();
             remotes.insert(self.config.provider.clone(), gl_issue.iid.to_string());
-            
+
             // Handle assignees (take first one)
-            let assignee = gl_issue.assignees.as_ref()
+            let assignee = gl_issue
+                .assignees
+                .as_ref()
                 .and_then(|a| a.first())
                 .map(|u| u.username.clone())
                 .or_else(|| gl_issue.assignee.map(|u| u.username));
@@ -179,20 +191,20 @@ impl SyncProvider for GitLabProvider {
                 created: gl_issue.created_at,
                 updated: gl_issue.updated_at,
                 remotes,
-                repo: None,  // Will be set by multi-repo logic
+                repo: None, // Will be set by multi-repo logic
             };
             issues.push(issue);
         }
-        
+
         Ok(issues)
     }
 
     fn push(&self, issues: &mut [Issue]) -> Result<()> {
         let token = self.get_token()?;
         let url_base = self.api_url("issues");
-        
+
         // log::info!("📤 Synching {} issues with GitLab...", issues.len());
-        
+
         for issue in issues {
             // GitLab expects specific state_event to close/reopen
             let state_event = if matches!(issue.status, Status::Done) {
@@ -226,22 +238,29 @@ impl SyncProvider for GitLabProvider {
                 // UPDATE
                 let url = format!("{}/{}", url_base, remote_id);
                 log::debug!("   Updating #{}: title='{}'", remote_id, issue.title);
-                
-                let response = self.client.put(&url)
+
+                let response = self
+                    .client
+                    .put(&url)
                     .header("PRIVATE-TOKEN", &token)
                     .header("Content-Type", "application/json")
                     .json(&payload)
                     .send()
                     .context(format!("Failed to update issue #{}", remote_id))?;
-                    
+
                 if !response.status().is_success() {
-                    log::error!("   ⚠️ Update failed: {}", response.text().unwrap_or_default());
+                    log::error!(
+                        "   ⚠️ Update failed: {}",
+                        response.text().unwrap_or_default()
+                    );
                 }
             } else {
                 // CREATE
                 // log::info!("   Creating '{}'...", issue.title);
-                
-                let response = self.client.post(&url_base)
+
+                let response = self
+                    .client
+                    .post(&url_base)
                     .header("PRIVATE-TOKEN", &token)
                     .header("Content-Type", "application/json")
                     .json(&payload)
@@ -250,66 +269,78 @@ impl SyncProvider for GitLabProvider {
 
                 if response.status().is_success() {
                     let created: GitLabIssue = response.json()?;
-                    issue.remotes.insert(self.config.provider.clone(), created.iid.to_string());
+                    issue
+                        .remotes
+                        .insert(self.config.provider.clone(), created.iid.to_string());
                 } else {
-                    log::error!("   ⚠️ Create failed: {}", response.text().unwrap_or_default());
+                    log::error!(
+                        "   ⚠️ Create failed: {}",
+                        response.text().unwrap_or_default()
+                    );
                 }
             }
         }
-        
+
         Ok(())
     }
 
     fn delete_missing(&self, local_issues: &[Issue]) -> Result<usize> {
         let token = self.get_token()?;
         let url_base = self.api_url("issues");
-        
+
         // Get all remote issue IIDs
         let remote_issues = self.pull()?;
-        let remote_ids: std::collections::HashSet<String> = remote_issues.iter()
+        let remote_ids: std::collections::HashSet<String> = remote_issues
+            .iter()
             .filter_map(|i| i.remotes.get(&self.config.provider).cloned())
             .collect();
-        
+
         // Get local issue IIDs (for this provider)
-        let local_ids: std::collections::HashSet<String> = local_issues.iter()
+        let local_ids: std::collections::HashSet<String> = local_issues
+            .iter()
             .filter_map(|i| i.remotes.get(&self.config.provider).cloned())
             .collect();
-        
+
         // IDs to delete = remote - local
         let to_delete: Vec<_> = remote_ids.difference(&local_ids).collect();
-        
+
         let mut deleted = 0;
         for iid in to_delete {
             let url = format!("{}/{}", url_base, iid);
             // log::info!("   🗑️  Deleting remote issue #{}", iid);
-            
-            let response = self.client.delete(&url)
+
+            let response = self
+                .client
+                .delete(&url)
                 .header("PRIVATE-TOKEN", &token)
                 .send()
                 .context(format!("Failed to delete issue #{}", iid))?;
-                
+
             if response.status().is_success() {
                 deleted += 1;
             } else {
-                log::error!("   ⚠️ Delete failed: {}", response.text().unwrap_or_default());
+                log::error!(
+                    "   ⚠️ Delete failed: {}",
+                    response.text().unwrap_or_default()
+                );
             }
         }
-        
+
         Ok(deleted)
     }
-    
+
     // Merge Request operations
     fn create_mr(&self, mr: &crate::mr::MergeRequest) -> Result<u64> {
         let token = self.get_token()?;
         let url = self.api_url("merge_requests");
-        
+
         let mut payload = serde_json::json!({
             "source_branch": mr.source_branch,
             "target_branch": mr.target_branch,
             "title": mr.title,
             "description": mr.description,
         });
-        
+
         // Add optional fields
         if !mr.assignees.is_empty() {
             // GitLab wants assignee IDs, but we'll try usernames first
@@ -322,40 +353,49 @@ impl SyncProvider for GitLabProvider {
         if mr.is_draft {
             payload["title"] = serde_json::json!(format!("Draft: {}", mr.title));
         }
-        
-        log::info!("🔀 Creating MR: {} -> {}", mr.source_branch, mr.target_branch);
-        
-        let response = self.client.post(&url)
+
+        log::info!(
+            "🔀 Creating MR: {} -> {}",
+            mr.source_branch,
+            mr.target_branch
+        );
+
+        let response = self
+            .client
+            .post(&url)
             .header("PRIVATE-TOKEN", &token)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context("Failed to create merge request")?;
-            
+
         if !response.status().is_success() {
             let error_text = response.text().unwrap_or_default();
             return Err(anyhow!("MR creation failed: {}", error_text));
         }
-        
+
         let created: serde_json::Value = response.json()?;
-        let iid = created["iid"].as_u64()
+        let iid = created["iid"]
+            .as_u64()
             .ok_or_else(|| anyhow!("No IID in response"))?;
-        
+
         log::info!("✅ Created MR !{}", iid);
         Ok(iid)
     }
-    
+
     fn list_mrs(&self) -> Result<Vec<crate::mr::MergeRequest>> {
         let token = self.get_token()?;
         let url = self.api_url("merge_requests?state=opened&per_page=100");
-        
-        let response = self.client.get(&url)
+
+        let response = self
+            .client
+            .get(&url)
             .header("PRIVATE-TOKEN", &token)
             .send()
             .context("Failed to list merge requests")?;
-            
+
         if !response.status().is_success() {
-             return Err(anyhow!("API Error: {}", response.status()));
+            return Err(anyhow!("API Error: {}", response.status()));
         }
 
         let body = response.text().context("Failed to get response body")?;
@@ -363,19 +403,21 @@ impl SyncProvider for GitLabProvider {
             Ok(v) => v,
             Err(e) => return Err(anyhow!("Failed to parse MR list: {}\nBody: {}", e, body)),
         };
-            
+
         let mut mrs = Vec::new();
         for gl_mr in gl_mrs {
-            let created_at = gl_mr["created_at"].as_str()
+            let created_at = gl_mr["created_at"]
+                .as_str()
                 .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now);
 
-            let updated_at = gl_mr["updated_at"].as_str()
+            let updated_at = gl_mr["updated_at"]
+                .as_str()
                 .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now);
-                
+
             let state_str = gl_mr["state"].as_str().unwrap_or("opened");
             let state = match state_str {
                 "opened" | "open" => crate::mr::MRState::Open,
@@ -388,59 +430,82 @@ impl SyncProvider for GitLabProvider {
             let mr = crate::mr::MergeRequest {
                 id: uuid::Uuid::new_v4().to_string(),
                 remote_id: gl_mr["iid"].as_u64(),
-                source_branch: gl_mr["source_branch"].as_str().unwrap_or_default().to_string(),
-                target_branch: gl_mr["target_branch"].as_str().unwrap_or_default().to_string(),
+                source_branch: gl_mr["source_branch"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                target_branch: gl_mr["target_branch"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
                 title: gl_mr["title"].as_str().unwrap_or_default().to_string(),
-                description: gl_mr["description"].as_str().unwrap_or_default().to_string(),
+                description: gl_mr["description"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
                 state,
                 author: gl_mr["author"]["username"].as_str().map(|s| s.to_string()),
-                assignees: vec![],  // TODO
-                labels: vec![],     // TODO
+                assignees: vec![], // TODO
+                labels: vec![],    // TODO
                 linked_issues: vec![],
                 web_url: gl_mr["web_url"].as_str().map(|s| s.to_string()),
                 created: created_at,
                 updated: updated_at,
                 merged_at: None,
-                is_draft: gl_mr["draft"].as_bool().unwrap_or(false) || gl_mr["work_in_progress"].as_bool().unwrap_or(false),
+                is_draft: gl_mr["draft"].as_bool().unwrap_or(false)
+                    || gl_mr["work_in_progress"].as_bool().unwrap_or(false),
                 approvals: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32, // Use upvotes as proxy for now
                 upvotes: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32,
                 downvotes: gl_mr["downvotes"].as_u64().unwrap_or(0) as u32,
             };
             mrs.push(mr);
         }
-        
+
         Ok(mrs)
     }
-    
+
     fn get_mr(&self, remote_id: u64) -> Result<crate::mr::MergeRequest> {
         let token = self.get_token()?;
         let url = self.api_url(&format!("merge_requests/{}", remote_id));
-        
-        let response = self.client.get(&url)
+
+        let response = self
+            .client
+            .get(&url)
             .header("PRIVATE-TOKEN", &token)
             .send()
             .context("Failed to get merge request")?;
-            
+
         let gl_mr: serde_json::Value = response.json()?;
-        
+
         Ok(crate::mr::MergeRequest {
             id: uuid::Uuid::new_v4().to_string(),
             remote_id: Some(remote_id),
-            source_branch: gl_mr["source_branch"].as_str().unwrap_or_default().to_string(),
-            target_branch: gl_mr["target_branch"].as_str().unwrap_or_default().to_string(),
+            source_branch: gl_mr["source_branch"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            target_branch: gl_mr["target_branch"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
             title: gl_mr["title"].as_str().unwrap_or_default().to_string(),
-            description: gl_mr["description"].as_str().unwrap_or_default().to_string(),
+            description: gl_mr["description"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
             state: crate::mr::MRState::Open,
             author: gl_mr["author"]["username"].as_str().map(|s| s.to_string()),
             assignees: vec![],
             labels: vec![],
             linked_issues: vec![],
             web_url: gl_mr["web_url"].as_str().map(|s| s.to_string()),
-            created: gl_mr["created_at"].as_str()
+            created: gl_mr["created_at"]
+                .as_str()
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc))
                 .unwrap_or_else(chrono::Utc::now),
-            updated: gl_mr["updated_at"].as_str()
+            updated: gl_mr["updated_at"]
+                .as_str()
                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                 .map(|dt| dt.with_timezone(&chrono::Utc))
                 .unwrap_or_else(chrono::Utc::now),
@@ -451,105 +516,113 @@ impl SyncProvider for GitLabProvider {
             downvotes: gl_mr["downvotes"].as_u64().unwrap_or(0) as u32,
         })
     }
-    
+
     fn update_mr(&self, mr: &crate::mr::MergeRequest) -> Result<()> {
         let Some(remote_id) = mr.remote_id else {
             return Err(anyhow!("Cannot update MR without remote_id"));
         };
-        
+
         let token = self.get_token()?;
         let url = self.api_url(&format!("merge_requests/{}", remote_id));
-        
+
         let payload = serde_json::json!({
             "title": mr.title,
             "description": mr.description,
         });
-        
-        let response = self.client.put(&url)
+
+        let response = self
+            .client
+            .put(&url)
             .header("PRIVATE-TOKEN", &token)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context("Failed to update merge request")?;
-            
+
         if !response.status().is_success() {
             let error_text = response.text().unwrap_or_default();
             return Err(anyhow!("MR update failed: {}", error_text));
         }
-        
+
         Ok(())
     }
-    
+
     fn approve_mr(&self, remote_id: u64) -> Result<()> {
         let token = self.get_token()?;
         let url = self.api_url(&format!("merge_requests/{}/approve", remote_id));
-        
+
         log::info!("👍 Approving MR !{}", remote_id);
-        
-        let response = self.client.post(&url)
+
+        let response = self
+            .client
+            .post(&url)
             .header("PRIVATE-TOKEN", &token)
             .send()
             .context("Failed to approve merge request")?;
-            
+
         if !response.status().is_success() {
-             let error_text = response.text().unwrap_or_default();
-             return Err(anyhow!("MR approval failed: {}", error_text));
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("MR approval failed: {}", error_text));
         }
-        
+
         log::info!("✅ Approved MR !{}", remote_id);
         Ok(())
     }
-    
+
     fn merge_mr(&self, remote_id: u64) -> Result<()> {
         let token = self.get_token()?;
         let url = self.api_url(&format!("merge_requests/{}/merge", remote_id));
-        
+
         log::info!("🔀 Merging MR !{}", remote_id);
-        
+
         // GitLab specific parameters for merge
         let payload = serde_json::json!({
             "should_remove_source_branch": true,
             "merge_when_pipeline_succeeds": true,
         });
 
-        let response = self.client.put(&url)
+        let response = self
+            .client
+            .put(&url)
             .header("PRIVATE-TOKEN", &token)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context("Failed to merge merge request")?;
-            
+
         if !response.status().is_success() {
-             let error_text = response.text().unwrap_or_default();
-             return Err(anyhow!("MR merge failed: {}", error_text));
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("MR merge failed: {}", error_text));
         }
-        
+
         log::info!("✅ Merged MR !{}", remote_id);
         Ok(())
     }
-    
+
     fn close_mr(&self, remote_id: u64) -> Result<()> {
         let token = self.get_token()?;
         let url = self.api_url(&format!("merge_requests/{}", remote_id));
-        
+
         log::info!("🚫 Closing MR !{}", remote_id);
-        
+
         let payload = serde_json::json!({
             "state_event": "close"
         });
 
-        let response = self.client.put(&url)
+        let response = self
+            .client
+            .put(&url)
             .header("PRIVATE-TOKEN", &token)
             .header("Content-Type", "application/json")
             .json(&payload)
             .send()
             .context("Failed to close merge request")?;
-            
+
         if !response.status().is_success() {
-             let error_text = response.text().unwrap_or_default();
-             return Err(anyhow!("MR close failed: {}", error_text));
+            let error_text = response.text().unwrap_or_default();
+            return Err(anyhow!("MR close failed: {}", error_text));
         }
-        
+
         log::info!("✅ Closed MR !{}", remote_id);
         Ok(())
     }

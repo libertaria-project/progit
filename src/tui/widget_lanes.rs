@@ -58,24 +58,38 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) -> LaneAreas {
     }
 
     // Calculate column widths - split evenly
-    let num_lanes = branches.len().min(5); // Max 5 visible lanes
-    let constraints: Vec<Constraint> = (0..num_lanes)
-        .map(|_| Constraint::Percentage(100 / num_lanes as u16))
-        .collect();
-
+    let lane_count = branches.len();
+    
+    // Detect conflicts
+    let conflicts = app.vbranch_manager.as_ref()
+        .map(|m| m.detect_conflicts())
+        .unwrap_or_default();
+    
+    // Create columns for each branch
+    let mut constraints = branches.iter()
+        .map(|_| Constraint::Percentage((95 / lane_count.max(1)) as u16))
+        .collect::<Vec<_>>();
+    
+    // Add rightmost spacer
+    constraints.push(Constraint::Percentage(5));
+    
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(constraints)
         .split(area);
-
+    
     lane_areas.lanes = columns.iter().cloned().collect();
 
     // Render each lane
-    for (idx, (lane_rect, branch)) in columns.iter().zip(branches.iter()).enumerate() {
+    for (idx, branch) in branches.iter().enumerate() {
         let is_selected = idx == app.vbranch_selected;
+        let col_area = columns[idx];
+        
+        // Check if this branch has conflicts
+        let has_conflicts = conflicts.get(&branch.id).map(|c| !c.is_empty()).unwrap_or(false);
         render_lane(
             frame,
-            *lane_rect,
+            col_area,
             branch,
             &colors,
             engine,
@@ -85,6 +99,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) -> LaneAreas {
             } else {
                 None
             },
+            has_conflicts,
         );
     }
 
@@ -185,6 +200,7 @@ fn render_lane(
     engine: &crate::tui::style::ThemeEngine,
     is_selected: bool,
     selected_hunk: Option<usize>,
+    has_conflicts: bool,
 ) {
     // Split: header info + hunk list + staged section
     let chunks = Layout::default()
@@ -197,7 +213,7 @@ fn render_lane(
         .split(area);
 
     // Render header
-    render_lane_header(frame, chunks[0], branch, colors, engine, is_selected);
+    render_lane_header(frame, chunks[0], branch, colors, engine, is_selected, has_conflicts);
 
     // Render unstaged hunks
     render_hunk_list(
@@ -223,6 +239,7 @@ fn render_lane_header(
     colors: &ThemeColors,
     engine: &crate::tui::style::ThemeEngine,
     is_selected: bool,
+    has_conflicts: bool,
 ) {
     let border_style = if is_selected {
         engine.get("lanes.header.selected", colors.accent())

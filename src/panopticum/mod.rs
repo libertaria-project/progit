@@ -97,11 +97,7 @@ fn get_binary_path(custom_path: Option<&str>) -> String {
 /// Spawn validation in background thread (non-blocking)
 ///
 /// Results are sent back via the channel.
-pub fn spawn_validate(
-    root: PathBuf,
-    binary_path: Option<String>,
-    sender: Sender<PanoEvent>,
-) {
+pub fn spawn_validate(root: PathBuf, binary_path: Option<String>, sender: Sender<PanoEvent>) {
     thread::spawn(move || {
         let _ = sender.send(PanoEvent::Status(PanoStatus::Running(
             "🔱 Validating policy...".into(),
@@ -148,9 +144,10 @@ pub fn spawn_plan(
     sender: Sender<PanoEvent>,
 ) {
     thread::spawn(move || {
-        let _ = sender.send(PanoEvent::Status(PanoStatus::Running(
-            format!("🔱 Planning {} environment...", env),
-        )));
+        let _ = sender.send(PanoEvent::Status(PanoStatus::Running(format!(
+            "🔱 Planning {} environment...",
+            env
+        ))));
 
         let binary = binary_path.as_deref().unwrap_or(PANOCTL_BINARY);
         let child = Command::new(binary)
@@ -168,7 +165,8 @@ pub fn spawn_plan(
                 if let Some(stdout) = child.stdout.take() {
                     let reader = BufReader::new(stdout);
                     for line in reader.lines().flatten() {
-                        let _ = sender.send(PanoEvent::Status(PanoStatus::OutputLine(line.clone())));
+                        let _ =
+                            sender.send(PanoEvent::Status(PanoStatus::OutputLine(line.clone())));
                         full_output.push_str(&line);
                         full_output.push('\n');
                     }
@@ -178,9 +176,10 @@ pub fn spawn_plan(
                 if let Some(stderr) = child.stderr.take() {
                     let reader = BufReader::new(stderr);
                     for line in reader.lines().flatten() {
-                        let _ = sender.send(PanoEvent::Status(PanoStatus::OutputLine(
-                            format!("[ERR] {}", line),
-                        )));
+                        let _ = sender.send(PanoEvent::Status(PanoStatus::OutputLine(format!(
+                            "[ERR] {}",
+                            line
+                        ))));
                         full_output.push_str(&line);
                         full_output.push('\n');
                     }
@@ -213,9 +212,10 @@ pub fn spawn_apply(
     sender: Sender<PanoEvent>,
 ) {
     thread::spawn(move || {
-        let _ = sender.send(PanoEvent::Status(PanoStatus::Running(
-            format!("🔱 Applying {} environment...", env),
-        )));
+        let _ = sender.send(PanoEvent::Status(PanoStatus::Running(format!(
+            "🔱 Applying {} environment...",
+            env
+        ))));
 
         let binary = binary_path.as_deref().unwrap_or(PANOCTL_BINARY);
         let mut args = vec!["apply", "--env", &env];
@@ -237,7 +237,8 @@ pub fn spawn_apply(
                 if let Some(stdout) = child.stdout.take() {
                     let reader = BufReader::new(stdout);
                     for line in reader.lines().flatten() {
-                        let _ = sender.send(PanoEvent::Status(PanoStatus::OutputLine(line.clone())));
+                        let _ =
+                            sender.send(PanoEvent::Status(PanoStatus::OutputLine(line.clone())));
                         full_output.push_str(&line);
                         full_output.push('\n');
                     }
@@ -246,9 +247,10 @@ pub fn spawn_apply(
                 if let Some(stderr) = child.stderr.take() {
                     let reader = BufReader::new(stderr);
                     for line in reader.lines().flatten() {
-                        let _ = sender.send(PanoEvent::Status(PanoStatus::OutputLine(
-                            format!("[ERR] {}", line),
-                        )));
+                        let _ = sender.send(PanoEvent::Status(PanoStatus::OutputLine(format!(
+                            "[ERR] {}",
+                            line
+                        ))));
                         full_output.push_str(&line);
                         full_output.push('\n');
                     }

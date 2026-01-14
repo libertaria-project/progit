@@ -60,7 +60,7 @@ pub fn parse_kdl(content: &str) -> Result<(Issue, bool)> {
     // 1. Try property: issue id="123"
     // 2. Try entry (argument): issue "123" (unlikely but possible legacy)
     // 3. Try child: issue { id "123" }
-    
+
     let mut id = None;
     let mut generated = false;
 
@@ -74,16 +74,16 @@ pub fn parse_kdl(content: &str) -> Result<(Issue, bool)> {
     // Check children if not found
     if id.is_none() {
         if let Some(children) = issue_node.children() {
-             for node in children.nodes() {
-                 if node.name().value() == "id" {
-                     if let Some(entry) = node.entries().first() {
-                         if let Some(s) = entry.value().as_string() {
-                             id = Some(s.to_string());
-                             break;
-                         }
-                     }
-                 }
-             }
+            for node in children.nodes() {
+                if node.name().value() == "id" {
+                    if let Some(entry) = node.entries().first() {
+                        if let Some(s) = entry.value().as_string() {
+                            id = Some(s.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -118,24 +118,27 @@ pub fn parse_kdl(content: &str) -> Result<(Issue, bool)> {
     let remotes = get_remotes(children);
     let repo = get_string_value(children, "repo");
 
-    Ok((Issue {
-        id: final_id,
-        title,
-        description,
-        status,
-        effort,
-        tags,
-        assignee,
-        sprint,
-        due,
-        started,
-        completed,
-        blocked,
-        created,
-        updated,
-        remotes,
-        repo,
-    }, generated))
+    Ok((
+        Issue {
+            id: final_id,
+            title,
+            description,
+            status,
+            effort,
+            tags,
+            assignee,
+            sprint,
+            due,
+            started,
+            completed,
+            blocked,
+            created,
+            updated,
+            remotes,
+            repo,
+        },
+        generated,
+    ))
 }
 
 /// Write an issue to a KDL file
@@ -207,7 +210,7 @@ pub fn serialize_kdl(issue: &Issue) -> String {
         }
         lines.push("    }".to_string());
     }
-    
+
     if let Some(ref repo) = issue.repo {
         lines.push(format!("    repo \"{}\"", repo));
     }
@@ -257,7 +260,11 @@ fn get_int_value(nodes: &[KdlNode], name: &str) -> Option<i64> {
 }
 
 fn get_datetime_value(nodes: &[KdlNode], name: &str) -> Option<DateTime<Utc>> {
-    get_string_value(nodes, name).and_then(|s| DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&Utc)))
+    get_string_value(nodes, name).and_then(|s| {
+        DateTime::parse_from_rfc3339(&s)
+            .ok()
+            .map(|dt| dt.with_timezone(&Utc))
+    })
 }
 
 fn get_bool_value(nodes: &[KdlNode], name: &str) -> Option<bool> {
@@ -288,7 +295,7 @@ fn get_tags(nodes: &[KdlNode]) -> Vec<String> {
 
 fn get_remotes(nodes: &[KdlNode]) -> std::collections::HashMap<String, String> {
     let mut map = std::collections::HashMap::new();
-    
+
     if let Some(remotes_node) = nodes.iter().find(|n| n.name().value() == "remotes") {
         if let Some(children) = remotes_node.children() {
             for node in children.nodes() {
@@ -299,7 +306,7 @@ fn get_remotes(nodes: &[KdlNode]) -> std::collections::HashMap<String, String> {
             }
         }
     }
-    
+
     map
 }
 
@@ -313,7 +320,6 @@ fn parse_status(s: &str) -> Status {
 
 fn escape_kdl_string(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
-
 }
 
 #[cfg(test)]
@@ -354,7 +360,7 @@ issue id="test-123" {
 
         let kdl = serialize_kdl(&issue);
         let (parsed, generated) = parse_kdl(&kdl).unwrap();
-        
+
         assert!(!generated);
         assert_eq!(parsed.title, issue.title);
         assert_eq!(parsed.status, issue.status);
