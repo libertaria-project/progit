@@ -54,6 +54,7 @@ blake3 = "1.5"
 # Plugin SDK (Apache 2.0 - separate license)
 progit-plugin-sdk = { path = "../progit-plugin-sdk" }
 tempfile = "3.23.0"
+mlua = { version = "0.11.5", features = ["luajit", "vendored"] }
 
 [features]
 default = []
