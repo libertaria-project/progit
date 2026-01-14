@@ -13,6 +13,7 @@ pub mod input;
 pub mod style;
 pub mod theme;
 pub mod widget_blame;
+pub mod widget_conflicts;
 pub mod widget_dashboard;
 mod widget_debug;
 pub mod widget_detail;
@@ -439,9 +440,14 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         frame.render_widget(p, inner);
     }
 
-    // Render panopticum log viewer modal if open
+    // Overlays (render last so they appear on top)
     if app.show_pano_log {
         widget_pano_log::render(frame, app);
+    }
+    
+    // Conflict resolution modal (top layer)
+    if app.show_conflicts {
+        widget_conflicts::render(frame, app);
     }
 
     areas

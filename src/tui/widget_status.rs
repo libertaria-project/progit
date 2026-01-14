@@ -183,7 +183,7 @@ pub fn help_text(app: &App) -> String {
         crate::tui::ViewMode::MRList => "j/k:nav  enter:review  r:reload  q:back".to_string(),
         crate::tui::ViewMode::Blame => "j/k:scroll  m:toggle mode  q:back".to_string(),
         crate::tui::ViewMode::Lanes => {
-            "h/l:lanes  j/k:hunks  n:new  Space:stage  m:move  q:back".to_string()
+            "j/k: Navigate | a: AI Agent | c: Show Conflicts | m: Move Hunk | Space: Stage | q: Quit".to_string()
         }
     }
 }

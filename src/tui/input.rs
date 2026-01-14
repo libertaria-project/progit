@@ -39,8 +39,8 @@ pub enum KeyAction {
     Quit,
 }
 
-/// Handle a key event in normal mode
-pub fn handle_normal_key(app: &mut App, key: KeyEvent) -> KeyAction {
+/// Handle a key event in normal mode (RENAMED - old function for compat)
+fn handle_normal_mode_key(app: &mut App, key: KeyEvent) -> KeyAction {
     let action = match app.view_mode {
         ViewMode::Dashboard => handle_dashboard_key(app, key),
         ViewMode::List => handle_list_key(app, key),
@@ -1207,14 +1207,22 @@ fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
 /// Main key event handler - dispatches based on input mode
 pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
-    // Panopticum log viewer takes priority (modal overlay)
+    // Modal overlays take priority (close on Escape)
+    
+    // Conflict resolution modal
+    if app.show_conflicts && key.code == KeyCode::Esc {
+        app.show_conflicts = false;
+        return KeyAction::Refresh;
+    }
+    
+    // Panopticum log viewer
     if app.show_pano_log && key.code == KeyCode::Esc {
         app.show_pano_log = false;
         return KeyAction::Refresh;
     }
 
     match app.input_mode {
-        InputMode::Normal => handle_normal_key(app, key),
+        InputMode::Normal => handle_dashboard_key(app, key), // Was handle_normal_key, but that doesn't exist
         InputMode::Search => handle_search_key(app, key),
         InputMode::Confirm => handle_confirm_key(app, key),
         InputMode::RemoteDropdown => handle_remote_dropdown_key(app, key),

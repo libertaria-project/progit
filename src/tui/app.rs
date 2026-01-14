@@ -223,6 +223,9 @@ pub struct App {
 
     /// Channel receiver for agent events (polled in main loop)
     pub agent_event_rx: Option<Receiver<crate::agent::AgentEvent>>,
+    
+    /// Show conflict resolution modal
+    pub show_conflicts: bool,
 }
 
 impl Default for App {
@@ -293,6 +296,7 @@ impl App {
             // Agent
             agent_event_tx: None,
             agent_event_rx: None,
+            show_conflicts: false,
         }
     }
 
