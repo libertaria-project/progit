@@ -3,6 +3,7 @@
 //! Vim-style navigation with mode-aware key processing and mouse support.
 
 use super::app::{App, InputMode, ViewMode};
+use super::agent_executor::execute_agent_action;
 use super::widget_kanban::{column_at_point, column_status, point_in_rect};
 use super::UIAreas;
 use crate::issue::Status;
@@ -530,66 +531,25 @@ fn handle_lanes_key(app: &mut App, key: KeyEvent) -> KeyAction {
             app.set_status("Move hunk to lane: Coming soon");
             KeyAction::Refresh
         }
-        // Trigger AI Agent
+        // Open AI Agent Menu
         KeyCode::Char('a') => {
-            let mut branch_info = None;
-            
-            // 1. Get branch info (immutable borrow)
+            // Check if we have a selected branch with hunks
             if let Some(manager) = &app.vbranch_manager {
-                if let Some(branch) = manager.list().get(app.vbranch_selected) {
-                    branch_info = Some((branch.id.clone(), branch.name.clone()));
-                }
-            }
-            
-            // 2. Act on it (mutable borrow allowed now)
-            if let Some((branch_id, branch_name)) = branch_info {
-                app.set_status(format!("🤖 waking up agent for {}...", branch_name));
-                
-                if app.agent_event_tx.is_some() {
-                     use crate::agent::{AgentRequest, AgentClient};
-                     use crate::agent::ollama::OllamaClient;
-                     
-                     let tx = app.agent_event_tx.clone().unwrap();
-                     let session_id = branch_id.clone();
-                     let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-                     
-                     // Gather context in the main thread (block UI slightly? No, spawn thread)
-                     let context_res = if let Some(manager) = &app.vbranch_manager {
-                         if let Some(branch) = manager.get(&branch_id) {
-                             use crate::agent::context::gather_context;
-                             gather_context(branch, &project_root).ok()
-                         } else {
-                             None
-                         }
-                     } else { None };
-
-                     std::thread::spawn(move || {
-                         let client = OllamaClient::default();
-                         
-                         let mut prompt = String::new();
-                         if let Some(ctx) = context_res {
-                             prompt.push_str(&ctx.to_prompt_string());
-                             prompt.push_str("\n");
-                         }
-                         
-                         prompt.push_str("Task: Analyze the code above. If there are obvious improvements or refactoring opportunities, implement them. Return the result as a Unified Diff wrapped in a markdown code block (```diff). Only change what is necessary.");
-                         
-                         let req = AgentRequest {
-                             prompt,
-                             // System prompt to set persona
-                             system_prompt: Some("You are a senior Rust developer. You act on a codebase by returning Unified Diffs. Always verify your diff headers match the file paths provided in the context.".to_string()),
-                             ..Default::default()
-                         };
-                         
-                         if let Err(e) = client.stream_completion(req, tx.clone(), session_id.clone()) {
-                              let _ = tx.send(crate::agent::AgentEvent::Error(session_id, e.to_string()));
-                         }
-                     });
-                     app.set_status("🤖 Agent started thinking...");
+                if let Some(_branch) =  manager.list().get(app.vbranch_selected) {
+                    app.show_agent_menu = true;
+                    app.agent_menu_selected = 0; // Reset selection
+                    app.set_status("Select an AI action...");
                 } else {
-                     app.set_status("⚠️  Agent system not initialized");
+                    app.set_status("No branch selected");
                 }
+            } else {
+                app.set_status("Virtual branches not initialized");
             }
+            KeyAction::Refresh
+        }
+        // Show conflict resolution modal
+        KeyCode::Char('c') => {
+            app.set_status("Conflict resolution: Coming soon");
             KeyAction::Refresh
         }
         _ => KeyAction::None,
@@ -1208,6 +1168,41 @@ fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyAction {
 /// Main key event handler - dispatches based on input mode
 pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
     // Modal overlays take priority (close on Escape)
+    
+    // Agent menu modal
+    if app.show_agent_menu {
+        use crate::tui::widget_agent_menu::AgentAction;
+        
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                app.agent_menu_selected = (app.agent_menu_selected + 1) % AgentAction::all().len();
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if app.agent_menu_selected == 0 {
+                    app.agent_menu_selected = AgentAction::all().len() - 1;
+                } else {
+                    app.agent_menu_selected -= 1;
+                }
+                return KeyAction::Refresh;
+            }
+            KeyCode::Enter => {
+                // Execute selected action
+                let action = AgentAction::all()[app.agent_menu_selected];
+                app.show_agent_menu = false;
+                
+                // Trigger agent with selected action
+                execute_agent_action(app, action);
+                return KeyAction::Refresh;
+            }
+            KeyCode::Esc => {
+                app.show_agent_menu = false;
+                app.set_status("Agent action canceled");
+                return KeyAction::Refresh;
+            }
+            _ => return KeyAction::None,
+        }
+    }
     
     // Conflict resolution modal
     if app.show_conflicts && key.code == KeyCode::Esc {

@@ -9,9 +9,11 @@
 //! - Main content area contains the active view window
 
 pub mod app;
+pub mod agent_executor;
 pub mod input;
 pub mod style;
 pub mod theme;
+pub mod widget_agent_menu;
 pub mod widget_blame;
 pub mod widget_conflicts;
 pub mod widget_dashboard;
@@ -445,9 +447,14 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         widget_pano_log::render(frame, app);
     }
     
-    // Conflict resolution modal (top layer)
+    // Conflict resolution modal
     if app.show_conflicts {
         widget_conflicts::render(frame, app);
+    }
+    
+    // Agent menu modal (top layer)
+    if app.show_agent_menu {
+        widget_agent_menu::render(frame, app, app.agent_menu_selected);
     }
 
     areas

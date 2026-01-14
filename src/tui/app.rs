@@ -226,6 +226,12 @@ pub struct App {
     
     /// Show conflict resolution modal
     pub show_conflicts: bool,
+    
+    /// Show agent menu modal
+    pub show_agent_menu: bool,
+    
+    /// Selected action in agent menu
+    pub agent_menu_selected: usize,
 }
 
 impl Default for App {
@@ -297,6 +303,8 @@ impl App {
             agent_event_tx: None,
             agent_event_rx: None,
             show_conflicts: false,
+            show_agent_menu: false,
+            agent_menu_selected: 0,
         }
     }
 
