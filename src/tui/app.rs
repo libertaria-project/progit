@@ -216,6 +216,13 @@ pub struct App {
 
     /// Selected hunk within a virtual branch
     pub vbranch_hunk_selected: usize,
+
+    // ─── Agent Integration ───────────────────────────────────────────────────
+    /// Channel sender for agent events (cloned to agent thread)
+    pub agent_event_tx: Option<Sender<crate::agent::AgentEvent>>,
+
+    /// Channel receiver for agent events (polled in main loop)
+    pub agent_event_rx: Option<Receiver<crate::agent::AgentEvent>>,
 }
 
 impl Default for App {
@@ -283,6 +290,9 @@ impl App {
             vbranch_manager: None,
             vbranch_selected: 0,
             vbranch_hunk_selected: 0,
+            // Agent
+            agent_event_tx: None,
+            agent_event_rx: None,
         }
     }
 

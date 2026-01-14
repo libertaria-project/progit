@@ -530,6 +530,46 @@ fn handle_lanes_key(app: &mut App, key: KeyEvent) -> KeyAction {
             app.set_status("Move hunk to lane: Coming soon");
             KeyAction::Refresh
         }
+        // Trigger AI Agent
+        KeyCode::Char('a') => {
+            let mut branch_info = None;
+            
+            // 1. Get branch info (immutable borrow)
+            if let Some(manager) = &app.vbranch_manager {
+                if let Some(branch) = manager.list().get(app.vbranch_selected) {
+                    branch_info = Some((branch.id.clone(), branch.name.clone()));
+                }
+            }
+            
+            // 2. Act on it (mutable borrow allowed now)
+            if let Some((branch_id, branch_name)) = branch_info {
+                app.set_status(format!("🤖 waking up agent for {}...", branch_name));
+                
+                if app.agent_event_tx.is_some() {
+                     use crate::agent::{AgentRequest, AgentClient};
+                     use crate::agent::ollama::OllamaClient;
+                     
+                     let tx = app.agent_event_tx.clone().unwrap();
+                     let session_id = branch_id;
+                     
+                     std::thread::spawn(move || {
+                         let client = OllamaClient::default();
+                         let req = AgentRequest {
+                             prompt: "Analyze the current git hunks and suggest a refactor.".to_string(),
+                             ..Default::default()
+                         };
+                         
+                         if let Err(_e) = client.stream_completion(req, tx, session_id) {
+                             // log error
+                         }
+                     });
+                     app.set_status("🤖 Agent started thinking...");
+                } else {
+                     app.set_status("⚠️  Agent system not initialized");
+                }
+            }
+            KeyAction::Refresh
+        }
         _ => KeyAction::None,
     }
 }

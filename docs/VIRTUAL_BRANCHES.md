@@ -92,6 +92,7 @@ This means your virtual branch definitions can be checked into git (if you want 
 ## 🤖 AI Agent Integration
 
 Each virtual branch can have an **AI Agent** assigned to it.
+- **[📘 Read the Full AI Agent Documentation](AI_AGENTS.md)**
 - The agent effectively "owns" the branch.
 - It can read the hunks assigned to it.
 - It can propose new changes (which appear as new unowned hunks or auto-assigned hunks).

@@ -15,3 +15,4 @@ pub mod storage;
 pub mod sync;
 pub mod tui;
 pub mod virtual_branch;
+pub mod agent;

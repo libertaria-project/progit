@@ -17,6 +17,7 @@ mod storage;
 mod sync;
 mod tui;
 mod virtual_branch;
+mod agent;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -719,6 +720,11 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
     // Track UI areas for mouse events
     let mut ui_areas = UIAreas::default();
 
+    // ─── Agent Integration ───────────────────────────────────────────────────
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.agent_event_tx = Some(tx);
+    app.agent_event_rx = Some(rx);
+
     loop {
         // ─── Panopticum Event Polling ─────────────────────────────────────────
         // Check for async panopticum results before rendering
@@ -771,6 +777,34 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
             }
             // Put receiver back
             app.pano_event_rx = Some(rx);
+        }
+
+        // ─── Agent Event Polling ──────────────────────────────────────────────
+        if let Some(rx) = app.agent_event_rx.take() {
+            while let Ok(event) = rx.try_recv() {
+                use crate::agent::AgentEvent;
+                match event {
+                    AgentEvent::Started(id) => {
+                         // Update session status to Thinking
+                         // This would ideally map id back to a virtual branch
+                         // For now we just show a status
+                         app.set_status(format!("🤖 Agent started (Session {})", &id[..8]));
+                    }
+                    AgentEvent::Token(_id, token) => {
+                         // Streaming token - in future we append to a buffer
+                         // For now, simple indicator
+                         // app.set_status(format!("🤖 Typing... {}", token)); // Too noisy
+                    }
+                    AgentEvent::Completed(_id, response) => {
+                         app.set_status("🤖 Agent finished!");
+                         // TODO: Store response in session history
+                    }
+                    AgentEvent::Error(_id, err) => {
+                         app.set_status(format!("⚠️ Agent error: {}", err));
+                    }
+                }
+            }
+            app.agent_event_rx = Some(rx);
         }
 
         // Draw
