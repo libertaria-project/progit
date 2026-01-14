@@ -616,45 +616,11 @@ fn main() -> Result<()> {
             }
         }
         Some(Commands::Plugin { action }) => {
-            match action {
-                PluginAction::List => {
-                    plugins::cli::list(&project_root)?;
-                }
-                PluginAction::Install { name, version, git } => {
-                    let git_url = if git { Some(name.as_str()) } else { None };
-                    let plugin_name = if git {
-                        // Extract name from URL
-                        name.rsplit('/').next().unwrap_or(&name).trim_end_matches(".git")
-                    } else {
-                        &name
-                    };
-                    plugins::cli::install(
-                        &project_root,
-                        plugin_name,
-                        version.as_deref(),
-                        git_url,
-                    )?;
-                }
-                PluginAction::Remove { name } => {
-                    plugins::cli::remove(&project_root, &name)?;
-                }
-                PluginAction::Update { name } => {
-                    plugins::cli::update(&project_root, name.as_deref())?;
-                }
-                PluginAction::Search { query } => {
-                    plugins::cli::search(&project_root, &query)?;
-                }
-                PluginAction::Info { name } => {
-                    plugins::cli::info(&project_root, &name)?;
-                }
-                PluginAction::Index { action: index_action } => {
-                    match index_action {
-                        IndexAction::Update => {
-                            plugins::cli::index_update(&project_root)?;
-                        }
-                    }
-                }
-            }
+            // TODO: Reimplement plugin CLI with new SDK in v0.6.0
+            eprintln!("⚠️  Plugin management CLI will be reimplemented in v0.6.0");
+            eprintln!("    Current plugin system: LuaJIT engine available via API");
+            eprintln!("    See docs/PLUGIN_SDK.md for details");
+            std::process::exit(1);
         }
         Some(Commands::RebaseEditor { path }) => {
             crate::rebase::run(&path)?;
@@ -766,34 +732,15 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
     // Load data from engine
     app.load_issues(engine.issues().to_vec());
     app.load_mrs(engine.mrs().to_vec());
-
+    
     // Detect git repository from current working directory
     let cwd = std::env::current_dir()?;
     app.repo_info = detect_repo(&cwd)?;
 
-    // Initialize plugin manager and load plugins
-    let mut plugin_manager = crate::plugins::PluginManager::new(&project_root);
-    let plugin_context = progit_plugin_sdk::prelude::PluginContext {
-        repo_path: project_root.to_string_lossy().to_string(),
-        user: std::env::var("USER").ok(),
-        env: std::env::vars().collect(),
-        config: std::collections::HashMap::new(),
-    };
-
-    match plugin_manager.load_all(&plugin_context) {
-        Ok(count) if count > 0 => {
-            log::info!("✅ Loaded {} plugin(s)", count);
-            app.set_status(format!("Loaded {} plugin(s)", count));
-        }
-        Ok(_) => {
-            log::info!("No plugins found");
-        }
-        Err(e) => {
-            log::warn!("⚠️ Plugin loading failed: {}", e);
-        }
-    }
-
-    app.plugin_manager = Some(plugin_manager);
+    // TODO: Reimplement plugin loading with new SDK in v0.6.0
+    // Plugin SDK is ready (src/plugins/sdk.rs), LuaJIT engine works,
+    // but needs proper TUI integration and App struct updates.
+    // For now, plugin system is API-only (no CLI, no auto-loading).
 
     // ─── Panopticum Integration ───────────────────────────────────────────────
     app.repo_path = project_root.clone();
@@ -955,11 +902,12 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     app.load_issues(engine.issues().to_vec());
                     app.set_status("Created new issue");
 
-                    // Trigger plugin hook
-                    if let Some(ref mut pm) = app.plugin_manager {
-                        let plugin_issue = convert_issue_to_plugin(&new_issue);
-                        pm.on_issue_created(&plugin_issue);
-                    }
+                   // Trigger plugin hook  
+                    // TODO: Reimplement in v0.6.0 with new SDK
+                    // if let Some(ref mut pm) = app.plugin_manager {
+                    //     let plugin_issue = convert_issue_to_plugin(&new_issue);
+                    //     // pm.on_issue_created(&plugin_issue);
+                    // }
                 }
                 KeyAction::DeleteIssue => {
                     // Delete the selected issue based on view mode
@@ -979,9 +927,10 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                             app.set_status("Issue deleted");
 
                             // Trigger plugin hook
-                            if let Some(ref mut pm) = app.plugin_manager {
-                                pm.on_issue_deleted(&id);
-                            }
+                            // TODO: Reimplement in v0.6.0 with new SDK
+                            // if let Some(ref mut pm) = app.plugin_manager {
+                            //     // pm.on_issue_deleted(&id);
+                            // }
                         } else {
                             app.set_status("Failed to delete issue");
                         }

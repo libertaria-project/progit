@@ -37,13 +37,21 @@ impl LuaPluginEngine {
             PluginEvent::IssueCreated { issue_id } => {
                 table.set("type", "IssueCreated").map_err(|e| e.to_string())?;
                 let data = self.lua.create_table().map_err(|e| e.to_string())?;
-                data.set("issue_id", issue_id.clone()).map_err(|e| e.to_string())?;
+                data.set("issue_id", issue_id.as_str()).map_err(|e| e.to_string())?;
                 table.set("data", data).map_err(|e| e.to_string())?;
             }
             PluginEvent::IssueUpdated { issue_id } => {
                 table.set("type", "IssueUpdated").map_err(|e| e.to_string())?;
                 let data = self.lua.create_table().map_err(|e| e.to_string())?;
-                data.set("issue_id", issue_id.clone()).map_err(|e| e.to_string())?;
+                data.set("issue_id", issue_id.as_str()).map_err(|e| e.to_string())?;
+                table.set("data", data).map_err(|e| e.to_string())?;
+            }
+            PluginEvent::IssueStatusChanged { issue_id, old_status, new_status } => {
+                table.set("type", "IssueStatusChanged").map_err(|e| e.to_string())?;
+                let data = self.lua.create_table().map_err(|e| e.to_string())?;
+                data.set("issue_id", issue_id.as_str()).map_err(|e| e.to_string())?;
+                data.set("old_status", old_status.as_str()).map_err(|e| e.to_string())?;
+                data.set("new_status", new_status.as_str()).map_err(|e| e.to_string())?;
                 table.set("data", data).map_err(|e| e.to_string())?;
             }
             // Add other event types as needed
@@ -83,8 +91,8 @@ impl PluginEngine for LuaPluginEngine {
             .map_err(|e| format!("Failed to register plugin {}: {}", name, e))?;
         
         // Call on_load if it exists
-        if let Ok(plugin_table) = self.lua.globals().get::<_, Table>(format!("__plugin_{}", name)) {
-            if let Ok(on_load) = plugin_table.get::<_, mlua::Function>("on_load") {
+        if let Ok(plugin_table) = self.lua.globals().get::<Table>(format!("__plugin_{}", name)) {
+            if let Ok(on_load) = plugin_table.get::<mlua::Function>("on_load") {
                 let _: Value = on_load.call(plugin_table.clone())
                     .map_err(|e| format!("Plugin {} on_load failed: {}", name, e))?;
             }
@@ -96,8 +104,8 @@ impl PluginEngine for LuaPluginEngine {
     
     fn unload_plugin(&mut self, name: &str) -> Result<(), String> {
         // Call on_unload if it exists
-        if let Ok(plugin_table) = self.lua.globals().get::<_, Table>(format!("__plugin_{}", name)) {
-            if let Ok(on_unload) = plugin_table.get::<_, mlua::Function>("on_unload") {
+        if let Ok(plugin_table) = self.lua.globals().get::<Table>(format!("__plugin_{}", name)) {
+            if let Ok(on_unload) = plugin_table.get::<mlua::Function>("on_unload") {
                 let _: Value = on_unload.call(plugin_table.clone())
                     .map_err(|e| format!("Plugin {} on_unload failed: {}", name, e))?;
             }
@@ -118,11 +126,11 @@ impl PluginEngine for LuaPluginEngine {
         
         // Send event to all loaded plugins
         for plugin_name in self.plugins.keys().cloned().collect::<Vec<_>>() {
-            if let Ok(plugin_table) = self.lua.globals().get::<_, Table>(format!("__plugin_{}", plugin_name)) {
-                if let Ok(on_event) = plugin_table.get::<_, mlua::Function>("on_event") {
+            if let Ok(plugin_table) = self.lua.globals().get::<Table>(format!("__plugin_{}", plugin_name)) {
+                if let Ok(on_event) = plugin_table.get::<mlua::Function>("on_event") {
                     // Call plugin's on_event handler
-                    match on_event.call::<_, Value>((plugin_table.clone(), event_table.clone())) {
-                        Ok(Value::Nil) | Ok(Value::Null) => {
+                    match on_event.call::<Value>((plugin_table.clone(), event_table.clone())) {
+                        Ok(Value::Nil) => {
                             // No response from plugin
                         }
                         Ok(value) => {
@@ -143,18 +151,18 @@ impl PluginEngine for LuaPluginEngine {
     }
     
     fn execute_command(&mut self, plugin_name: &str, command: &str, args: &[String]) -> Result<String, String> {
-        let plugin_table = self.lua.globals()
-            .get::<_, Table>(format!("__plugin_{}", plugin_name))
+        let plugin_table: Table = self.lua.globals()
+            .get(format!("__plugin_{}", plugin_name))
             .map_err(|_| format!("Plugin {} not loaded", plugin_name))?;
         
-        let execute_command = plugin_table
-            .get::<_, mlua::Function>("execute_command")
+        let execute_command: mlua::Function = plugin_table
+            .get("execute_command")
             .map_err(|_| format!("Plugin {} has no execute_command function", plugin_name))?;
         
         // Convert args to Lua table
         let args_table = self.lua.create_table().map_err(|e| e.to_string())?;
         for (i, arg) in args.iter().enumerate() {
-            args_table.set(i + 1, arg.clone()).map_err(|e| e.to_string())?;
+            args_table.set(i + 1, arg.as_str()).map_err(|e| e.to_string())?;
         }
         
         // Call plugin command
