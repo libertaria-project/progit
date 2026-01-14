@@ -4,12 +4,13 @@
 
 use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
+use crate::mr::MergeRequest;
 use crate::panopticum::{PanoEvent, PanoStatus};
 use crate::plugins::PluginManager;
-use crate::tui::theme::Theme;
 use crate::sync::SyncProvider;
 use crate::tui::style::ThemeEngine;
-use crate::mr::MergeRequest;
+use crate::tui::theme::Theme;
+use crate::virtual_branch::VirtualBranchManager;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 
@@ -23,6 +24,8 @@ pub enum ViewMode {
     Diff,
     MRList,
     Blame,
+    /// Virtual branch lanes view (GitButler-style)
+    Lanes,
 }
 
 /// Input mode
@@ -35,16 +38,16 @@ pub enum InputMode {
     Confirm,
     RemoteDropdown,
     BranchDropdown,
-    BranchCreate,    // Typing new branch name
+    BranchCreate,        // Typing new branch name
     BranchDeleteConfirm, // Confirm branch deletion
-    DetailView,      // Viewing issue details
-    DetailEdit,      // Editing a field in detail view
-    Command,         // Command palette (: command)
-    MRCreate,        // Creating a merge request
-    RepoFilter,      // Filtering by repository
-    Settings,        // Settings pane
-    FuzzyPalette,    // Fuzzy command palette (Ctrl+P)
-    DiffComment,     // Adding a comment to a diff line
+    DetailView,          // Viewing issue details
+    DetailEdit,          // Editing a field in detail view
+    Command,             // Command palette (: command)
+    MRCreate,            // Creating a merge request
+    RepoFilter,          // Filtering by repository
+    Settings,            // Settings pane
+    FuzzyPalette,        // Fuzzy command palette (Ctrl+P)
+    DiffComment,         // Adding a comment to a diff line
 }
 
 /// Mouse drag state
@@ -74,7 +77,7 @@ pub struct App {
 
     // Diff State
     pub diff_state: Option<crate::diff::DiffState>,
-    
+
     // MR List State
     pub mr_list: Vec<crate::mr::MergeRequest>,
     pub mr_selected: usize,
@@ -119,10 +122,10 @@ pub struct App {
     pub selected_remote: usize,
     /// Selected branch in dropdown
     pub selected_branch: usize,
-    
+
     /// Repo filter state
-    pub repo_filter: Option<String>,  // None = show all, Some(repo) = filter by repo
-    pub selected_repo_filter: usize,  // Selected index in repo filter dropdown
+    pub repo_filter: Option<String>, // None = show all, Some(repo) = filter by repo
+    pub selected_repo_filter: usize, // Selected index in repo filter dropdown
     pub available_repos: Vec<String>, // Cached list of unique repos
 
     /// Branch pending deletion (for confirmation)
@@ -145,65 +148,74 @@ pub struct App {
 
     /// Sync provider for remote synchronization
     pub sync_provider: Option<Box<dyn SyncProvider>>,
-    
+
     /// Provider name (e.g. "gitlab", "forgejo")
     pub sync_provider_name: Option<String>,
-    
+
     /// Current sync status message
     pub sync_status: Option<String>,
-    
+
     /// Draft MR being created
     pub mr_draft: Option<crate::mr::MergeRequest>,
-    
+
     /// Current field in MR creation form (0=title, 1=description, 2=target_branch)
     pub mr_field: usize,
 
     /// Style engine
     pub theme_engine: ThemeEngine,
-    
+
     /// Show debug console overlay
     pub show_debug_console: bool,
-    
+
     /// Plugin manager
     pub plugin_manager: Option<PluginManager>,
-    
+
     /// Fuzzy searcher for command palette
     pub fuzzy_searcher: crate::fuzzy::FuzzySearcher,
-    
+
     /// Fuzzy palette query
     pub fuzzy_query: String,
-    
+
     /// Selected fuzzy result index
     pub fuzzy_selected: usize,
 
     /// Blame State
     pub blame_state: Option<crate::tui::widget_blame::BlameState>,
-    
+
     // ─── Panopticum Integration ───────────────────────────────────────────
-    
     /// Repository root path
     pub repo_path: PathBuf,
-    
+
     /// Whether this is a Panopticum-enabled repo (PANOPTICUM.kdl exists)
     pub is_panopticum_repo: bool,
-    
+
     /// Custom path to panoctl binary (None = use PATH)
     pub panoctl_binary_path: Option<String>,
-    
+
     /// Current panopticum operation status
     pub pano_status: PanoStatus,
-    
+
     /// Output buffer for panopticum operations (for console view)
     pub pano_output: Vec<String>,
-    
+
     /// Channel sender for panopticum events (cloned to spawn functions)
     pub pano_event_tx: Option<Sender<PanoEvent>>,
-    
+
     /// Channel receiver for panopticum events (polled in main loop)
     pub pano_event_rx: Option<Receiver<PanoEvent>>,
-    
+
     /// Show panopticum log viewer modal
     pub show_pano_log: bool,
+
+    // ─── Virtual Branches Integration ────────────────────────────────────────
+    /// Virtual branch manager
+    pub vbranch_manager: Option<VirtualBranchManager>,
+
+    /// Selected virtual branch index in lanes view
+    pub vbranch_selected: usize,
+
+    /// Selected hunk within a virtual branch
+    pub vbranch_hunk_selected: usize,
 }
 
 impl Default for App {
@@ -267,6 +279,10 @@ impl App {
             pano_event_rx: None,
             show_pano_log: false,
             blame_state: None,
+            // Virtual Branches
+            vbranch_manager: None,
+            vbranch_selected: 0,
+            vbranch_hunk_selected: 0,
         }
     }
 
@@ -311,7 +327,7 @@ impl App {
         } else {
             Some(self.search_query.to_lowercase())
         };
-        
+
         self.filtered = self
             .issues
             .iter()
@@ -319,15 +335,15 @@ impl App {
             .filter(|(_, i)| {
                 // Search filter
                 let matches_search = query.as_ref().map_or(true, |q| {
-                    i.title.to_lowercase().contains(q)
-                        || i.description.to_lowercase().contains(q)
+                    i.title.to_lowercase().contains(q) || i.description.to_lowercase().contains(q)
                 });
-                
+
                 // Repo filter
-                let matches_repo = self.repo_filter.as_ref().map_or(true, |repo| {
-                    i.repo.as_ref().map_or(false, |r| r == repo)
-                });
-                
+                let matches_repo = self
+                    .repo_filter
+                    .as_ref()
+                    .map_or(true, |repo| i.repo.as_ref().map_or(false, |r| r == repo));
+
                 matches_search && matches_repo
             })
             .map(|(idx, _)| idx)
@@ -338,18 +354,18 @@ impl App {
             self.selected = self.filtered.len() - 1;
         }
     }
-    
+
     /// Update available repos list from current issues
     pub fn update_available_repos(&mut self) {
         use std::collections::HashSet;
-        
+
         let mut repos: HashSet<String> = HashSet::new();
         for issue in &self.issues {
             if let Some(ref repo) = issue.repo {
                 repos.insert(repo.clone());
             }
         }
-        
+
         self.available_repos = repos.into_iter().collect();
         self.available_repos.sort();
     }
@@ -384,7 +400,10 @@ impl App {
     /// Move selection up
     pub fn previous(&mut self) {
         if !self.filtered.is_empty() {
-            self.selected = self.selected.checked_sub(1).unwrap_or(self.filtered.len() - 1);
+            self.selected = self
+                .selected
+                .checked_sub(1)
+                .unwrap_or(self.filtered.len() - 1);
         }
     }
 
@@ -397,13 +416,14 @@ impl App {
             ViewMode::MRList => ViewMode::Dashboard,
             ViewMode::Diff => ViewMode::List,
             ViewMode::Blame => ViewMode::List,
+            ViewMode::Lanes => ViewMode::List,
         };
-        
+
         // Auto-load MRs when switching to MR list view
         if new_mode == ViewMode::MRList && self.mr_list.is_empty() {
             let _ = self.refresh_mrs();
         }
-        
+
         self.view_mode = new_mode;
     }
 
@@ -492,13 +512,17 @@ impl App {
 
     /// Navigate to next field in detail view
     pub fn detail_next_field(&mut self) {
-        self.detail_field = (self.detail_field + 1) % 9;  // 9 total fields now
+        self.detail_field = (self.detail_field + 1) % 9; // 9 total fields now
         self.load_field_to_buffer();
     }
 
     /// Navigate to previous field in detail view
     pub fn detail_prev_field(&mut self) {
-        self.detail_field = if self.detail_field == 0 { 8 } else { self.detail_field - 1 };
+        self.detail_field = if self.detail_field == 0 {
+            8
+        } else {
+            self.detail_field - 1
+        };
         self.load_field_to_buffer();
     }
 
@@ -512,9 +536,18 @@ impl App {
                 3 => format!("{}", issue.effort as u8),
                 4 => issue.assignee.clone().unwrap_or_default(),
                 5 => issue.tags.join(", "),
-                6 => issue.due.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default(),
-                7 => issue.started.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default(),
-                8 => issue.completed.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default(),
+                6 => issue
+                    .due
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default(),
+                7 => issue
+                    .started
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default(),
+                8 => issue
+                    .completed
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default(),
                 _ => String::new(),
             };
         }
@@ -529,7 +562,13 @@ impl App {
                 0 => issue.title = buffer,
                 1 => issue.description = buffer,
                 // Status and Effort handled by cycling
-                4 => issue.assignee = if buffer.is_empty() { None } else { Some(buffer) },
+                4 => {
+                    issue.assignee = if buffer.is_empty() {
+                        None
+                    } else {
+                        Some(buffer)
+                    }
+                }
                 5 => {
                     issue.tags = buffer
                         .split(|c| c == ',' || c == ';')
@@ -544,10 +583,10 @@ impl App {
                     if buffer.is_empty() {
                         issue.due = None;
                     } else if let Some(dt) = parse_date_input(&buffer) {
-                         issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(
-                             dt.and_hms_opt(23, 59, 59).unwrap(), 
-                             chrono::Utc
-                         ));
+                        issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(
+                            dt.and_hms_opt(23, 59, 59).unwrap(),
+                            chrono::Utc,
+                        ));
                     }
                 }
                 7 => {
@@ -555,10 +594,10 @@ impl App {
                     if buffer.is_empty() {
                         issue.started = None;
                     } else if let Some(dt) = parse_date_input(&buffer) {
-                         issue.started = Some(chrono::DateTime::from_naive_utc_and_offset(
-                             dt.and_hms_opt(0, 0, 0).unwrap(), 
-                             chrono::Utc
-                         ));
+                        issue.started = Some(chrono::DateTime::from_naive_utc_and_offset(
+                            dt.and_hms_opt(0, 0, 0).unwrap(),
+                            chrono::Utc,
+                        ));
                     }
                 }
                 8 => {
@@ -566,10 +605,10 @@ impl App {
                     if buffer.is_empty() {
                         issue.completed = None;
                     } else if let Some(dt) = parse_date_input(&buffer) {
-                         issue.completed = Some(chrono::DateTime::from_naive_utc_and_offset(
-                             dt.and_hms_opt(23, 59, 59).unwrap(), 
-                             chrono::Utc
-                         ));
+                        issue.completed = Some(chrono::DateTime::from_naive_utc_and_offset(
+                            dt.and_hms_opt(23, 59, 59).unwrap(),
+                            chrono::Utc,
+                        ));
                     }
                 }
                 _ => {}
@@ -632,7 +671,10 @@ impl App {
     pub fn kanban_up(&mut self) {
         let col_issues = self.issues_for_column(self.kanban_column);
         if !col_issues.is_empty() {
-            self.kanban_row = self.kanban_row.checked_sub(1).unwrap_or(col_issues.len() - 1);
+            self.kanban_row = self
+                .kanban_row
+                .checked_sub(1)
+                .unwrap_or(col_issues.len() - 1);
         }
     }
 
@@ -703,22 +745,22 @@ impl App {
     /// Load blame for a file
     pub fn load_blame(&mut self, file_path: &str) {
         self.set_status(format!("Loading blame for {}...", file_path));
-        
+
         let path_obj = std::path::Path::new(file_path);
         // blame_file likely expects full path or relative to CWD if using git command
         // But our git module uses Command::new("git").current_dir(repo_path)
         // So we should pass path relative to repo root.
-        
+
         match crate::git::blame::BlameInfo::new(file_path) {
             Ok(info) => {
-                 let mut state = crate::tui::widget_blame::BlameState::default();
-                 state.info = Some(info);
-                 self.blame_state = Some(state);
-                 self.view_mode = ViewMode::Blame;
-                 self.set_status(format!("Blame: {}", file_path));
-            },
+                let mut state = crate::tui::widget_blame::BlameState::default();
+                state.info = Some(info);
+                self.blame_state = Some(state);
+                self.view_mode = ViewMode::Blame;
+                self.set_status(format!("Blame: {}", file_path));
+            }
             Err(e) => {
-                 self.set_status(format!("Failed to load blame: {}", e));
+                self.set_status(format!("Failed to load blame: {}", e));
             }
         }
     }

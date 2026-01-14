@@ -4,18 +4,19 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
+mod command;
+mod diff;
+mod fuzzy;
 mod git;
 mod issue;
 mod mr;
 mod panopticum;
 mod plugins;
-mod diff;
-mod fuzzy;
 mod rebase;
 mod storage;
 mod sync;
 mod tui;
-mod command;
+mod virtual_branch;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -31,9 +32,9 @@ use std::path::{Path, PathBuf};
 use crate::git::detect_repo;
 use crate::issue::{Issue, Status};
 use crate::storage::{delete_issue, load_issues, paths, save_issue, sync_kdl_to_json};
-use crate::tui::{handle_key, handle_mouse, render, App, KeyAction, UIAreas};
 use crate::sync::SyncProvider;
-use anyhow::{Context, anyhow};
+use crate::tui::{handle_key, handle_mouse, render, App, KeyAction, UIAreas};
+use anyhow::{anyhow, Context};
 
 use colored::*;
 
@@ -114,7 +115,6 @@ enum RemoteBranchAction {
     },
 }
 
-
 #[derive(Subcommand)]
 enum MrAction {
     /// List open merge requests (requires sync config)
@@ -167,7 +167,7 @@ fn main() -> Result<()> {
         // If no .project exists, we require either a git repository OR a PANOPTICUM.kdl
         let has_git = crate::git::detect_repo(&project_root)?.is_some();
         let has_panopticum = project_root.join("PANOPTICUM.kdl").exists();
-        
+
         if !has_git && !has_panopticum {
             println!("{} No git repository or PANOPTICUM.kdl found.", "❌".red());
             println!("   ProGit requires either:");
@@ -176,7 +176,7 @@ fn main() -> Result<()> {
             return Ok(());
         }
     }
-    
+
     // 2. Migration Check (.projects -> Split Core)
     storage::check_and_migrate(&project_root)?;
 
@@ -193,9 +193,9 @@ fn main() -> Result<()> {
             let config = storage::config::load_config(&config_path)?;
 
             let mut sync_config = config.sync.context(
-                "No sync configuration found. Please add a 'sync' block to .projects/config.kdl"
+                "No sync configuration found. Please add a 'sync' block to .projects/config.kdl",
             )?;
-            
+
             // Auto-configure based on remote
             let cwd = std::env::current_dir()?;
             auto_configure(&mut sync_config, &cwd);
@@ -210,76 +210,110 @@ fn main() -> Result<()> {
             match action {
                 Some(SyncAction::Push) => {
                     let mut issues = engine.issues().to_vec();
-                    
-                    println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
+
+                    println!(
+                        "{} Authenticating with {}...",
+                        "🔄".blue(),
+                        sync_config.provider
+                    );
                     provider.login()?;
-                    
-                    println!("{} Pushing {} issues to remote...", "🔄".blue(), issues.len());
+
+                    println!(
+                        "{} Pushing {} issues to remote...",
+                        "🔄".blue(),
+                        issues.len()
+                    );
                     provider.push(&mut issues)?;
-                    
+
                     // Save issues back to persist new remote IDs
                     *engine.issues_mut() = issues.clone();
                     engine.save()?;
-                    println!("{} Saved {} issues with remote links.", "💾".green(), issues.len());
-                    
+                    println!(
+                        "{} Saved {} issues with remote links.",
+                        "💾".green(),
+                        issues.len()
+                    );
+
                     // Delete remote issues not in local
                     let deleted = provider.delete_missing(&issues)?;
                     if deleted > 0 {
                         println!("{} Deleted {} orphaned remote issues.", "🗑️".red(), deleted);
                     }
-                    
+
                     println!("{} Push complete.", "✅".green());
                 }
                 Some(SyncAction::Pull) => {
                     let local_issues = engine.issues().to_vec();
-                    
-                    println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
+
+                    println!(
+                        "{} Authenticating with {}...",
+                        "🔄".blue(),
+                        sync_config.provider
+                    );
                     provider.login()?;
-                    
+
                     println!("{} Pulling issues from remote...", "🔄".blue());
                     let remote_issues = provider.pull()?;
-                    
-                    println!("{} Pulled {} issues. Merging...", "📥".blue(), remote_issues.len());
-                    
+
+                    println!(
+                        "{} Pulled {} issues. Merging...",
+                        "📥".blue(),
+                        remote_issues.len()
+                    );
+
                     let provider_name = &sync_config.provider;
-                    let merged_issues = sync::merge_issues(&local_issues, remote_issues, provider_name);
-                    
+                    let merged_issues =
+                        sync::merge_issues(&local_issues, remote_issues, provider_name);
+
                     // Save merged set
                     *engine.issues_mut() = merged_issues.clone();
                     engine.save()?;
-                    println!("{} Saved {} merged issues.", "💾".green(), merged_issues.len());
+                    println!(
+                        "{} Saved {} merged issues.",
+                        "💾".green(),
+                        merged_issues.len()
+                    );
                     println!("{} Pull complete.", "✅".green());
                 }
                 None => {
                     // Default: bidirectional sync (push then pull)
                     let mut issues = engine.issues().to_vec();
-                    
-                    println!("{} Authenticating with {}...", "🔄".blue(), sync_config.provider);
+
+                    println!(
+                        "{} Authenticating with {}...",
+                        "🔄".blue(),
+                        sync_config.provider
+                    );
                     provider.login()?;
-                    
+
                     // Push first
                     println!("{} Pushing {} local issues...", "⬆️".blue(), issues.len());
                     provider.push(&mut issues)?;
-                    
+
                     // Update engine with any new remote IDs
                     *engine.issues_mut() = issues.clone();
-                    
+
                     // Then pull
                     println!("{} Pulling remote updates...", "⬇️".blue());
                     let remote_issues = provider.pull()?;
-                    let merged = sync::merge_issues(engine.issues(), remote_issues, &sync_config.provider);
-                    
+                    let merged =
+                        sync::merge_issues(engine.issues(), remote_issues, &sync_config.provider);
+
                     *engine.issues_mut() = merged;
                     engine.save()?;
-                    
-                    println!("{} Sync complete: {} issues.", "✅".green(), engine.issues().len());
+
+                    println!(
+                        "{} Sync complete: {} issues.",
+                        "✅".green(),
+                        engine.issues().len()
+                    );
                 }
             }
         }
         Some(Commands::Branch { action }) => {
             let cwd = std::env::current_dir()?;
             let repo_info = detect_repo(&cwd)?.context("Not a git repository")?;
-            
+
             match action {
                 Some(BranchAction::List) | None => {
                     println!("{} Branches in {}:", "🌿".green(), repo_info.path.blue());
@@ -293,11 +327,19 @@ fn main() -> Result<()> {
                 }
                 Some(BranchAction::Switch { name }) => {
                     crate::git::switch_branch(&cwd, &name)?;
-                    println!("{} Switched to branch {}", "✅".green(), name.green().bold());
+                    println!(
+                        "{} Switched to branch {}",
+                        "✅".green(),
+                        name.green().bold()
+                    );
                 }
                 Some(BranchAction::Create { name }) => {
                     crate::git::create_branch(&project_root, &name)?;
-                    println!("{} Created and switched to branch {}", "✅".green(), name.cyan());
+                    println!(
+                        "{} Created and switched to branch {}",
+                        "✅".green(),
+                        name.cyan()
+                    );
                 }
                 Some(BranchAction::Delete { name }) => {
                     crate::git::delete_branch(&project_root, &name)?;
@@ -311,16 +353,23 @@ fn main() -> Result<()> {
                                 .ok()
                                 .flatten()
                                 .unwrap_or_else(|| "unknown".to_string());
-                            
+
                             // Parse project name from URL
-                            let project_name = if let Some((_, owner, repo)) = crate::git::parse_git_url(&remote_url) {
+                            let project_name = if let Some((_, owner, repo)) =
+                                crate::git::parse_git_url(&remote_url)
+                            {
                                 format!("{}/{}", owner, repo)
                             } else {
                                 "unknown/unknown".to_string()
                             };
-                            
+
                             let branches = crate::git::list_remote_branches(&project_root)?;
-                            println!("{} Remote Branches: {} ({})", "🌐".blue(), project_name.cyan(), remote_url.dimmed());
+                            println!(
+                                "{} Remote Branches: {} ({})",
+                                "🌐".blue(),
+                                project_name.cyan(),
+                                remote_url.dimmed()
+                            );
                             for branch in branches {
                                 println!("  - {}", branch);
                             }
@@ -328,8 +377,14 @@ fn main() -> Result<()> {
                         RemoteBranchAction::Create { name } => {
                             // Default to create on "origin" for now
                             match crate::git::create_remote_branch(&project_root, &name, None) {
-                                Ok(_) => println!("{} Pushed HEAD to new remote branch {}", "🚀".green(), name.cyan()),
-                                Err(e) => println!("{} Failed to create remote branch: {}", "❌".red(), e),
+                                Ok(_) => println!(
+                                    "{} Pushed HEAD to new remote branch {}",
+                                    "🚀".green(),
+                                    name.cyan()
+                                ),
+                                Err(e) => {
+                                    println!("{} Failed to create remote branch: {}", "❌".red(), e)
+                                }
                             }
                         }
                     }
@@ -345,7 +400,7 @@ fn main() -> Result<()> {
             let repo_info = detect_repo(&cwd)?.context("Not a git repository")?;
 
             let mut sync_config = config.sync.context(
-                "No sync configuration found. MR commands require a configured provider."
+                "No sync configuration found. MR commands require a configured provider.",
             )?;
 
             // Auto-configure based on remote
@@ -359,7 +414,7 @@ fn main() -> Result<()> {
                     println!("{} Fetching open Merge Requests...", "🔄".blue());
                     let mrs = provider.list_mrs()?;
                     if mrs.is_empty() {
-                         println!("No open MRs found.");
+                        println!("No open MRs found.");
                     } else {
                         println!("{} Open Merge Requests:", "🔀".green());
                         for mr in mrs {
@@ -368,10 +423,11 @@ fn main() -> Result<()> {
                             } else {
                                 format!("!{}", &mr.id[..8])
                             };
-                            
-                            println!("  {:<6} {} {}", 
-                                id_display.cyan(), 
-                                mr.title.bold(), 
+
+                            println!(
+                                "  {:<6} {} {}",
+                                id_display.cyan(),
+                                mr.title.bold(),
                                 format!("({} -> {})", mr.source_branch, mr.target_branch).dimmed()
                             );
                         }
@@ -380,7 +436,7 @@ fn main() -> Result<()> {
                 Some(MrAction::Create { target, title }) => {
                     let source_branch = repo_info.branch.clone();
                     let target_branch = target.unwrap_or_else(|| "main".to_string());
-                    
+
                     let mr_title = if let Some(t) = title {
                         t
                     } else {
@@ -388,9 +444,15 @@ fn main() -> Result<()> {
                         source_branch.clone()
                     };
 
-                    println!("{} Creating MR: {} -> {}", "🔄".blue(), source_branch.cyan(), target_branch.cyan());
-                    
-                    let mr = crate::mr::MergeRequest::new(&source_branch, &target_branch, &mr_title);
+                    println!(
+                        "{} Creating MR: {} -> {}",
+                        "🔄".blue(),
+                        source_branch.cyan(),
+                        target_branch.cyan()
+                    );
+
+                    let mr =
+                        crate::mr::MergeRequest::new(&source_branch, &target_branch, &mr_title);
                     match provider.create_mr(&mr) {
                         Ok(id) => println!("{} Created MR !{}", "✅".green(), id),
                         Err(e) => println!("{} Failed to create MR: {}", "❌".red(), e),
@@ -411,7 +473,11 @@ fn main() -> Result<()> {
                     }
                 }
                 Some(MrAction::Reject { id }) => {
-                    println!("{} Rejecting MR !{} (closing without merge)...", "🔄".blue(), id);
+                    println!(
+                        "{} Rejecting MR !{} (closing without merge)...",
+                        "🔄".blue(),
+                        id
+                    );
                     match provider.close_mr(id) {
                         Ok(_) => println!("{} Rejected MR !{}", "❌".yellow(), id),
                         Err(e) => println!("{} Failed to reject: {}", "❌".red(), e),
@@ -428,13 +494,26 @@ fn main() -> Result<()> {
             let project_root = find_project_root()?;
             let mut engine = storage::engine::StorageEngine::new(&project_root);
             engine.load()?;
-            
+
             // Find issue by full or short ID
-            if let Some(issue) = engine.issues_mut().iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
+            if let Some(issue) = engine
+                .issues_mut()
+                .iter_mut()
+                .find(|i| i.id == id || i.id.starts_with(&id))
+            {
                 issue.blocked = !issue.blocked;
                 issue.updated = chrono::Utc::now();
-                let blocked_str = if issue.blocked { "BLOCKED".red().bold() } else { "UNBLOCKED".green().bold() };
-                println!("{} Issue {} marked as {}", "🔥".yellow(), issue.short_id().bold(), blocked_str);
+                let blocked_str = if issue.blocked {
+                    "BLOCKED".red().bold()
+                } else {
+                    "UNBLOCKED".green().bold()
+                };
+                println!(
+                    "{} Issue {} marked as {}",
+                    "🔥".yellow(),
+                    issue.short_id().bold(),
+                    blocked_str
+                );
                 engine.save()?;
             } else {
                 return Err(anyhow!("Issue '{}' not found", id));
@@ -442,22 +521,39 @@ fn main() -> Result<()> {
         }
         Some(Commands::Due { id, date }) => {
             let project_root = find_project_root()?;
-             let mut engine = storage::engine::StorageEngine::new(&project_root);
+            let mut engine = storage::engine::StorageEngine::new(&project_root);
             engine.load()?;
-            
+
             // Find issue by full or short ID
-            if let Some(issue) = engine.issues_mut().iter_mut().find(|i| i.id == id || i.id.starts_with(&id)) {
+            if let Some(issue) = engine
+                .issues_mut()
+                .iter_mut()
+                .find(|i| i.id == id || i.id.starts_with(&id))
+            {
                 if date.to_lowercase() == "clear" {
                     issue.due = None;
-                    println!("{} Due date cleared for issue {}", "⏰".green(), issue.short_id().bold());
+                    println!(
+                        "{} Due date cleared for issue {}",
+                        "⏰".green(),
+                        issue.short_id().bold()
+                    );
                 } else {
                     // Parse date (YYYY-MM-DD format)
                     let parsed_date = chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d")
                         .context("Invalid date format. Use YYYY-MM-DD")?;
-                    let due_datetime = parsed_date.and_hms_opt(23, 59, 59)
+                    let due_datetime = parsed_date
+                        .and_hms_opt(23, 59, 59)
                         .context("Invalid time")?;
-                    issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(due_datetime, chrono::Utc));
-                    println!("{} Due date set to {} for issue {}", "⏰".green(), date.cyan(), issue.short_id().bold());
+                    issue.due = Some(chrono::DateTime::from_naive_utc_and_offset(
+                        due_datetime,
+                        chrono::Utc,
+                    ));
+                    println!(
+                        "{} Due date set to {} for issue {}",
+                        "⏰".green(),
+                        date.cyan(),
+                        issue.short_id().bold()
+                    );
                 }
                 issue.updated = chrono::Utc::now();
                 engine.save()?;
@@ -565,7 +661,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
 
         // Initialize style engine with configured styles
         app.theme_engine = crate::tui::style::ThemeEngine::new(&config.styles);
-        
+
         // Validate styles and warn if needed
         if let Err(e) = app.theme_engine.validate() {
             app.set_status(format!("Style Config Error: {}", e));
@@ -588,7 +684,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
         env: std::env::vars().collect(),
         config: std::collections::HashMap::new(),
     };
-    
+
     match plugin_manager.load_all(&plugin_context) {
         Ok(count) if count > 0 => {
             log::info!("✅ Loaded {} plugin(s)", count);
@@ -601,13 +697,13 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
             log::warn!("⚠️ Plugin loading failed: {}", e);
         }
     }
-    
+
     app.plugin_manager = Some(plugin_manager);
 
     // ─── Panopticum Integration ───────────────────────────────────────────────
     app.repo_path = project_root.clone();
     app.is_panopticum_repo = crate::panopticum::is_panopticum_repo(&project_root);
-    
+
     if app.is_panopticum_repo {
         log::info!("🔱 Panopticum mode activated");
         // Check if panoctl is available (lazy check - don't fail if missing)
@@ -643,7 +739,8 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     }
                     crate::panopticum::PanoEvent::ValidationComplete { success, message } => {
                         if success {
-                            app.pano_status = crate::panopticum::PanoStatus::Success(message.clone());
+                            app.pano_status =
+                                crate::panopticum::PanoStatus::Success(message.clone());
                             app.set_status(format!("✓ {}", message));
                         } else {
                             app.pano_status = crate::panopticum::PanoStatus::Error(message.clone());
@@ -652,7 +749,8 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     }
                     crate::panopticum::PanoEvent::PlanComplete { success, output } => {
                         if success {
-                            app.pano_status = crate::panopticum::PanoStatus::Success("Plan complete".into());
+                            app.pano_status =
+                                crate::panopticum::PanoStatus::Success("Plan complete".into());
                             app.set_status("✓ Plan completed successfully");
                         } else {
                             app.pano_status = crate::panopticum::PanoStatus::Error(output.clone());
@@ -661,7 +759,8 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     }
                     crate::panopticum::PanoEvent::ApplyComplete { success, output } => {
                         if success {
-                            app.pano_status = crate::panopticum::PanoStatus::Success("Apply complete".into());
+                            app.pano_status =
+                                crate::panopticum::PanoStatus::Success("Apply complete".into());
                             app.set_status("✓ Apply completed successfully");
                         } else {
                             app.pano_status = crate::panopticum::PanoStatus::Error(output.clone());
@@ -715,7 +814,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     engine.upsert(new_issue.clone())?;
                     app.load_issues(engine.issues().to_vec());
                     app.set_status("Created new issue");
-                    
+
                     // Trigger plugin hook
                     if let Some(ref mut pm) = app.plugin_manager {
                         let plugin_issue = convert_issue_to_plugin(&new_issue);
@@ -731,13 +830,14 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                         tui::ViewMode::Diff => None,
                         tui::ViewMode::MRList => None,
                         tui::ViewMode::Blame => None,
+                        tui::ViewMode::Lanes => None,
                     };
 
                     if let Some(id) = issue_id {
                         if engine.delete(&id)? {
                             app.load_issues(engine.issues().to_vec());
                             app.set_status("Issue deleted");
-                            
+
                             // Trigger plugin hook
                             if let Some(ref mut pm) = app.plugin_manager {
                                 pm.on_issue_deleted(&id);
@@ -757,7 +857,10 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                         })?;
 
                         // 1. PUSH
-                        if let Err(e) = provider.login().and_then(|_| provider.push(&mut app.issues)) {
+                        if let Err(e) = provider
+                            .login()
+                            .and_then(|_| provider.push(&mut app.issues))
+                        {
                             app.set_status(format!("Push failed: {}", e));
                         } else {
                             // Persist links after push
@@ -771,8 +874,13 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                                 // 3. PULL ISSUES
                                 match provider.pull() {
                                     Ok(remote_issues) => {
-                                        let provider_name = app.sync_provider_name.as_deref().unwrap_or("gitlab");
-                                        let merged = sync::merge_issues(&app.issues, remote_issues, provider_name);
+                                        let provider_name =
+                                            app.sync_provider_name.as_deref().unwrap_or("gitlab");
+                                        let merged = sync::merge_issues(
+                                            &app.issues,
+                                            remote_issues,
+                                            provider_name,
+                                        );
                                         app.load_issues(merged.clone());
                                         *engine.issues_mut() = merged;
                                     }
@@ -782,11 +890,16 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                                 // 4. PULL MRS
                                 match provider.list_mrs() {
                                     Ok(remote_mrs) => {
-                                         let provider_name = app.sync_provider_name.as_deref().unwrap_or("gitlab");
-                                         let merged = sync::merge_mrs(&app.mr_list, remote_mrs, provider_name);
-                                         app.load_mrs(merged.clone());
-                                         *engine.mrs_mut() = merged;
-                                         app.set_status("Sync Complete (Issues & MRs)!");
+                                        let provider_name =
+                                            app.sync_provider_name.as_deref().unwrap_or("gitlab");
+                                        let merged = sync::merge_mrs(
+                                            &app.mr_list,
+                                            remote_mrs,
+                                            provider_name,
+                                        );
+                                        app.load_mrs(merged.clone());
+                                        *engine.mrs_mut() = merged;
+                                        app.set_status("Sync Complete (Issues & MRs)!");
                                     }
                                     Err(e) => app.set_status(format!("MR pull failed: {}", e)),
                                 }
@@ -804,21 +917,21 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     }
                 }
                 KeyAction::SwitchBranch(branch) => {
-                     match crate::git::switch_branch(&cwd, &branch) {
-                         Ok(_) => {
-                             app.set_status(format!("Switched to branch: {}", branch));
-                             // Refresh repo info
-                             app.repo_info = detect_repo(&cwd)?;
-                             
-                             // Reload issues from disk/engine
-                             if let Err(e) = engine.load() {
-                                 app.set_status(format!("Reload failed: {}", e));
-                             } else {
-                                 app.load_issues(engine.issues().to_vec());
-                             }
-                         },
-                         Err(e) => app.set_status(format!("Failed to switch: {}", e)),
-                     }
+                    match crate::git::switch_branch(&cwd, &branch) {
+                        Ok(_) => {
+                            app.set_status(format!("Switched to branch: {}", branch));
+                            // Refresh repo info
+                            app.repo_info = detect_repo(&cwd)?;
+
+                            // Reload issues from disk/engine
+                            if let Err(e) = engine.load() {
+                                app.set_status(format!("Reload failed: {}", e));
+                            } else {
+                                app.load_issues(engine.issues().to_vec());
+                            }
+                        }
+                        Err(e) => app.set_status(format!("Failed to switch: {}", e)),
+                    }
                 }
                 KeyAction::CreateBranch => {
                     // For now, simpler prompts. ideally we use an input box?
@@ -830,16 +943,16 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     // Actually, let's use the USER REQUEST context: "creating a new one".
                     // I will stick to "create-feature" for now to check if it works.
                     // Wait, `Edit` mode in input.rs says "Legacy - redirect to detail view".
-                    // Let's implement a real input dialog next time. 
+                    // Let's implement a real input dialog next time.
                     // For now, let's create "new-branch-<timestamp>"
-                    
+
                     let new_name = format!("branch-{}", chrono::Utc::now().timestamp());
                     match crate::git::create_branch(&cwd, &new_name) {
                         Ok(_) => {
                             app.set_status(format!("Created {}", new_name));
                             app.repo_info = detect_repo(&cwd)?;
-                        },
-                         Err(e) => app.set_status(format!("Failed to create: {}", e)),
+                        }
+                        Err(e) => app.set_status(format!("Failed to create: {}", e)),
                     }
                 }
                 KeyAction::CreateBranchNamed(name) => {
@@ -847,19 +960,17 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                         Ok(_) => {
                             app.set_status(format!("Created & switched to: {}", name));
                             app.repo_info = detect_repo(&cwd)?;
-                        },
+                        }
                         Err(e) => app.set_status(format!("Failed to create '{}': {}", name, e)),
                     }
                 }
-                KeyAction::DeleteBranch(name) => {
-                    match crate::git::delete_branch(&cwd, &name) {
-                        Ok(_) => {
-                            app.set_status(format!("Deleted branch: {}", name));
-                            app.repo_info = detect_repo(&cwd)?;
-                        },
-                        Err(e) => app.set_status(format!("Failed to delete '{}': {}", name, e)),
+                KeyAction::DeleteBranch(name) => match crate::git::delete_branch(&cwd, &name) {
+                    Ok(_) => {
+                        app.set_status(format!("Deleted branch: {}", name));
+                        app.repo_info = detect_repo(&cwd)?;
                     }
-                }
+                    Err(e) => app.set_status(format!("Failed to delete '{}': {}", name, e)),
+                },
                 KeyAction::Refresh | KeyAction::None => {}
                 KeyAction::ToggleDebug => {
                     app.show_debug_console = !app.show_debug_console;
@@ -894,10 +1005,11 @@ fn find_project_root() -> Result<PathBuf> {
     // Walk up looking for .git (repo root), .project (existing setup), or PANOPTICUM.kdl (infra repo)
     let mut path = current.as_path();
     loop {
-        if path.join(".git").exists() 
-            || path.join(storage::paths::PROJECT_DIR).exists() 
+        if path.join(".git").exists()
+            || path.join(storage::paths::PROJECT_DIR).exists()
             || path.join(".projects").exists()
-            || path.join("PANOPTICUM.kdl").exists() {
+            || path.join("PANOPTICUM.kdl").exists()
+        {
             return Ok(path.to_path_buf());
         }
         match path.parent() {
@@ -924,7 +1036,7 @@ fn initialize_workspace(root: &Path) -> Result<()> {
         if !issues_dir.exists() {
             std::fs::create_dir(&issues_dir)?;
         }
-        
+
         // Try to detect git remote for config
         let mut sync_config = String::new();
         let mut provider_msg = "Local Mode".to_string();
@@ -932,26 +1044,34 @@ fn initialize_workspace(root: &Path) -> Result<()> {
         if let Ok(Some(origin)) = crate::git::get_origin_url(root) {
             println!("   🔍 Detected git remote: {}", origin);
             if let Some((h, o, r)) = crate::git::parse_git_url(&origin) {
-                 // Heuristic detection
-                 let provider = if h.contains("gitlab") { "gitlab" } else { "forgejo" };
-                 
-                 sync_config = format!(r#"sync {{
+                // Heuristic detection
+                let provider = if h.contains("gitlab") {
+                    "gitlab"
+                } else {
+                    "forgejo"
+                };
+
+                sync_config = format!(
+                    r#"sync {{
     provider "{}"
     url "{}"
     owner "{}"
     repo "{}"
 }}
-"#, provider, h, o, r);
-                 provider_msg = format!("Provider: {}", provider);
+"#,
+                    provider, h, o, r
+                );
+                provider_msg = format!("Provider: {}", provider);
             }
         }
-        
+
         if sync_config.is_empty() {
             println!("   ℹ️ No compatible forge remote detected. Initializing in Local Mode.");
             sync_config = "// No sync configuration (Local Mode)\n// To enable sync, add a 'sync' block with provider, url, owner, and repo\n".to_string();
         }
 
-        let config_content = format!(r#"// ProGit Configuration
+        let config_content = format!(
+            r#"// ProGit Configuration
 // This file is auto-generated but safe to edit manually
 
 config {{
@@ -972,12 +1092,14 @@ config {{
 {0}
 // Theme: nord, gruvbox, dracula, cyberpunk
 theme "nord"
-"#, sync_config);
+"#,
+            sync_config
+        );
 
         std::fs::write(project_dir.join("config.kdl"), config_content)?;
         println!("   Created config.kdl ({})", provider_msg);
     }
-    
+
     // Ensure issues dir exists if project dir was already there
     let issues_dir = project_dir.join("issues");
     if !issues_dir.exists() {
@@ -987,7 +1109,7 @@ theme "nord"
     if !local_dir.exists() {
         std::fs::create_dir(&local_dir)?;
     }
-    
+
     // 2. Update .gitignore
     let gitignore = root.join(".gitignore");
     if gitignore.exists() {
@@ -1017,36 +1139,48 @@ fn auto_configure(sync_config: &mut storage::config::SyncConfig, cwd: &std::path
             let detected_base = base.trim_end_matches('/');
 
             if current_base != detected_base {
-                 // Detect Provider Type
-                 if remote_url.contains("gitlab") {
-                     sync_config.provider = "gitlab".to_string();
-                 } else if remote_url.contains("gitea") || 
-                           remote_url.contains("forgejo") || 
-                           remote_url.contains("codeberg") ||
-                           base.contains("maiwald.work") { 
-                     sync_config.provider = "forgejo".to_string();
-                 }
-
-             // Parse URL components properly
-             if let Some((base, owner, repo)) = crate::git::parse_git_url(&remote_url) {
-                println!("{} Detected remote change: {} -> {}", "⚡".yellow(), sync_config.url, base);
-                sync_config.url = base;
-                sync_config.owner = owner.clone();
-                sync_config.repo = repo.clone();
-                println!("{} Auto-configured for {}/{} ({})", "🔧".yellow(), owner, repo, sync_config.provider);
-             } else {
-                // Fallback manual parsing if parse_git_url fails (e.g. non-standard URL)
-                sync_config.url = remote_url.clone();
-                let clean_remote = remote_url.trim_end_matches(".git").trim_end_matches('/');
-                let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
-                if parts.len() >= 2 {
-                     let repo = parts.last().unwrap();
-                     let owner = parts.get(parts.len() - 2).unwrap();
-                     sync_config.owner = owner.to_string();
-                     sync_config.repo = repo.to_string();
+                // Detect Provider Type
+                if remote_url.contains("gitlab") {
+                    sync_config.provider = "gitlab".to_string();
+                } else if remote_url.contains("gitea")
+                    || remote_url.contains("forgejo")
+                    || remote_url.contains("codeberg")
+                    || base.contains("maiwald.work")
+                {
+                    sync_config.provider = "forgejo".to_string();
                 }
-             }
+
+                // Parse URL components properly
+                if let Some((base, owner, repo)) = crate::git::parse_git_url(&remote_url) {
+                    println!(
+                        "{} Detected remote change: {} -> {}",
+                        "⚡".yellow(),
+                        sync_config.url,
+                        base
+                    );
+                    sync_config.url = base;
+                    sync_config.owner = owner.clone();
+                    sync_config.repo = repo.clone();
+                    println!(
+                        "{} Auto-configured for {}/{} ({})",
+                        "🔧".yellow(),
+                        owner,
+                        repo,
+                        sync_config.provider
+                    );
+                } else {
+                    // Fallback manual parsing if parse_git_url fails (e.g. non-standard URL)
+                    sync_config.url = remote_url.clone();
+                    let clean_remote = remote_url.trim_end_matches(".git").trim_end_matches('/');
+                    let parts: Vec<&str> = clean_remote.split(&['/', ':'][..]).collect();
+                    if parts.len() >= 2 {
+                        let repo = parts.last().unwrap();
+                        let owner = parts.get(parts.len() - 2).unwrap();
+                        sync_config.owner = owner.to_string();
+                        sync_config.repo = repo.to_string();
+                    }
+                }
+            }
         }
     }
-}
 }

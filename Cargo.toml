@@ -48,6 +48,8 @@ regex = "1"
 colored = "3.0.0"
 log = "0.4.29"
 tui-logger = { version = "0.17.4", features = ["crossterm"] }
+sha2 = "0.10"
+blake3 = "1.5"
 
 # Plugin SDK (Apache 2.0 - separate license)
 progit-plugin-sdk = { path = "../progit-plugin-sdk" }

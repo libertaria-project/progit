@@ -69,6 +69,7 @@ repos {
   - 📐 **Hunk Folding** (collapse/expand diff hunks with `h`)
   - 📦 **Multi-Repo Management** (one TUI, infinite repos)
   - 🔄 **Bidirectional Sync** (GitLab, Forgejo, GitHub coming soon)
+  - 🌲 **Virtual Branches** (Work on multiple features simultaneously)
   - ⚡ **Blazing Fast TUI** (Pure Rust, 5MB binary, no Electron bloat)
   - 🎭 **Beautiful Themes** (Nord, Gruvbox, Dracula, Cyberpunk, Vibe)
   - 💾 **Git-Native Storage** (`.project/issues/*.json` — transparent, diffable files)
@@ -81,6 +82,7 @@ repos {
 > *"What GitLab sells, we give away. What GitHub hides, we expose. Your code, your issues, your repository. One binary. Infinite sovereignty."*
 
 📊 **[See how ProGit compares to Jira, Linear, and GitHub Issues →](COMPARISON.md)**
+🌲 **[Learn about Virtual Branches & AI Integration →](docs/VIRTUAL_BRANCHES.md)**
 
 -----
 
@@ -355,6 +357,6 @@ See the full [LICENSE](LICENSE) for legal text.
 
 -----
 
-**Made with 🔥 by developers, for developers.**
+**Made with 🔥 by developers, for developers and their teams.**
 
 *Stop clicking. Start shipping.*
