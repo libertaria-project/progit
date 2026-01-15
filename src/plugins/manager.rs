@@ -34,17 +34,29 @@ impl PluginManager {
         }
     }
 
-    /// Load all plugins from the plugins directory
+    /// Load all plugins from the default plugins directory
     pub fn load_all(&mut self, context: &PluginContext) -> Result<usize> {
-        if !self.plugin_dir.exists() {
-            log::info!("No plugins directory found at {:?}", self.plugin_dir);
-            return Ok(0);
+        Ok(self.load_from_dir(&self.plugin_dir.clone(), context))
+    }
+
+    /// Load plugins from a specific directory
+    pub fn load_from_dir(&mut self, dir: &Path, context: &PluginContext) -> usize {
+        if !dir.exists() {
+            log::info!("No plugins directory found at {:?}", dir);
+            return 0;
         }
 
         let mut loaded = 0;
 
-        for entry in std::fs::read_dir(&self.plugin_dir)? {
-            let entry = entry?;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(e) => {
+                log::warn!("Failed to read plugins directory {:?}: {}", dir, e);
+                return 0;
+            }
+        };
+
+        for entry in entries.flatten() {
             let path = entry.path();
 
             // Load .lua files directly
@@ -87,7 +99,7 @@ impl PluginManager {
             }
         }
 
-        Ok(loaded)
+        loaded
     }
 
     /// Load a single plugin

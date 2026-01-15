@@ -6,8 +6,7 @@ use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
 use crate::mr::MergeRequest;
 use crate::panopticum::{PanoEvent, PanoStatus};
-// TODO: Re-implement plugin manager with new SDK
-// use crate::plugins::PluginManager;
+use crate::plugins::PluginManager;
 use crate::sync::SyncProvider;
 use crate::tui::style::ThemeEngine;
 use crate::tui::theme::Theme;
@@ -168,9 +167,8 @@ pub struct App {
     /// Show debug console overlay
     pub show_debug_console: bool,
 
-    /// Plugin manager
-    // TODO: Reimpl with new SDK
-    // pub plugin_manager: Option<PluginManager>,
+    /// Plugin manager for executing plugin hooks
+    pub plugin_manager: Option<PluginManager>,
 
     /// Fuzzy searcher for command palette
     pub fuzzy_searcher: crate::fuzzy::FuzzySearcher,
@@ -283,6 +281,7 @@ impl App {
             mr_list: Vec::new(),
             mr_selected: 0,
             show_debug_console: false,
+            plugin_manager: None,
             fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
             fuzzy_query: String::new(),
             fuzzy_selected: 0,

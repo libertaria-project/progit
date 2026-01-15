@@ -616,11 +616,7 @@ fn main() -> Result<()> {
             }
         }
         Some(Commands::Plugin { action }) => {
-            // TODO: Reimplement plugin CLI with new SDK in v0.6.0
-            eprintln!("⚠️  Plugin management CLI will be reimplemented in v0.6.0");
-            eprintln!("    Current plugin system: LuaJIT engine available via API");
-            eprintln!("    See docs/PLUGIN_SDK.md for details");
-            std::process::exit(1);
+            handle_plugin_command(action)?;
         }
         Some(Commands::RebaseEditor { path }) => {
             crate::rebase::run(&path)?;
@@ -628,6 +624,163 @@ fn main() -> Result<()> {
         None => {
             // No command - run TUI
             start_tui()?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle plugin CLI commands
+fn handle_plugin_command(action: PluginAction) -> Result<()> {
+    use progit_plugin_sdk::prelude::{LuaPlugin, Plugin};
+
+    // Plugin directories
+    let home_plugins = dirs::home_dir()
+        .map(|h| h.join(".progit").join("plugins"))
+        .unwrap_or_else(|| PathBuf::from(".progit/plugins"));
+    let local_plugins = PathBuf::from(".progit/plugins");
+
+    match action {
+        PluginAction::List => {
+            println!("{}", "Installed Plugins".bold());
+            println!("{}", "─".repeat(50));
+
+            let mut found = false;
+            for dir in [&local_plugins, &home_plugins] {
+                if dir.exists() {
+                    if let Ok(entries) = std::fs::read_dir(dir) {
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.extension().is_some_and(|e| e == "lua") {
+                                found = true;
+                                match LuaPlugin::load(&path) {
+                                    Ok(plugin) => {
+                                        let meta = plugin.metadata();
+                                        println!(
+                                            "  {} {} - {}",
+                                            meta.name.green(),
+                                            format!("v{}", meta.version).dimmed(),
+                                            meta.description
+                                        );
+                                    }
+                                    Err(e) => {
+                                        let name = path.file_stem()
+                                            .map(|s| s.to_string_lossy().to_string())
+                                            .unwrap_or_else(|| "unknown".to_string());
+                                        println!("  {} {}", name.red(), format!("(error: {})", e).dimmed());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !found {
+                println!("  No plugins installed.");
+                println!();
+                println!("  Install plugins with:");
+                println!("    {} plugin install <path-to-plugin.lua>", "prog".cyan());
+            }
+        }
+
+        PluginAction::Install { name, version: _, git } => {
+            let source_path = PathBuf::from(&name);
+
+            if git {
+                // Git URL installation (future feature)
+                eprintln!("{} Git URL installation coming soon.", "⚠️".yellow());
+                eprintln!("  For now, download the plugin and use: prog plugin install <path>");
+                return Ok(());
+            }
+
+            if !source_path.exists() {
+                return Err(anyhow!("Plugin file not found: {}", name));
+            }
+
+            // Validate it's a valid Lua plugin
+            let plugin = LuaPlugin::load(&source_path)
+                .with_context(|| format!("Failed to load plugin from {}", name))?;
+            let meta = plugin.metadata();
+
+            // Create plugins directory if needed
+            std::fs::create_dir_all(&local_plugins)?;
+
+            // Copy to plugins directory
+            let dest = local_plugins.join(format!("{}.lua", meta.name));
+            std::fs::copy(&source_path, &dest)
+                .with_context(|| "Failed to copy plugin")?;
+
+            println!("{} Installed {} v{}", "✓".green(), meta.name.green(), meta.version);
+            println!("  Location: {}", dest.display());
+        }
+
+        PluginAction::Remove { name } => {
+            let mut removed = false;
+
+            for dir in [&local_plugins, &home_plugins] {
+                let plugin_path = dir.join(format!("{}.lua", name));
+                if plugin_path.exists() {
+                    std::fs::remove_file(&plugin_path)?;
+                    println!("{} Removed plugin: {}", "✓".green(), name);
+                    removed = true;
+                    break;
+                }
+            }
+
+            if !removed {
+                return Err(anyhow!("Plugin '{}' not found", name));
+            }
+        }
+
+        PluginAction::Info { name } => {
+            let mut found = false;
+
+            for dir in [&local_plugins, &home_plugins] {
+                let plugin_path = dir.join(format!("{}.lua", name));
+                if plugin_path.exists() {
+                    match LuaPlugin::load(&plugin_path) {
+                        Ok(plugin) => {
+                            let meta = plugin.metadata();
+                            println!("{}", "Plugin Information".bold());
+                            println!("{}", "─".repeat(40));
+                            println!("  Name:        {}", meta.name.green());
+                            println!("  Version:     {}", meta.version);
+                            println!("  Author:      {}", meta.author);
+                            println!("  Description: {}", meta.description);
+                            println!("  Location:    {}", plugin_path.display());
+                            println!("  Hooks:       {:?}", meta.hooks.iter().map(|h| format!("{:?}", h)).collect::<Vec<_>>().join(", "));
+                            found = true;
+                        }
+                        Err(e) => {
+                            return Err(anyhow!("Failed to load plugin: {}", e));
+                        }
+                    }
+                    break;
+                }
+            }
+
+            if !found {
+                return Err(anyhow!("Plugin '{}' not found", name));
+            }
+        }
+
+        PluginAction::Update { name: _ } => {
+            eprintln!("{} Plugin update requires registry server (coming soon)", "⚠️".yellow());
+            eprintln!("  For now, manually download and reinstall plugins.");
+        }
+
+        PluginAction::Search { query: _ } => {
+            eprintln!("{} Plugin search requires registry server (coming soon)", "⚠️".yellow());
+            eprintln!("  Browse available plugins at: https://git.maiwald.work/SSSS/progit-plugins-index");
+        }
+
+        PluginAction::Index { action: index_action } => {
+            match index_action {
+                IndexAction::Update => {
+                    eprintln!("{} Index update requires registry server (coming soon)", "⚠️".yellow());
+                }
+            }
         }
     }
 
@@ -737,10 +890,39 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
     let cwd = std::env::current_dir()?;
     app.repo_info = detect_repo(&cwd)?;
 
-    // TODO: Reimplement plugin loading with new SDK in v0.6.0
-    // Plugin SDK is ready (src/plugins/sdk.rs), LuaJIT engine works,
-    // but needs proper TUI integration and App struct updates.
-    // For now, plugin system is API-only (no CLI, no auto-loading).
+    // ─── Plugin Loading ────────────────────────────────────────────────────────
+    // Load plugins from plugins/ (repo) and .progit/plugins/ (user-installed)
+    {
+        use progit_plugin_sdk::prelude::PluginContext;
+
+        let context = PluginContext {
+            repo_path: project_root.to_string_lossy().to_string(),
+            user: std::env::var("USER").ok(),
+            env: std::env::vars().collect(),
+            config: std::collections::HashMap::new(),
+        };
+
+        let mut plugin_manager = crate::plugins::PluginManager::new(&project_root);
+
+        // Load from repo plugins/ directory
+        match plugin_manager.load_all(&context) {
+            Ok(count) if count > 0 => {
+                log::info!("🔌 Loaded {} repo plugin(s)", count);
+            }
+            Err(e) => {
+                log::warn!("⚠️ Repo plugin loading failed: {}", e);
+            }
+            _ => {}
+        }
+
+        // Also load from .progit/plugins/ (user-installed)
+        let user_plugins = project_root.join(".progit").join("plugins");
+        if user_plugins.exists() {
+            plugin_manager.load_from_dir(&user_plugins, &context);
+        }
+
+        app.plugin_manager = Some(plugin_manager);
+    }
 
     // ─── Panopticum Integration ───────────────────────────────────────────────
     app.repo_path = project_root.clone();
@@ -902,12 +1084,11 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                     app.load_issues(engine.issues().to_vec());
                     app.set_status("Created new issue");
 
-                   // Trigger plugin hook  
-                    // TODO: Reimplement in v0.6.0 with new SDK
-                    // if let Some(ref mut pm) = app.plugin_manager {
-                    //     let plugin_issue = convert_issue_to_plugin(&new_issue);
-                    //     // pm.on_issue_created(&plugin_issue);
-                    // }
+                    // Trigger plugin hook
+                    if let Some(ref mut pm) = app.plugin_manager {
+                        let plugin_issue = convert_issue_to_plugin(&new_issue);
+                        pm.on_issue_created(&plugin_issue);
+                    }
                 }
                 KeyAction::DeleteIssue => {
                     // Delete the selected issue based on view mode
@@ -927,10 +1108,9 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                             app.set_status("Issue deleted");
 
                             // Trigger plugin hook
-                            // TODO: Reimplement in v0.6.0 with new SDK
-                            // if let Some(ref mut pm) = app.plugin_manager {
-                            //     // pm.on_issue_deleted(&id);
-                            // }
+                            if let Some(ref mut pm) = app.plugin_manager {
+                                pm.on_issue_deleted(&id);
+                            }
                         } else {
                             app.set_status("Failed to delete issue");
                         }
