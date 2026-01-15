@@ -3,7 +3,7 @@
 //! Full view of a single issue for viewing/editing.
 
 use crate::issue::{Effort, Issue, Status};
-// App/InputMode unused here
+use crate::tui::markdown::render_markdown;
 use crate::tui::theme::ThemeColors;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -154,19 +154,26 @@ pub fn render(
         colors,
     );
 
-    // Description field
-    render_multiline_field(
-        frame,
-        chunks[1],
-        "Description",
-        if edit_field == EditField::Description {
-            edit_buffer
-        } else {
-            &issue.description
-        },
-        edit_field == EditField::Description,
-        colors,
-    );
+    // Description field - render as markdown when not editing
+    if edit_field == EditField::Description {
+        render_multiline_field(
+            frame,
+            chunks[1],
+            "Description",
+            edit_buffer,
+            true,
+            colors,
+        );
+    } else {
+        render_markdown_field(
+            frame,
+            chunks[1],
+            "Description",
+            &issue.description,
+            false,
+            colors,
+        );
+    }
 
     // Status + Effort row
     let status_effort = Layout::default()
@@ -364,6 +371,38 @@ fn render_multiline_field(
 
     let content = Paragraph::new(format!("{}{}", value, cursor))
         .style(style)
+        .wrap(Wrap { trim: false })
+        .block(
+            Block::default()
+                .title(Span::styled(format!(" {} ", label), colors.dim()))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(border_style),
+        );
+
+    frame.render_widget(content, area);
+}
+
+/// Render a field with markdown formatting
+fn render_markdown_field(
+    frame: &mut Frame,
+    area: Rect,
+    label: &str,
+    value: &str,
+    is_selected: bool,
+    colors: &ThemeColors,
+) {
+    let border_style = if is_selected {
+        colors.accent()
+    } else {
+        colors.border()
+    };
+
+    // Parse and render markdown
+    let base_style = colors.normal();
+    let markdown_text = render_markdown(value, base_style);
+
+    let content = Paragraph::new(markdown_text)
         .wrap(Wrap { trim: false })
         .block(
             Block::default()

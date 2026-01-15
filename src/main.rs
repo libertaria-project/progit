@@ -8,6 +8,7 @@ mod command;
 mod diff;
 mod fuzzy;
 mod git;
+mod hooks;
 mod issue;
 mod mr;
 mod panopticum;
@@ -91,6 +92,11 @@ enum Commands {
         /// Path to the git-rebase-todo file
         path: String,
     },
+    /// Manage git hooks integration
+    Hooks {
+        #[command(subcommand)]
+        action: HooksAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -139,6 +145,16 @@ enum PluginAction {
 enum IndexAction {
     /// Update the local plugin index from remote
     Update,
+}
+
+#[derive(Subcommand)]
+enum HooksAction {
+    /// Install ProGit git hooks
+    Install,
+    /// Uninstall ProGit git hooks
+    Uninstall,
+    /// Show status of installed hooks
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -618,6 +634,9 @@ fn main() -> Result<()> {
         Some(Commands::Plugin { action }) => {
             handle_plugin_command(action)?;
         }
+        Some(Commands::Hooks { action }) => {
+            handle_hooks_command(action, &project_root)?;
+        }
         Some(Commands::RebaseEditor { path }) => {
             crate::rebase::run(&path)?;
         }
@@ -779,6 +798,68 @@ fn handle_plugin_command(action: PluginAction) -> Result<()> {
             match index_action {
                 IndexAction::Update => {
                     eprintln!("{} Index update requires registry server (coming soon)", "⚠️".yellow());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle hooks CLI commands
+fn handle_hooks_command(action: HooksAction, repo_root: &Path) -> Result<()> {
+    match action {
+        HooksAction::Install => {
+            println!("{} Installing ProGit hooks...", "🔧".blue());
+            match hooks::install_hooks(repo_root) {
+                Ok(installed) => {
+                    for hook in &installed {
+                        println!("  {} Installed {}", "✓".green(), hook.filename());
+                    }
+                    println!();
+                    println!("{} Hooks will auto-update issues based on commit messages:", "ℹ️".cyan());
+                    println!("  {} closes #123, fixes #123, resolves #123 → marks Done", "•".dimmed());
+                    println!("  {} refs #123, see #123, re #123 → marks In Progress", "•".dimmed());
+                    println!("  {} #123 (bare reference) → no status change", "•".dimmed());
+                }
+                Err(e) => {
+                    return Err(anyhow!("Failed to install hooks: {}", e));
+                }
+            }
+        }
+        HooksAction::Uninstall => {
+            println!("{} Uninstalling ProGit hooks...", "🔧".blue());
+            match hooks::uninstall_hooks(repo_root) {
+                Ok(uninstalled) => {
+                    if uninstalled.is_empty() {
+                        println!("  {} No ProGit hooks were installed", "ℹ️".cyan());
+                    } else {
+                        for hook in &uninstalled {
+                            println!("  {} Removed {}", "✓".green(), hook.filename());
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(anyhow!("Failed to uninstall hooks: {}", e));
+                }
+            }
+        }
+        HooksAction::Status => {
+            println!("{}", "Git Hooks Status".bold());
+            println!("{}", "─".repeat(40));
+            match hooks::hooks_status(repo_root) {
+                Ok(status) => {
+                    for (hook, installed) in status {
+                        let status_str = if installed {
+                            "installed".green()
+                        } else {
+                            "not installed".dimmed()
+                        };
+                        println!("  {:<15} {}", hook.filename(), status_str);
+                    }
+                }
+                Err(e) => {
+                    return Err(anyhow!("Failed to check hook status: {}", e));
                 }
             }
         }

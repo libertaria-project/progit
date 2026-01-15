@@ -56,6 +56,7 @@ progit-plugin-sdk = { path = "../progit-plugin-sdk" }
 tempfile = "3.23.0"
 mlua = { version = "0.11.5", features = ["luajit", "vendored", "send"] }
 dirs = "6.0.0"
+pulldown-cmark = "0.13.0"
 
 [features]
 default = []

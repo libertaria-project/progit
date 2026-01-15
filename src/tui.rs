@@ -11,6 +11,7 @@
 pub mod app;
 pub mod agent_executor;
 pub mod input;
+pub mod markdown;
 pub mod style;
 pub mod theme;
 pub mod widget_agent_menu;

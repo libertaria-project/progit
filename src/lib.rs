@@ -6,6 +6,7 @@ pub mod command;
 pub mod diff;
 pub mod fuzzy;
 pub mod git;
+pub mod hooks;
 pub mod issue;
 pub mod mr;
 pub mod panopticum;
