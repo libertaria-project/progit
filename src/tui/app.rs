@@ -40,6 +40,8 @@ pub enum InputMode {
     BranchDropdown,
     BranchCreate,        // Typing new branch name
     BranchDeleteConfirm, // Confirm branch deletion
+    VBranchCreate,       // Creating a virtual branch (typing name)
+    VBranchMove,         // Selecting target lane for hunk move
     DetailView,          // Viewing issue details
     DetailEdit,          // Editing a field in detail view
     Command,             // Command palette (: command)

@@ -513,20 +513,56 @@ fn handle_lanes_key(app: &mut App, key: KeyEvent) -> KeyAction {
         }
         // Create new virtual branch
         KeyCode::Char('n') => {
-            // TODO: Open branch name input dialog
-            app.set_status("Create virtual branch: Coming soon");
+            app.edit_buffer = String::from("feature/");
+            app.input_mode = InputMode::VBranchCreate;
+            app.set_status("Enter virtual branch name...");
             KeyAction::Refresh
         }
         // Toggle staging for selected hunk
         KeyCode::Char(' ') | KeyCode::Enter => {
-            // TODO: Toggle hunk staging
-            app.set_status("Toggle hunk staging: Coming soon");
+            if let Some(ref mut manager) = app.vbranch_manager {
+                let branches = manager.list();
+                if let Some(branch) = branches.get(app.vbranch_selected) {
+                    let branch_id = branch.id.clone();
+                    let owned_hunks = branch.owned_hunks.clone();
+                    let staged_hunks = branch.staged_hunks.clone();
+
+                    // Get selected hunk
+                    if let Some(hunk) = owned_hunks.get(app.vbranch_hunk_selected) {
+                        // Check if hunk is already staged
+                        let is_staged = staged_hunks.contains(hunk);
+
+                        if let Some(branch) = manager.get_mut(&branch_id) {
+                            if is_staged {
+                                branch.unstage_hunk(hunk);
+                                app.set_status("Hunk unstaged");
+                            } else {
+                                branch.stage_hunk(hunk);
+                                app.set_status("Hunk staged");
+                            }
+                        }
+                    } else {
+                        app.set_status("No hunk selected");
+                    }
+                }
+            }
             KeyAction::Refresh
         }
         // Transfer hunk to another lane
         KeyCode::Char('m') => {
-            // TODO: Open lane selection for hunk transfer
-            app.set_status("Move hunk to lane: Coming soon");
+            if let Some(ref manager) = app.vbranch_manager {
+                let branches = manager.list();
+                if branches.len() < 2 {
+                    app.set_status("Need at least 2 branches to move hunks");
+                } else if let Some(branch) = branches.get(app.vbranch_selected) {
+                    if branch.owned_hunks.get(app.vbranch_hunk_selected).is_some() {
+                        app.input_mode = InputMode::VBranchMove;
+                        app.set_status("Select target lane (h/l), Enter to confirm, Esc to cancel");
+                    } else {
+                        app.set_status("No hunk selected to move");
+                    }
+                }
+            }
             KeyAction::Refresh
         }
         // Open AI Agent Menu
@@ -547,7 +583,15 @@ fn handle_lanes_key(app: &mut App, key: KeyEvent) -> KeyAction {
         }
         // Show conflict resolution modal
         KeyCode::Char('c') => {
-            app.set_status("Conflict resolution: Coming soon");
+            if let Some(ref manager) = app.vbranch_manager {
+                let conflicts = manager.detect_conflicts();
+                if conflicts.is_empty() {
+                    app.set_status("No conflicts detected");
+                } else {
+                    app.show_conflicts = true;
+                    app.set_status(format!("{} branch(es) have conflicts", conflicts.len()));
+                }
+            }
             KeyAction::Refresh
         }
         _ => KeyAction::None,
@@ -1044,6 +1088,158 @@ pub fn handle_branch_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
     }
 }
 
+/// Handle key events in virtual branch create mode
+fn handle_vbranch_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc => {
+            app.edit_buffer.clear();
+            app.input_mode = InputMode::Normal;
+            app.set_status("Virtual branch creation cancelled");
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            if !app.edit_buffer.is_empty() {
+                let name = app.edit_buffer.clone();
+                app.edit_buffer.clear();
+
+                // Get HEAD commit for base
+                let base_commit = app.repo_info
+                    .as_ref()
+                    .and_then(|r| {
+                        use git2::Repository;
+                        if let Ok(repo) = Repository::open(&r.path) {
+                            if let Ok(head) = repo.head() {
+                                if let Ok(commit) = head.peel_to_commit() {
+                                    return Some(commit.id().to_string());
+                                }
+                            }
+                        }
+                        None
+                    })
+                    .unwrap_or_else(|| "HEAD".to_string());
+
+                // Create virtual branch
+                let result = if let Some(ref mut manager) = app.vbranch_manager {
+                    match manager.create_branch(&name, &base_commit) {
+                        Ok(id) => {
+                            let pos = manager.list().iter().position(|b| b.id == id);
+                            Some((Ok(()), name.clone(), pos))
+                        }
+                        Err(e) => Some((Err(e), name.clone(), None)),
+                    }
+                } else {
+                    None
+                };
+
+                // Update status outside the borrow
+                if let Some((res, branch_name, pos)) = result {
+                    match res {
+                        Ok(()) => {
+                            app.set_status(format!("Created virtual branch: {}", branch_name));
+                            if let Some(p) = pos {
+                                app.vbranch_selected = p;
+                            }
+                        }
+                        Err(e) => {
+                            app.set_status(format!("Failed to create branch: {}", e));
+                        }
+                    }
+                }
+
+                app.input_mode = InputMode::Normal;
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Backspace => {
+            app.edit_buffer.pop();
+            KeyAction::Refresh
+        }
+        KeyCode::Char(c) => {
+            // Only allow valid branch name chars
+            if c.is_alphanumeric() || c == '-' || c == '_' || c == '/' {
+                app.edit_buffer.push(c);
+            }
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle key events in virtual branch move mode (selecting target lane)
+fn handle_vbranch_move_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    // Store the original selected lane as source
+    let source_idx = app.vbranch_selected;
+
+    match key.code {
+        KeyCode::Esc => {
+            app.input_mode = InputMode::Normal;
+            app.set_status("Hunk move cancelled");
+            KeyAction::Refresh
+        }
+        KeyCode::Char('h') | KeyCode::Left => {
+            // Navigate to select target (but don't allow selecting same lane)
+            let new_idx = app.vbranch_selected.saturating_sub(1);
+            app.vbranch_selected = new_idx;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('l') | KeyCode::Right => {
+            if let Some(ref manager) = app.vbranch_manager {
+                let max = manager.list().len().saturating_sub(1);
+                let new_idx = (app.vbranch_selected + 1).min(max);
+                app.vbranch_selected = new_idx;
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            let target_idx = app.vbranch_selected;
+
+            if target_idx == source_idx {
+                app.set_status("Cannot move hunk to same lane");
+                return KeyAction::Refresh;
+            }
+
+            // Collect needed data first without holding references
+            let transfer_info = if let Some(ref manager) = app.vbranch_manager {
+                let branches = manager.list();
+                let source_branch = branches.get(source_idx);
+                let target_branch = branches.get(target_idx);
+
+                if let (Some(source), Some(target)) = (source_branch, target_branch) {
+                    let source_id = source.id.clone();
+                    let target_id = target.id.clone();
+                    let target_name = target.name.clone();
+                    let hunk = source.owned_hunks.get(app.vbranch_hunk_selected).cloned();
+                    Some((source_id, target_id, target_name, hunk))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // Now perform the transfer
+            if let Some((source_id, target_id, target_name, Some(hunk))) = transfer_info {
+                if let Some(ref mut manager) = app.vbranch_manager {
+                    match manager.transfer_hunk(&hunk, &source_id, &target_id) {
+                        Ok(()) => {
+                            app.set_status(format!("Moved hunk to '{}'", target_name));
+                            app.vbranch_hunk_selected = 0;
+                        }
+                        Err(e) => {
+                            app.set_status(format!("Failed to move hunk: {}", e));
+                        }
+                    }
+                }
+            }
+
+            app.vbranch_selected = source_idx; // Restore original selection
+            app.input_mode = InputMode::Normal;
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
 /// Handle keys in fuzzy palette mode
 fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyAction {
     match key.code {
@@ -1222,6 +1418,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::BranchDropdown => handle_branch_dropdown_key(app, key),
         InputMode::BranchCreate => handle_branch_create_key(app, key),
         InputMode::BranchDeleteConfirm => handle_branch_delete_confirm_key(app, key),
+        InputMode::VBranchCreate => handle_vbranch_create_key(app, key),
+        InputMode::VBranchMove => handle_vbranch_move_key(app, key),
         InputMode::DetailView => handle_detail_view_key(app, key),
         InputMode::DetailEdit => handle_detail_edit_key(app, key),
         InputMode::Command => handle_command_key(app, key),
@@ -1935,6 +2133,8 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::BranchDropdown => "j/k:nav │ Enter:select │ n:new │ d:delete │ Esc:cancel",
         InputMode::BranchCreate => "Type branch name │ Enter:create │ Esc:cancel",
         InputMode::BranchDeleteConfirm => "y:confirm delete │ n/Esc:cancel",
+        InputMode::VBranchCreate => "Type virtual branch name │ Enter:create │ Esc:cancel",
+        InputMode::VBranchMove => "h/l:select target lane │ Enter:move hunk │ Esc:cancel",
         InputMode::Edit => "Esc:done │ Enter:save",
         InputMode::DetailView => "j/k:fields │ Space:cycle │ Enter:edit │ Esc:close",
         InputMode::DetailEdit => "Type to edit │ Enter:save │ Esc:cancel",
