@@ -174,13 +174,7 @@ impl SyncProvider for ForgejoProvider {
 
                 let status = response.status();
                 let resp_body = response.text().unwrap_or_default();
-                if status.is_success() {
-                    // Parse response to verify body was updated
-                    if let Ok(updated) = serde_json::from_str::<serde_json::Value>(&resp_body) {
-                        let body_str = updated["body"].as_str().unwrap_or("");
-                        // log::debug!("DEBUG: Response Body='{}'", body_str);
-                    }
-                } else {
+                if !status.is_success() {
                     log::error!("   ⚠️ Update failed ({}): {}", status, resp_body);
                 }
             } else {

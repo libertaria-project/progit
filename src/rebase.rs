@@ -13,7 +13,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
-    backend::{Backend, CrosstermBackend},
+    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -214,22 +214,12 @@ pub fn run(path: &str) -> Result<()> {
         if let Event::Key(key) = event::read()? {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => {
-                    // Abort? Or just quit without saving?
-                    // Git interprets empty file as abort usually, or we should ask.
-                    // For now, let's treat Q as "Do nothing / Cancel" -> But users might want to abort rebase.
-                    // Let's implement 'Ctrl+C' as abort.
-                    // Q/Esc exit? No, we need explicit "Done" vs "Abort".
-                    // Let's make "Enter" = Save & Quit (Proceed)
-                    // "Ctrl+C" = Abort (Exit 1)
-                }
-                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    // Abort
+                    // Abort rebase
                     res = Err(anyhow::anyhow!("Rebase aborted by user"));
                     break;
                 }
-                KeyCode::Char('q') => {
-                    // Ask for confirmation to abort? Or just abort?
-                    // Let's assume Abort for now, cleaner.
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    // Abort via Ctrl+C
                     res = Err(anyhow::anyhow!("Rebase aborted by user"));
                     break;
                 }

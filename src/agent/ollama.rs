@@ -80,7 +80,7 @@ impl AgentClient for OllamaClient {
             .timeout(Duration::from_secs(120)) // Long timeout for LLM
             .build()?;
 
-        let mut res = client.post(&url)
+        let res = client.post(&url)
             .json(&body)
             .send()
             .context("Failed to connect to Ollama")?;

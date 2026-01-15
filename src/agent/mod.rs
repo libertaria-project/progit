@@ -11,7 +11,7 @@ pub mod ops;
 pub mod context;
 
 use std::sync::mpsc::Sender;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 /// Events sent from the Agent thread to the main TUI thread
 #[derive(Debug, Clone)]

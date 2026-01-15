@@ -239,7 +239,7 @@ fn render_lane_header(
     colors: &ThemeColors,
     engine: &crate::tui::style::ThemeEngine,
     is_selected: bool,
-    has_conflicts: bool,
+    _has_conflicts: bool,
 ) {
     let border_style = if is_selected {
         engine.get("lanes.header.selected", colors.accent())

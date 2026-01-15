@@ -79,29 +79,28 @@ fn parse_blame_porcelain(output: &str) -> Result<Vec<BlameLine>> {
                     summary: info.summary.clone(),
                     content,
                 });
-            } else {
-                // This shouldn't happen if porcelain output is standard,
-                // because headers come before content
             }
             continue;
         }
 
+        // Check if this is a commit hash header line first
+        // Format: 40-byte-sha1 <orig_line> <final_line> [<num_lines>]
+        let cols: Vec<&str> = line.split_whitespace().collect();
+        if cols.len() >= 3 && cols[0].len() == 40 && cols[0].chars().all(|c| c.is_ascii_hexdigit()) {
+            current_commit_hash = cols[0].to_string();
+            current_orig_line = cols[1].parse().unwrap_or(0);
+            current_final_line = cols[2].parse().unwrap_or(0);
+
+            // If we don't have this commit cached, we expect following headers
+            if !commit_cache.contains_key(&current_commit_hash) {
+                commit_cache.insert(current_commit_hash.clone(), CommitInfo::default());
+            }
+            continue;
+        }
+
+        // Otherwise it's a key-value pair
         let parts: Vec<&str> = line.splitn(2, ' ').collect();
         if parts.len() < 2 {
-            // Might be the header line: <sha> <orig_line> <final_line> <group_lines>
-            // actually git blame porcelain header format:
-            // 40-byte-sha1 <orig_line> <final_line> <num_lines>
-            let cols: Vec<&str> = line.split_whitespace().collect();
-            if cols.len() >= 3 && cols[0].len() == 40 {
-                current_commit_hash = cols[0].to_string();
-                current_orig_line = cols[1].parse().unwrap_or(0);
-                current_final_line = cols[2].parse().unwrap_or(0);
-
-                // If we don't have this commit cached, we expect following headers
-                if !commit_cache.contains_key(&current_commit_hash) {
-                    commit_cache.insert(current_commit_hash.clone(), CommitInfo::default());
-                }
-            }
             continue;
         }
 

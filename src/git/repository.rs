@@ -182,9 +182,18 @@ pub fn refresh_repo(path: &Path) -> Result<Option<RepoInfo>> {
 
 /// Format remote URL for display (shorten if needed)
 pub fn format_remote_url(url: &str) -> String {
-    // Convert git@github.com:user/repo.git to github.com/user/repo
+    // Convert various URL formats to github.com/user/repo style
     if url.starts_with("git@") {
+        // git@github.com:user/repo.git -> github.com/user/repo
         let trimmed = url.trim_start_matches("git@").replace(':', "/");
+        trimmed.trim_end_matches(".git").to_string()
+    } else if url.starts_with("https://") {
+        // https://github.com/user/repo.git -> github.com/user/repo
+        let trimmed = url.trim_start_matches("https://");
+        trimmed.trim_end_matches(".git").to_string()
+    } else if url.starts_with("http://") {
+        // http://github.com/user/repo.git -> github.com/user/repo
+        let trimmed = url.trim_start_matches("http://");
         trimmed.trim_end_matches(".git").to_string()
     } else {
         url.trim_end_matches(".git").to_string()

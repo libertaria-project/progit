@@ -16,7 +16,6 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
     Frame,
 };
-use std::collections::HashMap;
 
 /// Render the conflict resolution modal
 pub fn render(frame: &mut Frame, app: &App) {
@@ -29,7 +28,7 @@ pub fn render(frame: &mut Frame, app: &App) {
             if let Some(branch) = branches.get(app.vbranch_selected) {
                 let all_conflicts = manager.detect_conflicts();
                 let branch_conflicts = all_conflicts.get(&branch.id).cloned().unwrap_or_default();
-                (Some(branch.clone()), branch_conflicts)
+                (Some((*branch).clone()), branch_conflicts)
             } else {
                 (None, Vec::new())
             }
@@ -45,7 +44,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     let current = current_branch.unwrap();
     
     // Create centered modal (80% width, 80% height)
-    let area = centered_rect(85, 85, frame.size());
+    let area = centered_rect(85, 85, frame.area());
     
     // Clear background
     let block = Block::default()
@@ -197,7 +196,7 @@ fn render_conflict_details(
 
 /// Render "no conflicts" message
 fn render_no_conflicts(frame: &mut Frame, colors: &ThemeColors) {
-    let area = centered_rect(50, 30, frame.size());
+    let area = centered_rect(50, 30, frame.area());
     
     let block = Block::default()
         .title(" No Conflicts ")

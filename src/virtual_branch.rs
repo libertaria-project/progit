@@ -525,8 +525,8 @@ impl VirtualBranchManager {
                 });
                 true
             }),
-            Some(&mut |_delta, _hunk, line| {
-                // We actually don't need to accumulate content here because we are deferring 
+            Some(&mut |_delta, _hunk, _line| {
+                // We actually don't need to accumulate content here because we are deferring
                 // the precise hashing logic to the other helper 'git_hunk_collector' which does it better.
                 // But wait, 'detect_workspace_hunks' calls *this* function OR 'git_hunk_collector'?
                 // The previous code had `detect_workspace_hunks` calling `self.collect_git2_hunks`.

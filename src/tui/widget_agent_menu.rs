@@ -7,7 +7,6 @@
 //! Provides curated prompts for common development tasks.
 
 use crate::tui::app::App;
-use crate::tui::theme::ThemeColors;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},

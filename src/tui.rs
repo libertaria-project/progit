@@ -605,7 +605,7 @@ mod tests {
     #[test]
     fn test_app_creation() {
         let app = App::new();
-        assert_eq!(app.view_mode, ViewMode::List);
+        assert_eq!(app.view_mode, ViewMode::Dashboard);
         assert_eq!(app.input_mode, InputMode::Normal);
     }
 }

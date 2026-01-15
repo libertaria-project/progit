@@ -155,7 +155,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
 
     let table = Table::new(rows, constraints)
         .header(headers.style(Style::default().add_modifier(Modifier::BOLD)))
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
+        .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED));
 
     frame.render_stateful_widget(table, inner_area, &mut state.table_state);
 }

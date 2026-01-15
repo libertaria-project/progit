@@ -769,11 +769,7 @@ impl App {
     pub fn load_blame(&mut self, file_path: &str) {
         self.set_status(format!("Loading blame for {}...", file_path));
 
-        let path_obj = std::path::Path::new(file_path);
-        // blame_file likely expects full path or relative to CWD if using git command
-        // But our git module uses Command::new("git").current_dir(repo_path)
-        // So we should pass path relative to repo root.
-
+        // blame_file expects path relative to repo root
         match crate::git::blame::BlameInfo::new(file_path) {
             Ok(info) => {
                 let mut state = crate::tui::widget_blame::BlameState::default();

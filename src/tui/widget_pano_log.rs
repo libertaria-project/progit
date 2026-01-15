@@ -20,7 +20,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     let engine = &app.theme_engine;
 
     // Create centered modal area (80% width, 80% height)
-    let area = centered_rect(80, 80, frame.size());
+    let area = centered_rect(80, 80, frame.area());
 
     // Clear background
     frame.render_widget(Clear, area);

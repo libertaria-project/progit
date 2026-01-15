@@ -159,7 +159,7 @@ pub fn merge_issues(
 pub fn merge_mrs(
     local_mrs: &[MergeRequest],
     remote_mrs: Vec<MergeRequest>,
-    provider_name: &str,
+    _provider_name: &str,
 ) -> Vec<MergeRequest> {
     let mut merged = local_mrs.to_vec();
 

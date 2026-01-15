@@ -435,8 +435,6 @@ fn handle_blame_key(app: &mut App, key: KeyEvent) -> KeyAction {
             if let Some(ref mut state) = app.blame_state {
                 if let Some(info) = &state.info {
                     let max_lines = info.lines.len();
-                    let height = 20; // TODO: Get actual height? TableState handles scroll indices mostly
-                                     // Ratatui TableState: select(index)
                     let current = state.table_state.selected().unwrap_or(0);
                     if current < max_lines.saturating_sub(1) {
                         state.table_state.select(Some(current + 1));

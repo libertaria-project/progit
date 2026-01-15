@@ -87,7 +87,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let table = Table::new(rows, widths)
         .header(header)
         .block(Block::default().borders(Borders::NONE))
-        .highlight_style(engine.get("list.selected", colors.selected())); // Redundant if rows handled? No, Table highlights row too.
+        .row_highlight_style(engine.get("list.selected", colors.selected()));
 
     let mut state = TableState::default();
     state.select(Some(app.mr_selected));
