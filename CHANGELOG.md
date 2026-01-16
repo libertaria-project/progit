@@ -7,10 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- LuaJIT plugin runtime integration (in progress)
-- Plugin command execution via TUI
-- Plugin registry management
+## [0.5.2-beta] - 2026-01-16
+
+### 🎯 Phase 1: "Addiction Molecules"
+
+#### 🪝 Git Hooks Integration
+- Smart commit-msg hook auto-updates issue status
+- `prog hooks install/uninstall/status` CLI commands
+- Keywords: `closes/fixes/resolves #ID` → marks Done
+- Keywords: `refs/see/re #ID` → marks In Progress
+- Preserves existing user hooks when installing
+- Issue IDs support alphanumeric format (e.g., `#abc-123`)
+
+#### 📝 Markdown Live Renderer
+- Issue descriptions render as styled markdown in detail view
+- Supports: headers, **bold**, *italic*, `code`, lists, > quotes
+- Uses `pulldown-cmark` parser (~105 KiB)
+- Only renders when not in edit mode (seamless editing)
+
+#### ⚡ Binary Size Optimization
+- **17 MiB → 11 MiB** (-35% reduction)
+- Switched from vendored OpenSSL to system OpenSSL
+- Added comprehensive size audit: `docs/BINARY_SIZE_AUDIT.md`
+- Identified future optimization paths (feature flags)
+
+### 🔌 Plugin System (Continued)
+
+#### Plugin CLI Integration
+- `prog plugin list` - Show installed plugins with version info
+- `prog plugin install <path>` - Install .lua plugins locally
+- `prog plugin remove <name>` - Uninstall plugins
+- `prog plugin info <name>` - Show plugin metadata and hooks
+- Auto-load plugins from `plugins/` and `.progit/plugins/`
+- Plugins trigger on issue create/delete events
+
+### 🌿 Virtual Branches (Interactive)
+
+#### Keyboard Operations Wired
+- **n** - Create new virtual branch (prompts for name)
+- **Space/Enter** - Toggle hunk staging in selected lane
+- **m** - Move hunk to different lane (interactive target selection)
+- **c** - Conflict resolution modal for overlapping hunks
+
+### Technical
+- Added `regex` crate for issue reference parsing
+- Added `pulldown-cmark` 0.13 for markdown rendering
+- Created `src/hooks.rs` module (287 lines)
+- Created `src/tui/markdown.rs` module (244 lines)
+- Plugin manager now supports directory-based loading
+- All 75 tests passing
 
 ## [0.4.0-alpha] - 2026-01-14
 
