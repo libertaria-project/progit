@@ -2,8 +2,8 @@
 
 **A blazingly fast, AI-powered Git workflow manager with virtual branches**
 
-[![License: EUPL](https://img.shields.io/badge/License-EUPL%201.2-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.6.0--beta-green.svg)](CHANGELOG.md)
+[![License: LCL-1.0](https://img.shields.io/badge/License-LCL--1.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.6.1--beta-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org)
 
 > **Status:** Beta - Phase 2 (Collaboration) Complete | Phase 3 (Ecosystem) In Progress
@@ -190,14 +190,14 @@ ProGit is built with a **clean separation of concerns**:
 
 ```
 ┌─────────────────────────────────────┐
-│  TUI (EUPL-1.2)                     │  ← You interact here
+│  TUI (LCL-1.0)                      │  ← You interact here
 │  - Virtual branches                 │
 │  - Conflict resolution              │
 │  - Agent menu                       │
 └─────────────────────────────────────┘
            ↓ JSON Events
 ┌─────────────────────────────────────┐
-│  Plugin SDK (Apache-2.0)            │  ← Write plugins here
+│  Plugin SDK (LSL-1.0)               │  ← Write plugins here
 │  - Event system                     │
 │  - LuaJIT runtime                   │
 └─────────────────────────────────────┘
@@ -214,8 +214,8 @@ ProGit is built with a **clean separation of concerns**:
 
 | Component | License | Why |
 |-----------|---------|-----|
-| **Core TUI** | EUPL-1.2 | Strong copyleft, open source forever |
-| **Plugin SDK** | Apache-2.0 | Allows proprietary plugins |
+| **Core TUI** | LCL-1.0 | File-level copyleft, modifications stay open |
+| **Plugin SDK** | LSL-1.0 | File-level copyleft + patent grant, commercial-friendly |
 | **Your Data** | Yours | JSON in your repo, you own it |
 
 ---
@@ -299,7 +299,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 | AI Integration | ✅ Built-in | ❌ No |
 | Local-First | ✅ Yes | ✅ Yes |
 | Plugin System | ✅ Lua/WASM | ❌ No |
-| License | EUPL (copyleft) | Proprietary |
+| License | LCL-1.0 (file-level copyleft) | Proprietary |
 
 ### vs GitHub CLI
 
@@ -337,8 +337,10 @@ ProGit stands on the shoulders of giants:
 
 ## 📜 License
 
-**ProGit Core:** EUPL-1.2 (European Union Public License)  
-**Plugin SDK:** Apache-2.0 (allows proprietary plugins)
+**ProGit Core:** LCL-1.0 (Libertaria Commonwealth License)
+**Plugin SDK:** LSL-1.0 (Libertaria Sovereign License)
+
+Both licenses use **file-level copyleft** (modifications to our files stay open, your larger works stay yours). LSL-1.0 includes explicit patent grant for corporate use.
 
 See [LICENSE](LICENSE) for full text.
 
