@@ -19,6 +19,9 @@ pub struct Config {
     /// Theme preference
     pub theme: Option<String>,
 
+    /// Plugin configuration
+    pub plugins: Option<PluginConfig>,
+
     /// Web app settings (future commercial feature)
     pub web: Option<WebConfig>,
 
@@ -33,6 +36,13 @@ pub struct StyleConfig {
     pub bg: Option<String>,
     pub modifiers: Vec<String>,   // "bold", "italic", "dim", "underlined"
     pub inherits: Option<String>, // Name of style to inherit from
+}
+
+/// Plugin configuration
+#[derive(Debug, Clone)]
+pub struct PluginConfig {
+    /// Custom registry URL (optional, defaults to git remote)
+    pub registry_url: Option<String>,
 }
 
 /// Repository configuration (multi-repo support)
@@ -141,10 +151,18 @@ pub fn parse_config(content: &str) -> Result<Config> {
         .find(|n| n.name().value() == "web")
         .map(parse_web_node);
 
+    // Parse plugin config
+    let plugins = doc
+        .nodes()
+        .iter()
+        .find(|n| n.name().value() == "plugins")
+        .map(parse_plugins_node);
+
     Ok(Config {
         sync,
         repos,
         theme,
+        plugins,
         web,
         styles,
     })
@@ -256,6 +274,14 @@ fn parse_web_node(node: &KdlNode) -> WebConfig {
         port,
         api_token,
     }
+}
+
+fn parse_plugins_node(node: &KdlNode) -> PluginConfig {
+    let children = node.children().map(|c| c.nodes()).unwrap_or(&[]);
+
+    let registry_url = get_string_value(children, "registry-url");
+
+    PluginConfig { registry_url }
 }
 
 // Helper to extract string values from KDL nodes
@@ -398,7 +424,7 @@ mod tests {
             config {
                 theme "vibe"
             }
-            
+
             repos {
                 repo "main" {
                     sync {
@@ -409,7 +435,7 @@ mod tests {
                     }
                 }
             }
-            
+
             web {
                 enabled false
                 port 8080
@@ -420,5 +446,35 @@ mod tests {
         assert_eq!(config.theme, Some("vibe".to_string()));
         assert_eq!(config.repos.len(), 1);
         assert!(config.web.is_some());
+    }
+
+    #[test]
+    fn test_parse_plugin_config() {
+        let content = r#"
+            plugins {
+                registry-url "https://forgejo.example.com/user/progit-plugins-index.git"
+            }
+        "#;
+
+        let config = parse_config(content).unwrap();
+        let plugins = config.plugins.unwrap();
+
+        assert_eq!(
+            plugins.registry_url,
+            Some("https://forgejo.example.com/user/progit-plugins-index.git".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_plugin_config_empty() {
+        let content = r#"
+            plugins {
+            }
+        "#;
+
+        let config = parse_config(content).unwrap();
+        let plugins = config.plugins.unwrap();
+
+        assert!(plugins.registry_url.is_none());
     }
 }

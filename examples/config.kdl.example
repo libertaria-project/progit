@@ -68,6 +68,19 @@ config {
 // }
 
 // ==============================================================================
+// PLUGIN CONFIGURATION
+// ==============================================================================
+// Configure where ProGit looks for plugins:
+// - registry-url: Git repository URL for the plugin registry (optional)
+// - If not specified, ProGit will:
+//   1. Use the current project's git origin as fallback
+//   2. Fall back to default public plugin registry
+//
+// plugins {
+//     registry-url "https://git.maiwald.work/SSSS/progit-plugins.git"
+// }
+
+// ==============================================================================
 // WEB APP CONFIGURATION (Future Commercial Feature)
 // ==============================================================================
 // Uncomment to enable the web interface (coming soon):

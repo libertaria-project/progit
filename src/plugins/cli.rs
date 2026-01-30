@@ -11,12 +11,21 @@
 //! - search: Search the plugin registry
 //! - info: Show plugin details
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::*;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::registry::{PluginRegistry, PluginSource};
 use super::lockfile::Lockfile;
+use crate::storage::config;
+
+/// Helper to create a registry with config support
+fn get_registry(project_root: &Path) -> Result<PluginRegistry> {
+    let config_path = project_root.join(".project").join("config.kdl");
+    let config = config::load_config(&config_path)?;
+    let registry_url = config.plugins.and_then(|p| p.registry_url);
+    PluginRegistry::new(project_root, registry_url)
+}
 
 /// List installed plugins
 pub fn list(project_root: &Path) -> Result<()> {
@@ -102,7 +111,7 @@ pub fn install(project_root: &Path, name: &str, version: Option<&str>, git_url: 
         // Registry install
         println!("{} Searching registry for '{}'...", "🔍".blue(), name);
 
-        let registry = PluginRegistry::new(project_root)?;
+        let registry = get_registry(project_root)?;
 
         match registry.find_plugin(name)? {
             Some(manifest) => {
@@ -205,7 +214,7 @@ pub fn update(project_root: &Path, name: Option<&str>) -> Result<()> {
 
     println!("{} Checking for updates...", "🔄".blue());
 
-    let registry = PluginRegistry::new(project_root)?;
+    let registry = get_registry(project_root)?;
     let mut updated = 0;
 
     for (plugin_name, locked_info) in plugins_to_update {
@@ -235,7 +244,7 @@ pub fn update(project_root: &Path, name: Option<&str>) -> Result<()> {
 pub fn search(project_root: &Path, query: &str) -> Result<()> {
     println!("{} Searching for '{}'...", "🔍".blue(), query);
 
-    let registry = PluginRegistry::new(project_root)?;
+    let registry = get_registry(project_root)?;
     let results = registry.search(query)?;
 
     if results.is_empty() {
@@ -261,7 +270,7 @@ pub fn search(project_root: &Path, query: &str) -> Result<()> {
 
 /// Show plugin info
 pub fn info(project_root: &Path, name: &str) -> Result<()> {
-    let registry = PluginRegistry::new(project_root)?;
+    let registry = get_registry(project_root)?;
 
     match registry.find_plugin(name)? {
         Some(manifest) => {
@@ -292,7 +301,7 @@ pub fn info(project_root: &Path, name: &str) -> Result<()> {
 pub fn index_update(project_root: &Path) -> Result<()> {
     println!("{} Updating plugin index...", "🔄".blue());
 
-    let registry = PluginRegistry::new(project_root)?;
+    let registry = get_registry(project_root)?;
     registry.update_index()?;
 
     println!("{} Plugin index updated.", "✅".green());

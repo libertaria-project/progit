@@ -14,9 +14,13 @@
 pub mod sdk;
 pub mod lua_engine;
 pub mod manager;
+pub mod cli;
+pub mod registry;
+pub mod lockfile;
 
 // Re-export commonly used types
 pub use sdk::*;
 pub use lua_engine::LuaPluginEngine;
 pub use manager::PluginManager;
+pub use registry::PluginRegistry;
 

@@ -15,6 +15,29 @@ use std::process::Command;
 /// Default registry URL
 const DEFAULT_REGISTRY_URL: &str = "https://github.com/progit-plugins/index.git";
 
+/// Detect git origin remote URL from project root
+fn detect_git_origin(project_root: &Path) -> Option<String> {
+    let git_dir = project_root.join(".git");
+    if !git_dir.exists() {
+        return None;
+    }
+
+    // Try to read .git/config
+    let config_path = git_dir.join("config");
+    if let Ok(content) = std::fs::read_to_string(config_path) {
+        // Simple regex to find origin URL
+        if let Ok(re) = regex::Regex::new(r#"url\s*=\s*([^\n]+)"#) {
+            if let Some(caps) = re.captures(&content) {
+                if let Some(url) = caps.get(1) {
+                    return Some(url.as_str().trim().to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Plugin manifest from registry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginManifest {
@@ -144,13 +167,23 @@ pub struct PluginRegistry {
 
 impl PluginRegistry {
     /// Create a new registry client
-    pub fn new(project_root: &Path) -> Result<Self> {
+    ///
+    /// Registry URL resolution order (first match wins):
+    /// 1. PROGIT_PLUGIN_REGISTRY environment variable (for testing)
+    /// 2. Config-provided registry_url (.project/config.kdl)
+    /// 3. Git origin remote URL (if available)
+    /// 4. Default hardcoded registry URL
+    pub fn new(project_root: &Path, config_registry_url: Option<String>) -> Result<Self> {
         let index_path = project_root
             .join(".progit")
             .join("plugin-index");
 
+        // Determine registry URL with fallback chain
         let registry_url = std::env::var("PROGIT_PLUGIN_REGISTRY")
-            .unwrap_or_else(|_| DEFAULT_REGISTRY_URL.to_string());
+            .ok()
+            .or(config_registry_url)
+            .or_else(|| detect_git_origin(project_root))
+            .unwrap_or_else(|| DEFAULT_REGISTRY_URL.to_string());
 
         let mut registry = Self {
             index_path,

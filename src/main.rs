@@ -661,77 +661,64 @@ fn handle_plugin_command(action: PluginAction) -> Result<()> {
 
     match action {
         PluginAction::List => {
-            println!("{}", "Installed Plugins".bold());
-            println!("{}", "─".repeat(50));
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::list(&project_root)?;
+        }
 
-            let mut found = false;
-            for dir in [&local_plugins, &home_plugins] {
-                if dir.exists() {
-                    if let Ok(entries) = std::fs::read_dir(dir) {
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            if path.extension().is_some_and(|e| e == "lua") {
-                                found = true;
-                                match LuaPlugin::load(&path) {
-                                    Ok(plugin) => {
-                                        let meta = plugin.metadata();
-                                        println!(
-                                            "  {} {} - {}",
-                                            meta.name.green(),
-                                            format!("v{}", meta.version).dimmed(),
-                                            meta.description
-                                        );
-                                    }
-                                    Err(e) => {
-                                        let name = path.file_stem()
-                                            .map(|s| s.to_string_lossy().to_string())
-                                            .unwrap_or_else(|| "unknown".to_string());
-                                        println!("  {} {}", name.red(), format!("(error: {})", e).dimmed());
-                                    }
-                                }
-                            }
+        PluginAction::Install { name, version, git } => {
+            use crate::plugins::cli as plugin_cli;
+
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+
+            // Use the registry system from plugins::cli
+            if git {
+                // Git URL installation
+                plugin_cli::install(
+                    &project_root,
+                    &name,
+                    version.as_deref(),
+                    Some(&name),
+                )?;
+            } else {
+                // Try registry first
+                match plugin_cli::install(
+                    &project_root,
+                    &name,
+                    version.as_deref(),
+                    None,
+                ) {
+                    Ok(()) => {},
+                    Err(_) => {
+                        // Fall back to local file installation
+                        let source_path = PathBuf::from(&name);
+                        if !source_path.exists() {
+                            return Err(anyhow!(
+                                "Plugin '{}' not found in registry and not found as file",
+                                name
+                            ));
                         }
+
+                        // Validate it's a valid Lua plugin
+                        let plugin = LuaPlugin::load(&source_path)
+                            .with_context(|| format!("Failed to load plugin from {}", name))?;
+                        let meta = plugin.metadata();
+
+                        // Create plugins directory if needed
+                        std::fs::create_dir_all(&local_plugins)?;
+
+                        // Copy to plugins directory
+                        let dest = local_plugins.join(format!("{}.lua", meta.name));
+                        std::fs::copy(&source_path, &dest)
+                            .with_context(|| "Failed to copy plugin")?;
+
+                        println!("{} Installed {} v{}", "✓".green(), meta.name.green(), meta.version);
+                        println!("  Location: {}", dest.display());
                     }
                 }
             }
-
-            if !found {
-                println!("  No plugins installed.");
-                println!();
-                println!("  Install plugins with:");
-                println!("    {} plugin install <path-to-plugin.lua>", "prog".cyan());
-            }
-        }
-
-        PluginAction::Install { name, version: _, git } => {
-            let source_path = PathBuf::from(&name);
-
-            if git {
-                // Git URL installation (future feature)
-                eprintln!("{} Git URL installation coming soon.", "⚠️".yellow());
-                eprintln!("  For now, download the plugin and use: prog plugin install <path>");
-                return Ok(());
-            }
-
-            if !source_path.exists() {
-                return Err(anyhow!("Plugin file not found: {}", name));
-            }
-
-            // Validate it's a valid Lua plugin
-            let plugin = LuaPlugin::load(&source_path)
-                .with_context(|| format!("Failed to load plugin from {}", name))?;
-            let meta = plugin.metadata();
-
-            // Create plugins directory if needed
-            std::fs::create_dir_all(&local_plugins)?;
-
-            // Copy to plugins directory
-            let dest = local_plugins.join(format!("{}.lua", meta.name));
-            std::fs::copy(&source_path, &dest)
-                .with_context(|| "Failed to copy plugin")?;
-
-            println!("{} Installed {} v{}", "✓".green(), meta.name.green(), meta.version);
-            println!("  Location: {}", dest.display());
         }
 
         PluginAction::Remove { name } => {
@@ -784,20 +771,34 @@ fn handle_plugin_command(action: PluginAction) -> Result<()> {
             }
         }
 
-        PluginAction::Update { name: _ } => {
-            eprintln!("{} Plugin update requires registry server (coming soon)", "⚠️".yellow());
-            eprintln!("  For now, manually download and reinstall plugins.");
+        PluginAction::Update { name } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::update(&project_root, name.as_deref())?;
         }
 
-        PluginAction::Search { query: _ } => {
-            eprintln!("{} Plugin search requires registry server (coming soon)", "⚠️".yellow());
-            eprintln!("  Browse available plugins at: https://git.maiwald.work/SSSS/progit-plugins-index");
+        PluginAction::Search { query } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::search(&project_root, &query)?;
+        }
+
+        PluginAction::Info { name } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::info(&project_root, &name)?;
         }
 
         PluginAction::Index { action: index_action } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
             match index_action {
                 IndexAction::Update => {
-                    eprintln!("{} Index update requires registry server (coming soon)", "⚠️".yellow());
+                    plugin_cli::index_update(&project_root)?;
                 }
             }
         }
