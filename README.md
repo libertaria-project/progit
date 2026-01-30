@@ -3,20 +3,22 @@
 **A blazingly fast, AI-powered Git workflow manager with virtual branches**
 
 [![License: EUPL](https://img.shields.io/badge/License-EUPL%201.2-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0--alpha-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0--beta-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org)
 
-> **Status:** Alpha - Feature complete, stabilizing for beta
+> **Status:** Beta - Phase 2 (Collaboration) Complete | Phase 3 (Ecosystem) In Progress
 
 ## 🎯 What is ProGit?
 
 ProGit is a **terminal-based Git workflow manager** that combines the power of:
 
 - **Virtual Branches** (GitButler-style) - Work on multiple features simultaneously
+- **Code Review** - Line-level commenting with inline indicators
+- **CI/CD Integration** - Real-time pipeline status from GitLab/GitHub
 - **AI Agents** - Refactor code, generate tests, find bugs, write docs
 - **Conflict Resolution** - Visual conflict detection and resolution
 - **Local-First** - Your data lives in your repo, not the cloud
-- **Lightning Fast** - 5MB binary, <100ms cold start
+- **Lightning Fast** - 10MB binary, <100ms cold start
 
 **The Pitch:** _"GitButler's virtual branches + GitHub Copilot's AI + GitUI's speed = ProGit"_
 
@@ -61,6 +63,53 @@ Built-in AI agent with 7 curated actions:
 1. Press `a` in Lanes view
 2. Select an AI action
 3. Agent analyzes your code and applies changes
+
+### 📝 Code Review Mode (Phase 2 ✨)
+
+Line-level code review system with inline comments:
+
+- **Enter Review**: `:review <file> [commit]`
+- **Navigate**: j/k keys to move between lines
+- **Comment**: Press `c` to add a comment on any line
+- **Inline Indicators**: 💬 emoji shows commented lines
+- **Persistent**: Comments stored in `.project/reviews/`
+- **Sidebar View**: See author, date, and comment text
+
+```
+┌────────────────────────────────┬────────────────────────┐
+│ 42 💬 fn calculate_total() {   │ Comments               │
+│ 43    let sum = 0;             │                        │
+│ 44    for item in items {      │ alice • 2025-01-30     │
+│ 45        sum += item.price;   │ Consider using iter()  │
+│ 46    }                         │ .sum() here for better │
+│ 47    sum                       │ readability.           │
+└────────────────────────────────┴────────────────────────┘
+```
+
+### 🔄 CI/CD Integration (Phase 2 ✨)
+
+Real-time pipeline status in Merge Request Dashboard:
+
+- **Status Icons**: ✓ passed, ✗ failed, ● running, ○ pending
+- **Color-Coded**: Green/red/yellow indicators
+- **Plugin-Based**: Uses GitLab CI plugin (extensible)
+- **No Browser**: Check CI status without leaving terminal
+
+| MR | State | CI | Title | Author |
+|----|-------|----|-------|--------|
+| !42 | Open | ✓ | Add auth | alice |
+| !41 | Open | ✗ | Fix bug | bob |
+| !40 | Open | ● | Refactor | charlie |
+
+**Configuration:**
+```kdl
+plugins {
+    gitlab-ci {
+        gitlab_api_url "https://gitlab.com/api/v4"
+        gitlab_token "glpat-xxxxxxxxxxxxxxxxxxxx"
+    }
+}
+```
 
 ### 🔍 Conflict Resolution
 

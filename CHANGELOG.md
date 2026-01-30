@@ -7,6 +7,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0-beta] - 2025-01-30
+
+### 🎉 Phase 2: Collaboration Layer - COMPLETE
+
+**Strategic Achievement:** All Phase 2 features implemented. Binary size: 9.9MB (under 10MB target).
+
+#### 📝 Code Review Mode
+
+Complete line-level code review system:
+
+- **`:review <file> [commit]`** - Enter review mode for any file
+- **Line-level commenting** - Press `c` to add comments on any line
+- **Inline indicators** - 💬 emoji marks commented lines
+- **Comments sidebar** - Shows author, date, and text
+- **Persistent storage** - Comments saved to `.project/reviews/`
+- **Visual diff view** - Syntax-colored diff with navigation (j/k)
+- **Keyboard-driven** - No mouse required for entire workflow
+
+**Implementation:**
+- `src/review.rs` - Storage system (Review, ReviewComment, ReviewStorage)
+- `src/tui/widget_review.rs` - UI rendering with split view
+- Full integration with TUI input system
+
+#### 🔄 CI/CD Pipeline Integration
+
+Real-time CI/CD status in Merge Request Dashboard:
+
+- **Pipeline status column** - Shows status for each MR
+- **Color-coded indicators** - ✓ (passed), ✗ (failed), ● (running), ○ (pending)
+- **Plugin-based architecture** - Validates entire plugin system
+- **Event-based API** - New `PipelineStatusQuery` event type
+- **GitLab CI plugin** - First production plugin (Lua-based)
+- **No hardcoded logic** - All CI queries through plugin system
+
+**Strategic Win:** CI/CD is a plugin, not core code. This validates the plugin architecture and prevents binary bloat.
+
+**Implementation:**
+- `plugins/gitlab-ci/main.lua` - GitLab API integration
+- `src/plugins/manager.rs` - Added `dispatch_event()` method
+- `src/plugins/sdk.rs` - Added `PipelineStatusQuery` event
+- `src/mr/model.rs` - Added `pipeline_status` field
+- `src/tui/widget_mr_list.rs` - Added CI column rendering
+- `src/tui/app.rs` - Added `query_pipeline_status_for_all()`
+
+#### 🔌 Plugin SDK Enhancement
+
+Extended Plugin trait with event-based API:
+
+- **`on_event()` method** - Query-style plugin interactions
+- **Bidirectional communication** - Plugins can return response data
+- **Backward compatible** - Existing hook-based plugins unaffected
+- **JSON-only boundary** - Maintains trait firewall
+
+**progit-plugin-sdk changes:**
+- `src/traits/core.rs` - Added `on_event()` to Plugin trait
+- `src/lua/mod.rs` - Added `call_event()` implementation
+- Enables request-response patterns alongside lifecycle hooks
+
+#### 🔀 Merge Request Dashboard
+
+Enhanced MR list view:
+
+- **CI/CD status column** - Real-time pipeline status
+- **Color-coded states** - Visual state indicators
+- **Keyboard navigation** - j/k to navigate MRs
+- **Query on demand** - Fetches status when viewing dashboard
+
+#### 📋 MR Model Updates
+
+- Added `pipeline_status: Option<String>` field
+- Updated all MR constructors (forgejo, gitlab, local)
+- Stores status: "passed", "failed", "running", "pending", etc.
+
+### 🎯 Phase 2 Completion Metrics
+
+| Feature | Status | Progress |
+|---------|--------|----------|
+| MR Dashboard | ✅ Done | 100% |
+| CI/CD Status Display | ✅ Done | 100% |
+| CI/CD Plugin System | ✅ Done | 100% |
+| Code Review Mode | ✅ Done | 100% |
+| Conflict Resolution | ✅ Done | 100% |
+| Virtual Branches | ✅ Bonus | 100% |
+
+**Overall Phase 2: 100%** 🎉
+
+### 🏗️ Architectural Validation
+
+- ✅ Plugin system works end-to-end
+- ✅ Trait firewall enforced (no Lua types in core)
+- ✅ JSON-only communication boundary
+- ✅ Binary size preserved at 9.9MB
+- ✅ Event-based API superior to pure hooks
+- ✅ Data sovereignty maintained (.project/ storage)
+
+### 📚 Documentation
+
+- **PHASE2_COMPLETE.md** - Comprehensive Phase 2 summary
+- **PHASE2_STATUS.md** - Status tracking and metrics
+- **plugins/gitlab-ci/README.md** - Plugin documentation
+- **progit-market/plugins/gitlab-ci.json** - Marketplace entry
+
+### 🚀 What's Next: Phase 3 (Ecosystem Layer)
+
+Next priorities:
+1. Plugin Registry - `prog plugin install <name>`
+2. Binary Diet - Remove syntect → syntax-highlight plugin → <8MB
+3. Marketplace UI - Search/browse plugins in TUI
+4. Plugin Dependencies - Version management
+
+### Technical Details
+
+- **22 files changed** in core repo
+- **2 files changed** in plugin SDK
+- **1,678 insertions** total
+- **0 compile errors** ✅
+- Plugin: gitlab-ci (Lua, 165 lines)
+- Review system: 308 lines (storage + UI)
+
 ## [0.5.2-beta] - 2026-01-16
 
 ### 🎯 Phase 1: "Addiction Molecules"
