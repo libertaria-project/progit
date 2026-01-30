@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Context, Result};
 use git2::{DiffOptions, Repository};
-use once_cell::sync::Lazy;
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -9,12 +8,10 @@ use ratatui::{
 };
 use std::cell::RefCell;
 use std::path::Path;
-use syntect::easy::HighlightLines;
-use syntect::highlighting::{Style as SyntectStyle, ThemeSet};
-use syntect::parsing::SyntaxSet;
 
-static SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| SyntaxSet::load_defaults_newlines());
-static THEME_SET: Lazy<ThemeSet> = Lazy::new(|| ThemeSet::load_defaults());
+// [NOTE] Syntax highlighting moved to plugin "syntax-highlight"
+// This module now provides plain-text diffs without highlighting
+// Install plugin for syntax highlighting: prog plugin install syntax-highlight
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiffMode {
@@ -419,16 +416,8 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(chunks[1]);
 
-        let syntax = SYNTAX_SET
-            .find_syntax_for_file(&file.path)
-            .unwrap_or(None)
-            .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
-        let theme = &THEME_SET.themes["base16-ocean.dark"];
-
         let mut left_lines = Vec::new();
         let mut right_lines = Vec::new();
-
-        let mut highlighter = HighlightLines::new(syntax, theme);
 
         let mut current_line_idx = 0;
         // Iterate over all hunks and their lines
@@ -436,8 +425,8 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
             if !hunk.collapsed {
                 for line in &hunk.lines {
                     let is_selected = current_line_idx == state.cursor_y;
-                    left_lines.push(render_diff_line(&line.left, &mut highlighter, is_selected));
-                    right_lines.push(render_diff_line(&line.right, &mut highlighter, is_selected));
+                    left_lines.push(render_diff_line(&line.left, is_selected));
+                    right_lines.push(render_diff_line(&line.right, is_selected));
                     current_line_idx += 1;
                 }
             }
@@ -462,7 +451,6 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
 
 fn render_diff_line(
     line: &Option<DiffLine>,
-    highlighter: &mut HighlightLines,
     selected: bool,
 ) -> Line<'static> {
     match line {
@@ -483,26 +471,11 @@ fn render_diff_line(
                 None => "     ".to_string(),
             };
 
-            let spans =
-                if l.line_type == DiffLineType::HunkHeader || l.line_type == DiffLineType::Header {
-                    vec![Span::styled(l.content.clone(), style)]
-                } else {
-                    let ranges: Vec<(SyntectStyle, &str)> = highlighter
-                        .highlight_line(&l.content, &SYNTAX_SET)
-                        .unwrap_or_default();
-                    let mut s = vec![Span::styled(line_num, Style::default().fg(Color::DarkGray))];
-                    for (style_syn, text) in ranges {
-                        let fg = Color::Rgb(
-                            style_syn.foreground.r,
-                            style_syn.foreground.g,
-                            style_syn.foreground.b,
-                        );
-                        s.push(Span::styled(text.to_string(), style.fg(fg)));
-                    }
-                    s
-                };
+            // Plain text rendering (syntax highlighting via plugin)
+            let mut s = vec![Span::styled(line_num, Style::default().fg(Color::DarkGray))];
+            s.push(Span::styled(l.content.clone(), style));
 
-            Line::from(spans)
+            Line::from(s)
         }
         None => Line::from(Span::styled(
             " ".repeat(100),
