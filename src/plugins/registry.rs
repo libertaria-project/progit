@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Default registry URL
-const DEFAULT_REGISTRY_URL: &str = "https://github.com/progit-plugins/index.git";
+const DEFAULT_REGISTRY_URL: &str = "https://git.maiwald.work/ProGit/progit-market.git";
 
 /// Detect git origin remote URL from project root
 fn detect_git_origin(project_root: &Path) -> Option<String> {
@@ -169,20 +169,18 @@ impl PluginRegistry {
     /// Create a new registry client
     ///
     /// Registry URL resolution order (first match wins):
-    /// 1. PROGIT_PLUGIN_REGISTRY environment variable (for testing)
+    /// 1. PROGIT_PLUGIN_REGISTRY environment variable (for testing/override)
     /// 2. Config-provided registry_url (.project/config.kdl)
-    /// 3. Git origin remote URL (if available)
-    /// 4. Default hardcoded registry URL
+    /// 3. Default registry URL (https://git.maiwald.work/ProGit/progit-market.git)
     pub fn new(project_root: &Path, config_registry_url: Option<String>) -> Result<Self> {
         let index_path = project_root
             .join(".progit")
             .join("plugin-index");
 
-        // Determine registry URL with fallback chain
+        // Determine registry URL with fallback chain (removed git origin auto-detection)
         let registry_url = std::env::var("PROGIT_PLUGIN_REGISTRY")
             .ok()
             .or(config_registry_url)
-            .or_else(|| detect_git_origin(project_root))
             .unwrap_or_else(|| DEFAULT_REGISTRY_URL.to_string());
 
         let mut registry = Self {
