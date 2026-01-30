@@ -42,6 +42,15 @@ pub enum PluginEvent {
     BranchUpdated { branch_id: String },
     /// Agent action triggered
     AgentAction { action: String, branch_id: String },
+    /// Query pipeline status for MR/PR
+    PipelineStatusQuery {
+        mr_id: String,
+        project_id: String,
+        source_branch: String,
+        target_branch: String,
+        forge_type: String, // gitlab|github|forgejo
+        api_url: String,
+    },
     /// Custom event (for plugin-to-plugin communication)
     Custom { name: String, payload: serde_json::Value },
 }
@@ -54,6 +63,37 @@ pub struct PluginMetadata {
     pub description: String,
     pub author: String,
     pub license: String,
+}
+
+/// CI/CD Pipeline status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PipelineStatus {
+    pub status: PipelineState,
+    pub pipeline_id: Option<String>,
+    pub jobs: Vec<PipelineJob>,
+    pub updated_at: Option<String>,
+    pub web_url: Option<String>,
+}
+
+/// Pipeline state
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PipelineState {
+    Passed,
+    Failed,
+    Running,
+    Pending,
+    Canceled,
+    Skipped,
+    Unknown,
+}
+
+/// Individual job in pipeline
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PipelineJob {
+    pub name: String,
+    pub status: PipelineState,
+    pub duration: Option<String>,
 }
 
 /// Plugin SDK trait - implementation agnostic

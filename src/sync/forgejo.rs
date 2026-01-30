@@ -347,6 +347,7 @@ impl SyncProvider for ForgejoProvider {
                 approvals: 0,
                 upvotes: 0,
                 downvotes: 0,
+                pipeline_status: None,
             };
             mrs.push(mr);
         }
@@ -409,6 +410,7 @@ impl SyncProvider for ForgejoProvider {
             approvals: 0,
             upvotes: 0,
             downvotes: 0,
+            pipeline_status: None,
         })
     }
 

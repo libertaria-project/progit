@@ -150,6 +150,7 @@ impl SyncProvider for LocalProvider {
                     approvals: 0,
                     upvotes: 0,
                     downvotes: 0,
+                    pipeline_status: None,
                 });
             }
         }

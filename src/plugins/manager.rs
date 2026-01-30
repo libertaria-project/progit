@@ -187,6 +187,40 @@ impl PluginManager {
     pub fn count(&self) -> usize {
         self.plugins.len()
     }
+
+    /// Dispatch a plugin event and collect responses
+    ///
+    /// Sends event to all loaded plugins and returns their responses.
+    /// Plugins that don't handle the event return None and are filtered out.
+    pub fn dispatch_event(&mut self, event: &crate::plugins::PluginEvent) -> Result<Vec<serde_json::Value>> {
+        let mut responses = Vec::new();
+
+        // Serialize event to JSON for plugins
+        let event_json = serde_json::to_value(event)
+            .context("Failed to serialize plugin event")?;
+
+        for plugin in &mut self.plugins {
+            match plugin.on_event(&event_json) {
+                Ok(Some(response)) => {
+                    log::debug!("Plugin '{}' responded to event", plugin.metadata().name);
+                    responses.push(response);
+                }
+                Ok(None) => {
+                    // Plugin didn't handle this event
+                    log::trace!("Plugin '{}' ignored event", plugin.metadata().name);
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Plugin '{}' failed to handle event: {}",
+                        plugin.metadata().name,
+                        e
+                    );
+                }
+            }
+        }
+
+        Ok(responses)
+    }
 }
 
 #[cfg(test)]

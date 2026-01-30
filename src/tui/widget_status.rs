@@ -185,5 +185,6 @@ pub fn help_text(app: &App) -> String {
         crate::tui::ViewMode::Lanes => {
             "j/k: Navigate | a: AI Agent | c: Show Conflicts | m: Move Hunk | Space: Stage | q: Quit".to_string()
         }
+        crate::tui::ViewMode::Review => "j/k:navigate  c:comment  q:back".to_string(),
     }
 }

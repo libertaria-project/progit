@@ -14,7 +14,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
 
     // Header
     let header_style = engine.get("list.header", colors.header().add_modifier(Modifier::BOLD));
-    let header_cells = ["ID", "State", "Title", "Author", "Branches"]
+    let header_cells = ["ID", "State", "CI", "Title", "Author", "Branches"]
         .iter()
         .map(|h| Cell::from(*h).style(header_style));
     let header = Row::new(header_cells).height(1).bottom_margin(1);
@@ -51,6 +51,24 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         };
         let state_cell = Cell::from(state_icon).style(base_style);
 
+        // CI Status Column
+        let ci_status = match mr.pipeline_status.as_deref() {
+            Some("passed") => "✓",
+            Some("failed") => "✗",
+            Some("running") => "●",
+            Some("pending") => "○",
+            Some("canceled") => "⊘",
+            Some("skipped") => "⊗",
+            _ => "–",
+        };
+        let ci_style = match mr.pipeline_status.as_deref() {
+            Some("passed") => engine.get("ci.passed", colors.success()),
+            Some("failed") => engine.get("ci.failed", colors.error()),
+            Some("running") => engine.get("ci.running", colors.warning()),
+            _ => engine.get("ci.unknown", colors.dim()),
+        };
+        let ci_cell = Cell::from(ci_status).style(ci_style);
+
         // Title Column
         let title_cell = Cell::from(mr.title.clone()).style(if is_selected {
             base_style.add_modifier(Modifier::BOLD)
@@ -69,6 +87,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         Row::new(vec![
             id_cell,
             state_cell,
+            ci_cell,
             title_cell,
             author_cell,
             branches_cell,
@@ -79,9 +98,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let widths = [
         Constraint::Length(10),     // ID
         Constraint::Length(12),     // State
-        Constraint::Percentage(40), // Title
+        Constraint::Length(4),      // CI
+        Constraint::Percentage(35), // Title (reduced from 40)
         Constraint::Length(15),     // Author
-        Constraint::Percentage(25), // Branches
+        Constraint::Percentage(20), // Branches (reduced from 25)
     ];
 
     let table = Table::new(rows, widths)

@@ -27,6 +27,7 @@ pub mod widget_lanes;
 pub mod widget_mr_create;
 pub mod widget_mr_list;
 pub mod widget_pano_log;
+pub mod widget_review;
 pub mod widget_settings;
 pub mod widget_status;
 
@@ -195,6 +196,7 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         ViewMode::Diff => (colors.dim(), colors.dim(), colors.dim(), colors.dim()),
         ViewMode::Blame => (colors.dim(), colors.dim(), colors.dim(), colors.dim()),
         ViewMode::Lanes => (colors.dim(), colors.dim(), colors.dim(), colors.dim()),
+        ViewMode::Review => (colors.dim(), colors.dim(), colors.dim(), colors.dim()),
     };
 
     // Settings style (highlighted if in settings mode)
@@ -271,6 +273,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
         ViewMode::Lanes => {
             widget_lanes::render(frame, inner, app);
+            KanbanAreas::default()
+        }
+        ViewMode::Review => {
+            widget_review::render(frame, app, inner);
             KanbanAreas::default()
         }
     };

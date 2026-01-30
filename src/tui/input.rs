@@ -50,6 +50,7 @@ fn handle_normal_mode_key(app: &mut App, key: KeyEvent) -> KeyAction {
         ViewMode::MRList => handle_mr_list_key(app, key),
         ViewMode::Blame => handle_blame_key(app, key),
         ViewMode::Lanes => handle_lanes_key(app, key),
+        ViewMode::Review => handle_review_key(app, key),
     };
 
     if action != KeyAction::None {
@@ -594,6 +595,41 @@ fn handle_lanes_key(app: &mut App, key: KeyEvent) -> KeyAction {
             }
             KeyAction::Refresh
         }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in review mode
+fn handle_review_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => {
+            if let Some(state) = &mut app.review_state {
+                state.move_down(30); // Visible lines estimate
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if let Some(state) = &mut app.review_state {
+                state.move_up();
+            }
+            KeyAction::Refresh
+        }
+
+        // Add comment
+        KeyCode::Char('c') => {
+            app.input_mode = InputMode::DiffComment;
+            app.edit_buffer.clear();
+            KeyAction::Refresh
+        }
+
+        // Quit review mode
+        KeyCode::Char('q') | KeyCode::Esc => {
+            app.review_state = None;
+            app.view_mode = ViewMode::Dashboard;
+            KeyAction::Refresh
+        }
+
         _ => KeyAction::None,
     }
 }
@@ -1542,6 +1578,31 @@ fn handle_diff_comment_key(app: &mut App, key: KeyEvent) -> KeyAction {
                 return KeyAction::Refresh;
             }
 
+            // Handle review mode comments
+            if let Some(ref mut review_state) = app.review_state {
+                let author = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
+                let new_comment = review_state.add_comment(comment.clone(), author);
+
+                // Save to storage
+                use crate::review::ReviewStorage;
+                let storage = ReviewStorage::new(&app.repo_path);
+                if let Some(ref mut review) = review_state.review {
+                    review.comments.push(new_comment.clone());
+                    if let Err(e) = storage.save(review) {
+                        app.set_status(format!("⚠ Failed to save comment: {}", e));
+                    } else {
+                        app.set_status("✅ Comment added");
+                    }
+                } else {
+                    app.set_status("✅ Comment added (not persisted - no review session)");
+                }
+
+                app.input_mode = InputMode::Normal;
+                app.edit_buffer.clear();
+                return KeyAction::Refresh;
+            }
+
+            // Handle diff mode comments (legacy)
             if let Some(ref state) = app.diff_state {
                 if let Some(info) = state.get_selected_line_info() {
                     app.set_status(format!(
@@ -2073,6 +2134,11 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                     // Navigate virtual branches
                     app.vbranch_selected = app.vbranch_selected.saturating_add(1);
                 }
+                ViewMode::Review => {
+                    if let Some(ref mut state) = app.review_state {
+                        state.move_down(10); // Visible lines estimate
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -2108,6 +2174,11 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
                     // Navigate virtual branches
                     app.vbranch_selected = app.vbranch_selected.saturating_sub(1);
                 }
+                ViewMode::Review => {
+                    if let Some(ref mut state) = app.review_state {
+                        state.move_up();
+                    }
+                }
             }
             KeyAction::Refresh
         }
@@ -2126,6 +2197,7 @@ pub fn help_text(app: &App) -> &'static str {
             ViewMode::MRList => "j/k:nav │ Enter:diff │ a:approve(LGTM) │ m:accept+merge │ x:reject │ r:reload │ S:sync │ ?:help │ q:back",
             ViewMode::Blame => "j/k:scroll │ m:toggle mode │ q:back",
             ViewMode::Lanes => "h/l:lanes │ j/k:hunks │ n:new │ Space:stage │ m:move │ q:back",
+            ViewMode::Review => "j/k:navigate │ c:comment │ q:back",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",

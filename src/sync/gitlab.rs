@@ -457,6 +457,7 @@ impl SyncProvider for GitLabProvider {
                 approvals: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32, // Use upvotes as proxy for now
                 upvotes: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32,
                 downvotes: gl_mr["downvotes"].as_u64().unwrap_or(0) as u32,
+                pipeline_status: None,
             };
             mrs.push(mr);
         }
@@ -514,6 +515,7 @@ impl SyncProvider for GitLabProvider {
             approvals: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32,
             upvotes: gl_mr["upvotes"].as_u64().unwrap_or(0) as u32,
             downvotes: gl_mr["downvotes"].as_u64().unwrap_or(0) as u32,
+            pipeline_status: None,
         })
     }
 

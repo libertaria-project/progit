@@ -181,6 +181,53 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                 )),
             }
         }
+        "review" => {
+            // Enter code review mode
+            if parts.len() < 2 {
+                return CommandAction::Error(
+                    "Usage: :review <file> [commit-sha]".to_string(),
+                );
+            }
+
+            let file_path = parts[1].to_string();
+            let commit_sha = parts.get(2).map(|s| s.to_string()).unwrap_or_else(|| "HEAD".to_string());
+
+            // Get diff for the file
+            let diff_cmd = std::process::Command::new("git")
+                .args(["diff", &commit_sha, "--", &file_path])
+                .current_dir(&app.repo_path)
+                .output();
+
+            match diff_cmd {
+                Ok(output) if output.status.success() => {
+                    let diff_text = String::from_utf8_lossy(&output.stdout).to_string();
+
+                    if diff_text.is_empty() {
+                        return CommandAction::Error(
+                            format!("No changes found in {} at {}", file_path, commit_sha)
+                        );
+                    }
+
+                    // Create review state
+                    let review_state = crate::tui::widget_review::ReviewState::from_diff(
+                        file_path.clone(),
+                        diff_text,
+                        commit_sha.clone(),
+                    );
+
+                    app.review_state = Some(review_state);
+                    app.view_mode = ViewMode::Review;
+
+                    CommandAction::Status(
+                        format!("📝 Reviewing {} @ {}", file_path, &commit_sha[..8])
+                    )
+                }
+                Ok(output) => CommandAction::Error(
+                    format!("Git diff failed: {}", String::from_utf8_lossy(&output.stderr))
+                ),
+                Err(e) => CommandAction::Error(format!("Failed to run git diff: {}", e)),
+            }
+        }
         _ => CommandAction::Error(format!("Unknown command: {}", parts[0])),
     }
 }

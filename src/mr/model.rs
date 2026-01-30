@@ -85,6 +85,10 @@ pub struct MergeRequest {
     pub approvals: u32,
     pub upvotes: u32,
     pub downvotes: u32,
+
+    /// CI/CD Pipeline status (from plugin)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pipeline_status: Option<String>, // "passed"|"failed"|"running"|"pending"
 }
 
 impl MergeRequest {
@@ -111,6 +115,7 @@ impl MergeRequest {
             approvals: 0,
             upvotes: 0,
             downvotes: 0,
+            pipeline_status: None,
         }
     }
 

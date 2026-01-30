@@ -26,6 +26,8 @@ pub enum ViewMode {
     Blame,
     /// Virtual branch lanes view (GitButler-style)
     Lanes,
+    /// Code review mode with line-level comments
+    Review,
 }
 
 /// Input mode
@@ -154,6 +156,9 @@ pub struct App {
     /// Provider name (e.g. "gitlab", "forgejo")
     pub sync_provider_name: Option<String>,
 
+    /// Sync configuration (for CI/CD plugin queries)
+    pub sync_config: Option<crate::storage::config::SyncConfig>,
+
     /// Current sync status message
     pub sync_status: Option<String>,
 
@@ -231,9 +236,13 @@ pub struct App {
     
     /// Show agent menu modal
     pub show_agent_menu: bool,
-    
+
     /// Selected action in agent menu
     pub agent_menu_selected: usize,
+
+    // ─── Code Review Integration ─────────────────────────────────────────────
+    /// Review state for code review mode
+    pub review_state: Option<crate::tui::widget_review::ReviewState>,
 }
 
 impl Default for App {
@@ -276,6 +285,7 @@ impl App {
             last_click_issue: None,
             sync_provider: None,
             sync_provider_name: None,
+            sync_config: None,
             sync_status: None,
             mr_draft: None,
             mr_field: 0,
@@ -307,6 +317,7 @@ impl App {
             show_conflicts: false,
             show_agent_menu: false,
             agent_menu_selected: 0,
+            review_state: None,
         }
     }
 
@@ -331,6 +342,10 @@ impl App {
                 Ok(mrs) => {
                     self.load_mrs(mrs);
                     self.set_status(format!("Loaded {} MRs", self.mr_list.len()));
+
+                    // Query pipeline status for all MRs
+                    self.query_pipeline_status_for_all();
+
                     Ok(())
                 }
                 Err(e) => {
@@ -341,6 +356,64 @@ impl App {
         } else {
             self.set_status("No sync provider configured".to_string());
             Ok(())
+        }
+    }
+
+    /// Query pipeline status for all MRs via plugin
+    fn query_pipeline_status_for_all(&mut self) {
+        let Some(ref mut plugin_manager) = self.plugin_manager else {
+            log::trace!("No plugin manager - skipping pipeline status query");
+            return;
+        };
+
+        // Get forge configuration
+        let (forge_type, api_url, project_id) = if let Some(ref sync_config) = self.sync_config {
+            let forge = sync_config.provider.clone();
+            let url = sync_config.url.clone();
+            // Project ID format: owner/repo (e.g., "ProGit/progit")
+            let project = format!("{}/{}", sync_config.owner, sync_config.repo);
+            (forge, url, project)
+        } else {
+            log::trace!("No sync config - skipping pipeline status query");
+            return;
+        };
+
+        log::debug!("Querying pipeline status for {} MRs via plugins", self.mr_list.len());
+
+        // Query each MR
+        for mr in self.mr_list.iter_mut() {
+            let Some(remote_id) = mr.remote_id else {
+                continue; // Skip MRs without remote ID
+            };
+
+            // Build event
+            let event = crate::plugins::PluginEvent::PipelineStatusQuery {
+                mr_id: remote_id.to_string(),
+                project_id: project_id.clone(),
+                source_branch: mr.source_branch.clone(),
+                target_branch: mr.target_branch.clone(),
+                forge_type: forge_type.clone(),
+                api_url: api_url.clone(),
+            };
+
+            // Dispatch to plugins
+            match plugin_manager.dispatch_event(&event) {
+                Ok(responses) => {
+                    // Take first valid response
+                    for response in responses {
+                        if let Some(status_obj) = response.as_object() {
+                            if let Some(status) = status_obj.get("status").and_then(|v| v.as_str()) {
+                                log::debug!("MR !{}: pipeline status = {}", remote_id, status);
+                                mr.pipeline_status = Some(status.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to query pipeline status for MR !{}: {}", remote_id, e);
+                }
+            }
         }
     }
 
@@ -441,6 +514,7 @@ impl App {
             ViewMode::Diff => ViewMode::List,
             ViewMode::Blame => ViewMode::List,
             ViewMode::Lanes => ViewMode::List,
+            ViewMode::Review => ViewMode::List,
         };
 
         // Auto-load MRs when switching to MR list view

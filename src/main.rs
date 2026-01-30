@@ -14,6 +14,7 @@ mod mr;
 mod panopticum;
 mod plugins;
 mod rebase;
+mod review;
 mod storage;
 mod sync;
 mod tui;
@@ -941,6 +942,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
     if let Ok(config) = storage::config::load_config(&config_path) {
         if let Some(sync_config) = config.sync {
             app.sync_provider_name = Some(sync_config.provider.clone());
+            app.sync_config = Some(sync_config.clone());
             app.sync_provider = Some(sync::create_provider(sync_config));
         }
         // Apply saved theme
@@ -1182,6 +1184,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> Result<(
                         tui::ViewMode::MRList => None,
                         tui::ViewMode::Blame => None,
                         tui::ViewMode::Lanes => None,
+                        tui::ViewMode::Review => None,
                     };
 
                     if let Some(id) = issue_id {

@@ -1,0 +1,29 @@
+{
+  "id": "gitlab-ci",
+  "name": "GitLab CI/CD",
+  "version": "1.0.0",
+  "author": "ProGit Team",
+  "description": "Real-time pipeline status for GitLab merge requests. Displays CI/CD job results directly in the MR Dashboard.",
+  "license": "Apache-2.0",
+  "runtime": "lua",
+  "repository": "https://github.com/progit/plugins/tree/main/gitlab-ci",
+  "download_url": "https://raw.githubusercontent.com/progit/plugins/main/gitlab-ci/main.lua",
+  "install_path": "progit-plugins/gitlab-ci",
+  "tags": [
+    "gitlab",
+    "ci-cd",
+    "pipelines",
+    "devops",
+    "automation",
+    "merge-requests"
+  ],
+  "config_required": {
+    "gitlab_api_url": "GitLab API URL (e.g., https://gitlab.com/api/v4)",
+    "gitlab_token": "GitLab Personal Access Token with read_api scope"
+  },
+  "screenshots": [],
+  "downloads": 0,
+  "rating": 0.0,
+  "created_at": "2025-01-30T00:00:00Z",
+  "updated_at": "2025-01-30T00:00:00Z"
+}
