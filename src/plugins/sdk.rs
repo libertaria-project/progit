@@ -7,7 +7,8 @@
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 
-//! ProGit Plugin SDK
+//! ProGit Plugin SDK — public API surface, items used by external plugin authors.
+#![allow(dead_code)]
 //! 
 //! [ARCH] Apache 2.0 licensed plugin SDK for community extensions.
 //! Provides trait-based plugin system with LuaJIT runtime.

@@ -1,6 +1,8 @@
 //! Issue Operations - CRUD functionality
 //!
 //! Create, update, delete issues. All operations return new instances.
+//! Public API — items will be consumed by TUI and CLI as they mature.
+#![allow(dead_code)]
 
 use super::model::{Effort, Issue, Status};
 use chrono::Utc;

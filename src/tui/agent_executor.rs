@@ -21,6 +21,7 @@ pub fn execute_agent_action(app: &mut App, action: AgentAction) {
             use crate::agent::{AgentRequest, AgentClient};
             use crate::agent::ollama::OllamaClient;
             
+            // SAFETY: guarded by is_some() check on the enclosing if
             let tx = app.agent_event_tx.clone().unwrap();
             let session_id = branch_id.clone();
             let project_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));

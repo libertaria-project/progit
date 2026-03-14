@@ -205,7 +205,9 @@ pub fn switch_branch(path: &Path, branch: &str) -> Result<()> {
     let repo = Git2Repo::open(path)?;
     let (object, reference) = repo.revparse_ext(branch)?;
     repo.checkout_tree(&object, None)?;
-    repo.set_head(reference.unwrap().name().unwrap())?;
+    let reference = reference.context("Cannot switch to detached HEAD — use a branch name")?;
+    let refname = reference.name().context("Branch name is not valid UTF-8")?;
+    repo.set_head(refname)?;
     Ok(())
 }
 

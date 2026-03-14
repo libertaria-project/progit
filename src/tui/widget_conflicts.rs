@@ -41,6 +41,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         return;
     }
     
+    // SAFETY: is_none() case returns early in the guard above
     let current = current_branch.unwrap();
     
     // Create centered modal (80% width, 80% height)

@@ -8,6 +8,7 @@ use std::process::Command;
 /// Local Provider Implementation
 /// Treats local branches as "Merge Requests" against the main branch.
 pub struct LocalProvider {
+    #[allow(dead_code)]
     config: SyncConfig,
     target_branch: String,
 }

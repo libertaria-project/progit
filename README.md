@@ -135,7 +135,7 @@ Visual conflict detection and resolution:
 
 ```bash
 # From source
-git clone https://github.com/yourusername/progit
+git clone https://git.maiwald.work/ProGit/progit
 cd progit
 cargo build --release
 
@@ -254,15 +254,15 @@ See [Plugin SDK Documentation](docs/PLUGIN_SDK.md) for details.
 
 ## 🎯 Roadmap
 
-### v0.5.0-beta (Current)
+### v0.6.0-beta (Current)
 - [x] Virtual branches
 - [x] Conflict detection
 - [x] AI agent menu
-- [x] Plugin SDK (foundation)
-- [ ] LuaJIT runtime integration
-- [ ] Example plugins
+- [x] Plugin SDK (LuaJIT runtime)
+- [x] Code review mode
+- [x] CI/CD integration (GitLab/Forgejo)
 
-### v1.0.0 (Q2 2025)
+### v1.0.0 (Q2 2026)
 - [ ] Web UI (separate product)
 - [ ] Cloud sync (optional)
 - [ ] Mobile companion app
@@ -282,9 +282,9 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - PR workflow
 
 **Quick Links:**
-- [Good First Issues](https://github.com/yourusername/progit/labels/good-first-issue)
+- [Good First Issues](https://git.maiwald.work/ProGit/progit/issues)
 - [Discord Community](https://discord.gg/progit)
-- [GitHub Discussions](https://github.com/yourusername/progit/discussions)
+- [Discussions](https://git.maiwald.work/ProGit/progit/issues)
 
 ---
 
@@ -294,7 +294,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 | Feature | ProGit | GitButler |
 |---------|--------|-----------|
-| Binary Size | **5MB** | ~200MB |
+| Binary Size | **~10MB** | ~200MB |
 | Cold Start | **<100ms** | ~2s |
 | AI Integration | ✅ Built-in | ❌ No |
 | Local-First | ✅ Yes | ✅ Yes |
@@ -354,4 +354,4 @@ If you find ProGit useful, please star the repo! ⭐
 
 **Made with ❤️ by the ProGit Team**
 
-[Website](https://progit.io) • [Documentation](https://docs.progit.io) • [Discord](https://discord.gg/progit) • [Twitter](https://twitter.com/progit_io)
+[Website](https://progit.dev) • [Documentation](https://docs.progit.dev) • [Source](https://git.maiwald.work/ProGit/progit) • [Discord](https://discord.gg/progit)

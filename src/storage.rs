@@ -14,11 +14,11 @@ pub mod sync;
 
 // Re-export public API
 pub use cleaner::cleanup_duplicates;
-pub use config::{load_config, save_theme, Config, SyncConfig};
-pub use json::{read_cache, write_cache, IssueCache};
-pub use kdl::{issue_filename, parse_kdl, read_all_kdl, read_kdl, serialize_kdl, write_kdl};
+pub use config::save_theme;
 pub use migration::check_and_migrate;
 pub use sync::{delete_issue, load_issues, save_issue, sync_kdl_to_json};
+#[allow(unused_imports)] // Used by integration tests via `progit::storage::{parse_kdl, read_kdl}`
+pub use kdl::{parse_kdl, read_kdl};
 
 /// Default paths relative to project root
 pub mod paths {

@@ -119,6 +119,7 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                 app.pano_event_rx = Some(rx);
             }
 
+            // SAFETY: set in the is_none block immediately above
             let sender = app.pano_event_tx.clone().unwrap();
             let repo_path = app.repo_path.clone();
             let binary_path = app.panoctl_binary_path.clone();

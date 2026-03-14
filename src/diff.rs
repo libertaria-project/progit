@@ -246,6 +246,7 @@ impl DiffState {
                         });
                     }
 
+                    // SAFETY: a hunk was just pushed in the Hunk callback above
                     let hunk = file.hunks.last_mut().unwrap();
                     let content = String::from_utf8_lossy(line.content()).to_string();
                     let (line_type, left, right) = match line.origin() {

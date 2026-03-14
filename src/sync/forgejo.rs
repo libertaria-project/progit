@@ -72,6 +72,7 @@ struct ForgejoUser {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct CreateIssuePayload {
     title: String,
     body: String,

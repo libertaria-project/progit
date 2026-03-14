@@ -50,6 +50,7 @@ struct OllamaResponse {
     response: String,
     done: bool,
     #[serde(default)]
+    #[allow(dead_code)]
     total_duration: u64,
 }
 

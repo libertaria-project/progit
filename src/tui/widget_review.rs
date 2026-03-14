@@ -67,7 +67,7 @@ impl Default for ReviewState {
 
 impl ReviewState {
     /// Create new review state from diff
-    pub fn from_diff(file_path: String, diff_text: String, commit_sha: String) -> Self {
+    pub fn from_diff(file_path: String, diff_text: String, _commit_sha: String) -> Self {
         let diff_lines = parse_diff(&diff_text);
 
         Self {

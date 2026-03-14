@@ -88,6 +88,7 @@ pub fn is_panoctl_available(binary_path: Option<&str>) -> bool {
 }
 
 /// Get panoctl binary path (from config or fallback to PATH)
+#[allow(dead_code)]
 fn get_binary_path(custom_path: Option<&str>) -> String {
     custom_path
         .map(|s| s.to_string())

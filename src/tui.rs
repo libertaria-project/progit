@@ -32,10 +32,9 @@ pub mod widget_settings;
 pub mod widget_status;
 
 // Re-export public API
-pub use app::{App, DragState, InputMode, ViewMode};
-pub use input::{handle_key, handle_mouse, help_text, KeyAction};
+pub use app::{App, InputMode, ViewMode};
+pub use input::{handle_key, handle_mouse, KeyAction};
 pub use theme::{Theme, ThemeColors};
-pub use widget_detail::EditField;
 pub use widget_kanban::KanbanAreas;
 
 use crate::git::render_remote_dropdown;
@@ -489,6 +488,7 @@ fn centered_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
 }
 
 /// Calculate repository statistics from issues
+#[allow(dead_code)]
 fn calculate_repo_stats(issues: &[crate::issue::Issue]) -> Vec<(String, usize)> {
     use std::collections::HashMap;
 

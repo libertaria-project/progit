@@ -9,11 +9,11 @@ pub mod widget_gitbar;
 
 // Re-export public API
 pub use repository::{
-    create_branch, create_remote_branch, delete_branch, detect_repo, format_remote_url,
-    get_origin_url, get_remote_url, list_remote_branches, parse_git_url, refresh_repo,
-    switch_branch, RemoteInfo, RepoInfo,
+    create_branch, create_remote_branch, delete_branch, detect_repo,
+    get_origin_url, get_remote_url, list_remote_branches, parse_git_url,
+    switch_branch, RepoInfo,
 };
 pub use widget_gitbar::{
-    render as render_gitbar, render_branch_dropdown, render_branch_input,
+    render_branch_dropdown, render_branch_input,
     render_dropdown as render_remote_dropdown,
 };

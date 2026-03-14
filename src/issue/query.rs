@@ -1,6 +1,8 @@
 //! Issue Query - Filtering and search operations
 //!
 //! Pure functions for querying issue collections.
+//! Public API — items will be consumed by TUI and CLI as they mature.
+#![allow(dead_code)]
 
 use super::model::{Issue, Status};
 

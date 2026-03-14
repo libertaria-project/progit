@@ -16,6 +16,7 @@ use std::process::Command;
 const DEFAULT_REGISTRY_URL: &str = "https://git.maiwald.work/ProGit/progit-market.git";
 
 /// Detect git origin remote URL from project root
+#[allow(dead_code)]
 fn detect_git_origin(project_root: &Path) -> Option<String> {
     let git_dir = project_root.join(".git");
     if !git_dir.exists() {
@@ -86,14 +87,14 @@ impl PluginSource {
                 // Shallow clone with specific tag/version
                 let tag = format!("v{}", version);
                 let status = Command::new("git")
-                    .args(["clone", "--depth", "1", "--branch", &tag, url, target_dir.to_str().unwrap()])
+                    .args(["clone", "--depth", "1", "--branch", &tag, url, target_dir.to_str().context("Non-UTF8 plugin path")?])
                     .status()
                     .context("Failed to run git clone")?;
 
                 if !status.success() {
                     // Try without tag (maybe it's a branch or commit)
                     let status = Command::new("git")
-                        .args(["clone", "--depth", "1", url, target_dir.to_str().unwrap()])
+                        .args(["clone", "--depth", "1", url, target_dir.to_str().context("Non-UTF8 plugin path")?])
                         .status()
                         .context("Failed to run git clone")?;
 
@@ -132,7 +133,7 @@ impl PluginSource {
                     args.push(ref_str);
                 }
                 args.push(url);
-                args.push(target_dir.to_str().unwrap());
+                args.push(target_dir.to_str().context("Non-UTF8 plugin path")?);
 
                 let status = Command::new("git")
                     .args(&args)
@@ -225,7 +226,7 @@ impl PluginRegistry {
                     "--depth",
                     "1",
                     &self.registry_url,
-                    self.index_path.to_str().unwrap(),
+                    self.index_path.to_str().context("Non-UTF8 plugin index path")?,
                 ])
                 .status()
                 .context("Failed to clone plugin index")?;
