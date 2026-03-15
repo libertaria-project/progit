@@ -135,7 +135,7 @@ Visual conflict detection and resolution:
 
 ```bash
 # From source
-git clone https://git.maiwald.work/ProGit/progit
+git clone https://git.sovereign-society.org/ProGit/progit
 cd progit
 cargo build --release
 
@@ -282,9 +282,9 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - PR workflow
 
 **Quick Links:**
-- [Good First Issues](https://git.maiwald.work/ProGit/progit/issues)
+- [Good First Issues](https://git.sovereign-society.org/ProGit/progit/issues)
 - [Discord Community](https://discord.gg/progit)
-- [Discussions](https://git.maiwald.work/ProGit/progit/issues)
+- [Discussions](https://git.sovereign-society.org/ProGit/progit/issues)
 
 ---
 
@@ -354,4 +354,4 @@ If you find ProGit useful, please star the repo! ⭐
 
 **Made with ❤️ by the ProGit Team**
 
-[Website](https://progit.dev) • [Documentation](https://docs.progit.dev) • [Source](https://git.maiwald.work/ProGit/progit) • [Discord](https://discord.gg/progit)
+[Website](https://progit.dev) • [Documentation](https://docs.progit.dev) • [Source](https://git.sovereign-society.org/ProGit/progit) • [Discord](https://discord.gg/progit)

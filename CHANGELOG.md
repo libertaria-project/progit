@@ -355,11 +355,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 ProGit Core: **LCL-1.0** (file-level copyleft)
 Plugin SDK: **LSL-1.0** (file-level copyleft + patent grant)
 
-[unreleased]: https://git.maiwald.work/ProGit/progit/compare/v0.7.0-alpha...HEAD
-[0.7.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.6.0-beta...v0.7.0-alpha
-[0.6.0-beta]: https://git.maiwald.work/ProGit/progit/compare/v0.5.2-beta...v0.6.0-beta
-[0.5.2-beta]: https://git.maiwald.work/ProGit/progit/compare/v0.4.0-alpha...v0.5.2-beta
-[0.4.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.3.0-alpha...v0.4.0-alpha
-[0.3.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.2.0-alpha...v0.3.0-alpha
-[0.2.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.1.0-alpha...v0.2.0-alpha
-[0.1.0-alpha]: https://git.maiwald.work/ProGit/progit/releases/tag/v0.1.0-alpha
+[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-alpha...HEAD
+[0.7.0-alpha]: https://git.sovereign-society.org/ProGit/progit/compare/v0.6.0-beta...v0.7.0-alpha
+[0.6.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.5.2-beta...v0.6.0-beta
+[0.5.2-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.4.0-alpha...v0.5.2-beta
+[0.4.0-alpha]: https://git.sovereign-society.org/ProGit/progit/compare/v0.3.0-alpha...v0.4.0-alpha
+[0.3.0-alpha]: https://git.sovereign-society.org/ProGit/progit/compare/v0.2.0-alpha...v0.3.0-alpha
+[0.2.0-alpha]: https://git.sovereign-society.org/ProGit/progit/compare/v0.1.0-alpha...v0.2.0-alpha
+[0.1.0-alpha]: https://git.sovereign-society.org/ProGit/progit/releases/tag/v0.1.0-alpha
