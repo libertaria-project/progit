@@ -42,7 +42,7 @@ We welcome many types of contributions:
 
 ### First Time Contributors
 
-Look for issues labeled [`good-first-issue`](https://github.com/yourusername/progit/labels/good-first-issue). These are specifically curated for newcomers.
+Look for issues labeled `good-first-issue` in the [issue tracker](https://git.sovereign-society.org/ProGit/progit/issues). These are specifically curated for newcomers.
 
 ## 🛠️ Development Setup
 
@@ -57,7 +57,7 @@ Look for issues labeled [`good-first-issue`](https://github.com/yourusername/pro
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/progit
+git clone https://git.sovereign-society.org/ProGit/progit
 cd progit
 
 # Build in debug mode (fast compilation)
@@ -100,13 +100,65 @@ progit/
 └── tests/                   # Integration tests
 ```
 
+## 🌿 Branch Strategy
+
+ProGit uses a three-branch model:
+
+```
+forge  →  main  →  stable
+ (dev)    (integration)  (releases)
+```
+
+| Branch | Purpose | Merges Into |
+|--------|---------|-------------|
+| `stable` | Tagged releases only. Always deployable. What users download and build from. | — |
+| `main` | Integration branch. Reviewed, tested code. PRs land here. | `stable` (on release) |
+| `forge` | Agent and contributor landing zone. Work-in-progress, worktree branches, and experimental work merge here first. | `main` (after review) |
+
+### How it works
+
+**For contributors:**
+1. Branch off `forge` (or `main` for hotfixes)
+2. Do your work, push your branch
+3. Open a merge request targeting `forge`
+4. After review, it gets merged to `forge`
+5. Maintainers promote tested work from `forge` to `main`
+
+**For AI agents (Claude Code, etc.):**
+- Agents work in isolated git worktrees
+- Worktree branches target `forge`
+- After validation, merged to `forge` automatically
+- Maintainers review and promote to `main`
+
+**For releases:**
+- When `main` is stable and tested, it gets merged to `stable`
+- A version tag is created on `stable` (e.g., `v0.7.0-alpha`)
+- Only tagged commits on `stable` are considered official releases
+
+**Rules:**
+- Never push directly to `stable` – it only receives merges from `main`
+- Never push untested code to `main` – use `forge` for work-in-progress
+- All commits follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/)
+
+```bash
+# Start new work
+git fetch origin
+git checkout -b feat/my-feature origin/forge
+
+# When done
+git push origin feat/my-feature
+# Open MR targeting forge
+```
+
+---
+
 ## 🎯 How to Contribute
 
 ### Bug Reports
 
 **Before submitting:**
 1. Search existing issues
-2. Try latest `develop` branch
+2. Try latest `forge` branch
 3. Gather reproduction steps
 
 **When submitting:**
@@ -153,9 +205,10 @@ Mockups, examples, related issues
 
 **Workflow:**
 
-1. **Fork & Branch**
+1. **Branch off `forge`**
    ```bash
-   git checkout -b feature/your-feature-name
+   git fetch origin
+   git checkout -b feat/your-feature origin/forge
    ```
 
 2. **Make Changes**
@@ -169,11 +222,11 @@ Mockups, examples, related issues
    git commit -m "feat(virtual-branch): add hunk splitting"
    ```
 
-4. **Push & PR**
+4. **Push & MR**
    ```bash
-   git push origin feature/your-feature-name
+   git push origin feat/your-feature
    ```
-   - Fill out PR template
+   - Open merge request targeting `forge`
    - Link related issues
    - Request review
 
@@ -361,13 +414,11 @@ Contributors are recognized in:
 
 By contributing, you agree to license your contributions under:
 
-- **EUPL-1.2** for core TUI code
-- **Apache-2.0** for plugin SDK code
+- **LCL-1.0** (Libertaria Commonwealth License) for core TUI code
+- **LSL-1.0** (Libertaria Sovereign License) for plugin SDK code
 
-See [LICENSE](LICENSE) for details.
+Both use file-level copyleft – modifications to our files stay open, your larger works stay yours. See [LICENSE](LICENSE) for details.
 
 ---
 
-**Questions?** Open a [Discussion](https://github.com/yourusername/progit/discussions) or join [Discord](https://discord.gg/progit).
-
-**Thank you for contributing!** 🎉
+**Questions?** Open an [issue](https://git.sovereign-society.org/ProGit/progit/issues) or join [Discord](https://discord.gg/progit).

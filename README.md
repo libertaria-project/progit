@@ -3,10 +3,10 @@
 **A blazingly fast, AI-powered Git workflow manager with virtual branches**
 
 [![License: LCL-1.0](https://img.shields.io/badge/License-LCL--1.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.6.1--beta-green.svg)](CHANGELOG.md)
-[![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org)
+[![Version](https://img.shields.io/badge/version-0.7.0--alpha-green.svg)](CHANGELOG.md)
+[![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org)
 
-> **Status:** Beta - Phase 2 (Collaboration) Complete | Phase 3 (Ecosystem) In Progress
+> **Status:** Alpha – Phase 1-2 Complete | Phase 3 (Ecosystem) In Progress | [Looking for testers](https://progit.dev#testers)
 
 ## 🎯 What is ProGit?
 
@@ -178,9 +178,8 @@ prog
 
 - [**Virtual Branches Guide**](docs/VIRTUAL_BRANCHES.md) - Complete guide to virtual branches
 - [**Plugin SDK**](docs/PLUGIN_SDK.md) - Write Lua plugins (Apache 2.0)
-- [**Contributing**](CONTRIBUTING.md) - How to contribute
+- [**Contributing**](CONTRIBUTING.md) - How to contribute (includes branch strategy)
 - [**Changelog**](CHANGELOG.md) - Version history
-- [**Roadmap**](ROADMAP.md) - Planned features
 
 ---
 
@@ -254,37 +253,48 @@ See [Plugin SDK Documentation](docs/PLUGIN_SDK.md) for details.
 
 ## 🎯 Roadmap
 
-### v0.6.0-beta (Current)
-- [x] Virtual branches
-- [x] Conflict detection
-- [x] AI agent menu
-- [x] Plugin SDK (LuaJIT runtime)
+### v0.7.0-alpha (Current)
+- [x] Virtual branches + conflict resolution
+- [x] AI agent (Ollama, 7 actions)
+- [x] Plugin SDK v0.1.0 (LuaJIT)
 - [x] Code review mode
 - [x] CI/CD integration (GitLab/Forgejo)
+- [x] Forge sync (bidirectional)
+- [x] Website launch (progit.dev)
+- [ ] Binary diet (syntect to plugin)
+- [ ] Plugin registry (`prog plugin install`)
+- [ ] Alpha bug triage
 
-### v1.0.0 (Q2 2026)
-- [ ] Web UI (separate product)
-- [ ] Cloud sync (optional)
-- [ ] Mobile companion app
+### v1.0.0 (TBD)
+- [ ] WASM plugin runtime (optional)
+- [ ] GitHub sync
+- [ ] Release management in TUI
 - [ ] Enterprise features
 
-See [ROADMAP.md](ROADMAP.md) for full details.
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
-- Development setup
-- Code style guide
-- Testing requirements
-- PR workflow
+### Branch Strategy
+
+```
+forge  →  main  →  stable
+ (dev)    (integration)  (releases)
+```
+
+- **`forge`** – where contributors and AI agents land their work
+- **`main`** – reviewed, tested code
+- **`stable`** – tagged releases only
+
+Branch off `forge`, open MRs targeting `forge`. See [CONTRIBUTING.md](CONTRIBUTING.md#-branch-strategy) for details.
 
 **Quick Links:**
-- [Good First Issues](https://git.sovereign-society.org/ProGit/progit/issues)
+- [Issue Tracker](https://git.sovereign-society.org/ProGit/progit/issues)
 - [Discord Community](https://discord.gg/progit)
-- [Discussions](https://git.sovereign-society.org/ProGit/progit/issues)
 
 ---
 
