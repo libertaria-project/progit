@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0-alpha] - 2026-03-15
+
+### Alpha Release — Call for Testers
+
+**Strategic Decision:** Reclassified from beta to alpha. ProGit works – Kanban, virtual branches,
+AI agent, plugin SDK, forge sync – but needs real-world hardening before beta designation is earned.
+
+#### What Changed
+- Version bump to 0.7.0-alpha (honest status)
+- Website updated with call-for-testers section
+- License stack migrated to Libertaria (LCL-1.0 core, LSL-1.0 SDK)
+
+#### What We Need
+- Bug reports from real workflows
+- Edge cases and crash reports
+- Plugin contributions (Lua)
+- UX feedback on keybindings and navigation
+
+#### Current State
+- Phase 1 (Addiction Layer): Complete
+- Phase 2 (Collaboration Layer): Complete
+- Phase 3 (Ecosystem Layer): Partial (SDK done, registry WIP)
+- Binary size: ~9.9MB (target: <10MB)
+- Tests: 78 passing
+
 ## [0.6.0-beta] - 2025-01-30
 
 ### 🎉 Phase 2: Collaboration Layer - COMPLETE
@@ -327,11 +352,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 
 ## License
 
-ProGit Core: **EUPL-1.2** (copyleft)  
-Plugin SDK: **Apache-2.0** (permissive, allows commercial use)
+ProGit Core: **LCL-1.0** (file-level copyleft)
+Plugin SDK: **LSL-1.0** (file-level copyleft + patent grant)
 
-[unreleased]: https://github.com/yourusername/progit/compare/v0.4.0-alpha...HEAD
-[0.4.0-alpha]: https://github.com/yourusername/progit/compare/v0.3.0-alpha...v0.4.0-alpha
-[0.3.0-alpha]: https://github.com/yourusername/progit/compare/v0.2.0-alpha...v0.3.0-alpha
-[0.2.0-alpha]: https://github.com/yourusername/progit/compare/v0.1.0-alpha...v0.2.0-alpha
-[0.1.0-alpha]: https://github.com/yourusername/progit/releases/tag/v0.1.0-alpha
+[unreleased]: https://git.maiwald.work/ProGit/progit/compare/v0.7.0-alpha...HEAD
+[0.7.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.6.0-beta...v0.7.0-alpha
+[0.6.0-beta]: https://git.maiwald.work/ProGit/progit/compare/v0.5.2-beta...v0.6.0-beta
+[0.5.2-beta]: https://git.maiwald.work/ProGit/progit/compare/v0.4.0-alpha...v0.5.2-beta
+[0.4.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.3.0-alpha...v0.4.0-alpha
+[0.3.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.2.0-alpha...v0.3.0-alpha
+[0.2.0-alpha]: https://git.maiwald.work/ProGit/progit/compare/v0.1.0-alpha...v0.2.0-alpha
+[0.1.0-alpha]: https://git.maiwald.work/ProGit/progit/releases/tag/v0.1.0-alpha
