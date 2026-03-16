@@ -538,5 +538,23 @@
     "updated": "2026-03-15T08:00:00Z",
     "remotes": {},
     "repo": null
+  },
+  {
+    "id": "f8c2a1b4-9d3e-4f5a-b6c7-d8e9f0a1b2c3",
+    "title": "Git Worktree Support",
+    "description": "Add native git worktree support to ProGit. Worktrees allow multiple working directories for the same repository - essential for parallel feature development without stashing or cloning multiple times.\n\nFeatures:\n- List existing worktrees (`prog worktree list`)\n- Create new worktree from branch (`prog worktree add <path> <branch>`)\n- Create new worktree with new branch (`prog worktree add -b <new-branch> <path> <base-branch>`)\n- Remove worktree (`prog worktree remove <path>`)\n- Prune stale worktrees (`prog worktree prune`)\n- Navigate between worktrees in TUI\n- Show worktree indicator in status bar\n\nImplementation uses git2 crate:\n- Repository::worktrees()\n- Worktree::add()\n- Worktree::prune()\n\nReference: https://git-scm.com/docs/git-worktree",
+    "status": "backlog",
+    "effort": 10,
+    "tags": ["phase-3", "git", "workflow"],
+    "assignee": null,
+    "sprint": null,
+    "due": null,
+    "started": null,
+    "completed": null,
+    "blocked": false,
+    "created": "2026-03-16T18:50:00Z",
+    "updated": "2026-03-16T18:50:00Z",
+    "remotes": {},
+    "repo": null
   }
 ]
