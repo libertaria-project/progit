@@ -70,3 +70,16 @@ node_modules/
 .progit/
 .project/config.kdl
 
+
+# Agent / AI operational dirs
+.claude/
+.agents/
+.agent/
+.kiro/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+
+# Editor / IDE
+.vscode/
+.idea/
