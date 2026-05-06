@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes yet — `forge` is at the `v0.7.0-beta` release commit. Next focus: Code Review Mode (`c` to comment on a diff line, the feature designed to remove the browser from the PR loop) and plugin marketplace expansion (more community plugins, install-from-URL)._
+
 ## [0.7.0-beta] - 2026-05-06
 
 ### Beta Promotion — Plugin Economy Hardened
