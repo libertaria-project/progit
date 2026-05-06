@@ -120,6 +120,7 @@ pub fn install(project_root: &Path, name: &str, version: Option<&str>, git_url: 
                     name: manifest.name.clone(),
                     version: version.map(|v| v.to_string()).unwrap_or(manifest.version.clone()),
                     url: manifest.source_url.clone(),
+                    source_path: manifest.source_path.clone(),
                 }
             }
             None => {

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Default registry URL
-const DEFAULT_REGISTRY_URL: &str = "https://git.maiwald.work/ProGit/progit-market.git";
+const DEFAULT_REGISTRY_URL: &str = "https://git.sovereign-society.org/ProGit/progit-market.git";
 
 /// Detect git origin remote URL from project root
 #[allow(dead_code)]
@@ -39,6 +39,44 @@ fn detect_git_origin(project_root: &Path) -> Option<String> {
     None
 }
 
+/// Sibling tempdir next to the plugin install target.
+///
+/// Lives next to `plugin_dir` so the eventual rename/copy stays on the
+/// same filesystem, avoiding cross-device link errors.
+fn tempdir_in(plugin_dir: &Path, name: &str) -> Result<PathBuf> {
+    std::fs::create_dir_all(plugin_dir)?;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let tmp = plugin_dir.join(format!(".{name}.install.{nanos}.tmp"));
+    if tmp.exists() {
+        std::fs::remove_dir_all(&tmp)?;
+    }
+    Ok(tmp)
+}
+
+/// Recursively copy a directory tree (cross-platform, no shell-out).
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else if file_type.is_symlink() {
+            // Skip symlinks for safety – don't want to clone repo escapes.
+            continue;
+        } else {
+            std::fs::copy(&from, &to)
+                .with_context(|| format!("Failed to copy {} -> {}", from.display(), to.display()))?;
+        }
+    }
+    Ok(())
+}
+
 /// Plugin manifest from registry
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginManifest {
@@ -50,9 +88,15 @@ pub struct PluginManifest {
     pub plugin_type: String,
     pub runtime: String,
     pub source_url: String,
+    #[serde(default)]
     pub source_tag: Option<String>,
+    #[serde(default)]
     pub source_commit: Option<String>,
+    /// Subdirectory within the source repo (for monorepo plugin layouts)
+    #[serde(default)]
+    pub source_path: Option<String>,
     pub sdk_version: String,
+    #[serde(default)]
     pub sha256: Option<String>,
 }
 
@@ -64,6 +108,8 @@ pub enum PluginSource {
         name: String,
         version: String,
         url: String,
+        /// Optional subdirectory within the cloned repo (monorepo support)
+        source_path: Option<String>,
     },
     /// Install directly from git URL
     Git {
@@ -76,7 +122,7 @@ impl PluginSource {
     /// Install the plugin to the given directory
     pub fn install(&self, plugin_dir: &Path) -> Result<PathBuf> {
         match self {
-            PluginSource::Registry { name, version, url } => {
+            PluginSource::Registry { name, version, url, source_path } => {
                 let target_dir = plugin_dir.join(name);
 
                 // Remove existing if present
@@ -84,26 +130,55 @@ impl PluginSource {
                     std::fs::remove_dir_all(&target_dir)?;
                 }
 
-                // Shallow clone with specific tag/version
+                // Clone into a tempdir first so we can extract a subpath if needed
+                let tmp_root = tempdir_in(plugin_dir, name)?;
+                let tmp_path = tmp_root.as_path();
+
+                // Try shallow clone at v<version> tag; suppress noisy stderr on first attempt
                 let tag = format!("v{}", version);
-                let status = Command::new("git")
-                    .args(["clone", "--depth", "1", "--branch", &tag, url, target_dir.to_str().context("Non-UTF8 plugin path")?])
+                let first_attempt = Command::new("git")
+                    .args([
+                        "clone", "--depth", "1", "--branch", &tag,
+                        url, tmp_path.to_str().context("Non-UTF8 tmp path")?,
+                    ])
+                    .stderr(std::process::Stdio::null())
                     .status()
                     .context("Failed to run git clone")?;
 
-                if !status.success() {
-                    // Try without tag (maybe it's a branch or commit)
+                if !first_attempt.success() {
+                    // Tag missing – fall back to default branch with visible stderr
+                    if tmp_path.exists() {
+                        let _ = std::fs::remove_dir_all(tmp_path);
+                    }
                     let status = Command::new("git")
-                        .args(["clone", "--depth", "1", url, target_dir.to_str().context("Non-UTF8 plugin path")?])
+                        .args([
+                            "clone", "--depth", "1",
+                            url, tmp_path.to_str().context("Non-UTF8 tmp path")?,
+                        ])
                         .status()
                         .context("Failed to run git clone")?;
-
                     if !status.success() {
                         anyhow::bail!("Git clone failed for {}", url);
                     }
                 }
 
-                // Remove .git directory to save space
+                // Source subdir for monorepo layouts; otherwise copy whole tree.
+                let copy_from = match source_path {
+                    Some(sub) => tmp_path.join(sub),
+                    None => tmp_path.to_path_buf(),
+                };
+                if !copy_from.exists() {
+                    let _ = std::fs::remove_dir_all(tmp_path);
+                    anyhow::bail!(
+                        "Plugin source path '{}' not found in {}",
+                        source_path.as_deref().unwrap_or(""),
+                        url,
+                    );
+                }
+                copy_dir_recursive(&copy_from, &target_dir)?;
+                let _ = std::fs::remove_dir_all(tmp_path);
+
+                // Remove any .git that snuck in
                 let git_dir = target_dir.join(".git");
                 if git_dir.exists() {
                     std::fs::remove_dir_all(&git_dir)?;
@@ -172,7 +247,7 @@ impl PluginRegistry {
     /// Registry URL resolution order (first match wins):
     /// 1. PROGIT_PLUGIN_REGISTRY environment variable (for testing/override)
     /// 2. Config-provided registry_url (.project/config.kdl)
-    /// 3. Default registry URL (https://git.maiwald.work/ProGit/progit-market.git)
+    /// 3. Default registry URL (https://git.sovereign-society.org/ProGit/progit-market.git)
     pub fn new(project_root: &Path, config_registry_url: Option<String>) -> Result<Self> {
         let index_path = project_root
             .join(".progit")
@@ -316,6 +391,7 @@ impl PluginRegistry {
             source_url: extract("url"),
             source_tag: Some(extract("tag")).filter(|s| !s.is_empty()),
             source_commit: Some(extract("commit")).filter(|s| !s.is_empty()),
+            source_path: Some(extract("source_path")).filter(|s| !s.is_empty()),
             sdk_version: extract("sdk_version"),
             sha256: Some(extract("sha256")).filter(|s| !s.is_empty()),
         })
