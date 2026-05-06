@@ -253,7 +253,7 @@ See [Plugin SDK Documentation](docs/PLUGIN_SDK.md) for details.
 
 ## 🎯 Roadmap
 
-### v0.7.0-alpha (Current)
+### v0.7.0-beta (Current)
 - [x] Virtual branches + conflict resolution
 - [x] AI agent (Ollama, 7 actions)
 - [x] Plugin SDK v0.1.0 (LuaJIT)
@@ -261,9 +261,11 @@ See [Plugin SDK Documentation](docs/PLUGIN_SDK.md) for details.
 - [x] CI/CD integration (GitLab/Forgejo)
 - [x] Forge sync (bidirectional)
 - [x] Website launch (progit.dev)
-- [ ] Binary diet (syntect to plugin)
-- [ ] Plugin registry (`prog plugin install`)
-- [ ] Alpha bug triage
+- [x] Binary diet (5.7MB release build)
+- [x] Plugin registry (`prog plugin install/remove/update` E2E verified)
+- [x] Plugin manager modal in TUI (`P` key)
+- [ ] Beta bug triage
+- [ ] Public-beta website overhaul
 
 ### v1.0.0 (TBD)
 - [ ] WASM plugin runtime (optional)

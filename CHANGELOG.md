@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0-beta] - 2026-05-06
+
+### Beta Promotion — Plugin Economy Hardened
+
+**Strategic Decision:** Promoted alpha → beta. The plugin install/uninstall/update
+loop now works end-to-end against the live marketplace, the plugin manager modal
+ships in the TUI, and the binary remains comfortably under target. Ready for a
+wider tester pool.
+
+#### Added
+- **Plugin manager modal (TUI):** Press `P` anywhere in the TUI to open a
+  centered overlay listing every loaded plugin with name, version, author,
+  description, and supported hooks. Navigate with `j/k`, close with `Esc/P/q`.
+  Empty state shows the install hint pointing to `prog plugin install`.
+- **`PluginManager::plugin_info()`** returns `Vec<&PluginMetadata>`, preserving
+  the trait firewall (TUI never sees concrete `LuaPlugin`/`WasmPlugin` types).
+- **Monorepo plugin layout support:** `PluginManifest` now carries
+  `source_path`, allowing a single source repo to host multiple plugins as
+  subdirectories. Install clones into a sibling tempdir and copies only the
+  named subdirectory into `plugins/<name>/`.
+
+#### Fixed
+- **Default registry URL** updated from `git.maiwald.work` (HTTP 530, defunct)
+  to `git.sovereign-society.org`, matching the rest of the codebase.
+- **`plugin install` no longer drags the entire monorepo** under each plugin
+  name. Previously, installing `csv-export` left every other plugin
+  (`jira-sync`, `slack-notify`, etc.) as junk subdirectories.
+- **`plugin remove` now handles directory installs** and updates the lockfile.
+  The dispatcher had a stale hand-rolled handler that only removed `*.lua`
+  files; routed it through `plugins::cli::remove()` like the other actions.
+- **Silenced noisy `fatal: Remote branch v1.0.0 not found`** stderr from the
+  first git-clone attempt. The fallback path (default branch) keeps stderr
+  visible so genuine clone failures stay loud.
+
+#### Verified End-to-End
+- `plugin index update` clones the marketplace from the live registry.
+- `plugin search`, `plugin info` resolve manifests correctly.
+- `plugin install csv-export` and `plugin install jira-sync` install only their
+  own files, side by side under `plugins/`.
+- `plugin list` shows both. `plugin update` walks the lockfile against the
+  registry. `plugin remove` cleans both the directory and the lockfile entry.
+
+#### Binary
+- Release build: **5.7MB** (well under the <10MB doctrine target).
+- Tests: 78 passing.
+
 ## [0.7.0-alpha] - 2026-03-15
 
 ### Alpha Release — Call for Testers
@@ -355,7 +401,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 ProGit Core: **LCL-1.0** (file-level copyleft)
 Plugin SDK: **LSL-1.0** (file-level copyleft + patent grant)
 
-[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-alpha...HEAD
+[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-beta...HEAD
+[0.7.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-alpha...v0.7.0-beta
 [0.7.0-alpha]: https://git.sovereign-society.org/ProGit/progit/compare/v0.6.0-beta...v0.7.0-alpha
 [0.6.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.5.2-beta...v0.6.0-beta
 [0.5.2-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.4.0-alpha...v0.5.2-beta
