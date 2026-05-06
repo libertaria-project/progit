@@ -27,6 +27,7 @@ pub mod widget_lanes;
 pub mod widget_mr_create;
 pub mod widget_mr_list;
 pub mod widget_pano_log;
+pub mod widget_plugins;
 pub mod widget_review;
 pub mod widget_settings;
 pub mod widget_status;
@@ -453,6 +454,11 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         widget_pano_log::render(frame, app);
     }
     
+    // Plugin manager modal
+    if app.show_plugins {
+        widget_plugins::render(frame, app);
+    }
+
     // Conflict resolution modal
     if app.show_conflicts {
         widget_conflicts::render(frame, app);

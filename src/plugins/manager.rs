@@ -183,6 +183,16 @@ impl PluginManager {
             .collect()
     }
 
+    /// Get rich metadata for all loaded plugins
+    ///
+    /// Returns borrowed references to each plugin's metadata
+    /// (name, version, author, description, hooks). Used by the TUI
+    /// plugin manager modal to render full plugin info without
+    /// breaching the trait firewall.
+    pub fn plugin_info(&self) -> Vec<&PluginMetadata> {
+        self.plugins.iter().map(|p| p.metadata()).collect()
+    }
+
     /// Get plugin count
     pub fn count(&self) -> usize {
         self.plugins.len()
