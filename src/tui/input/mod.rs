@@ -98,6 +98,11 @@ fn handle_normal_mode_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
         // Global Actions
         KeyCode::Char('S') => KeyAction::Sync,
+        KeyCode::Char('P') => {
+            app.show_plugins = !app.show_plugins;
+            app.plugin_selected = 0;
+            KeyAction::Refresh
+        }
         KeyCode::Char('q') => KeyAction::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => KeyAction::Quit,
         KeyCode::Char('O') => {
@@ -215,8 +220,37 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         return KeyAction::Refresh;
     }
 
+    // Plugin manager modal
+    if app.show_plugins {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('P') | KeyCode::Char('q') => {
+                app.show_plugins = false;
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                let count = app.plugin_manager.as_ref().map_or(0, |pm| pm.count());
+                if count > 0 {
+                    app.plugin_selected = (app.plugin_selected + 1) % count;
+                }
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                let count = app.plugin_manager.as_ref().map_or(0, |pm| pm.count());
+                if count > 0 {
+                    if app.plugin_selected == 0 {
+                        app.plugin_selected = count - 1;
+                    } else {
+                        app.plugin_selected -= 1;
+                    }
+                }
+                return KeyAction::Refresh;
+            }
+            _ => return KeyAction::None,
+        }
+    }
+
     match app.input_mode {
-        InputMode::Normal => handle_dashboard_key(app, key), // Was handle_normal_key, but that doesn't exist
+        InputMode::Normal => handle_normal_mode_key(app, key),
         InputMode::Search => handle_search_key(app, key),
         InputMode::Confirm => handle_confirm_key(app, key),
         InputMode::RemoteDropdown => handle_remote_dropdown_key(app, key),
@@ -633,7 +667,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 pub fn help_text(app: &App) -> &'static str {
     match app.input_mode {
         InputMode::Normal => match app.view_mode {
-            ViewMode::Dashboard => "Tab:list │ S:sync │ O:settings │ q:quit",
+            ViewMode::Dashboard => "Tab:list │ S:sync │ P:plugins │ O:settings │ q:quit",
             ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
             ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",

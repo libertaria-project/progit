@@ -240,6 +240,12 @@ pub struct App {
     /// Selected action in agent menu
     pub agent_menu_selected: usize,
 
+    /// Show plugin manager modal
+    pub show_plugins: bool,
+
+    /// Selected plugin index in plugin modal
+    pub plugin_selected: usize,
+
     // ─── Code Review Integration ─────────────────────────────────────────────
     /// Review state for code review mode
     pub review_state: Option<crate::tui::widget_review::ReviewState>,
@@ -317,6 +323,8 @@ impl App {
             show_conflicts: false,
             show_agent_menu: false,
             agent_menu_selected: 0,
+            show_plugins: false,
+            plugin_selected: 0,
             review_state: None,
         }
     }

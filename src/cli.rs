@@ -14,10 +14,7 @@ use super::{HooksAction, IndexAction, PluginAction};
 pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
     use progit_plugin_sdk::prelude::{LuaPlugin, Plugin};
 
-    // Plugin directories
-    let home_plugins = dirs::home_dir()
-        .map(|h| h.join(".progit").join("plugins"))
-        .unwrap_or_else(|| PathBuf::from(".progit/plugins"));
+    // Plugin directory for legacy file-based fallback installs
     let local_plugins = PathBuf::from(".progit/plugins");
 
     match action {
@@ -83,21 +80,10 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
         }
 
         PluginAction::Remove { name } => {
-            let mut removed = false;
-
-            for dir in [&local_plugins, &home_plugins] {
-                let plugin_path = dir.join(format!("{}.lua", name));
-                if plugin_path.exists() {
-                    std::fs::remove_file(&plugin_path)?;
-                    println!("{} Removed plugin: {}", "✓".green(), name);
-                    removed = true;
-                    break;
-                }
-            }
-
-            if !removed {
-                return Err(anyhow!("Plugin '{}' not found", name));
-            }
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::remove(&project_root, &name)?;
         }
 
         PluginAction::Update { name } => {
