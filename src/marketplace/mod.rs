@@ -1,24 +1,31 @@
-//! ProGit Marketplace Module
+//! Marketplace - Secure plugin distribution infrastructure
 //!
-//! This module provides the secure plugin distribution infrastructure based on
-//! Janus Hinge's supply chain principles.
+//! # Components
 //!
-//! ## Key Components
+//! - [crypto] - Cryptographic primitives (BLAKE3, Dilithium3)
+//! - [keyring] - Local trust store
+//! - [manifest] - Plugin manifest schema
+//! - [hinge] - Hinge verification layer
+//! - [submit] - Plugin submission CLI
 //!
-//! - **Verification**: Hinge-compatible signature verification
-//! - **Keyring**: Local trust store for publisher keys
-//! - **Manifest**: Plugin manifest schema with signatures
-//! - **Registry**: Marketplace registry client
+//! # Usage
+//!
+//! ```rust
+//! use progit::marketplace::{Verifier, TrustPolicy};
+//!
+//! let verifier = Verifier::new(keyring);
+//! let result = verifier.verify(&manifest)?;
+//! ```
 
-pub mod cli;
 pub mod crypto;
 pub mod keyring;
 pub mod manifest;
+pub mod hinge;
+pub mod submit;
+pub mod cli;
 
-// Re-export from submodules
-pub use crypto::compute_keyid;
+pub use crypto::{blake3_checksum, test_keypair, Algorithm};
 pub use keyring::Keyring;
-
-// Hinge verification
-mod hinge;
-pub use hinge::{TrustPolicy, Verifier};
+pub use manifest::{PluginManifest, LegacyPluginManifest, Publisher, Artifact, Capabilities};
+pub use hinge::{Verifier, TrustPolicy, VerificationResult};
+pub use cli::{handle_trust_command, handle_plugin_verify, handle_deeplink};
