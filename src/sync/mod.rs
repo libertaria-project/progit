@@ -12,6 +12,7 @@ use crate::mr::MergeRequest;
 use crate::review::{Review, ReviewComment};
 use crate::storage::config::SyncConfig;
 use anyhow::Result;
+use std::path::Path;
 
 /// Provider trait for remote issue trackers (Forgejo, GitLab, GitHub)
 pub trait SyncProvider {
@@ -55,11 +56,12 @@ pub trait SyncProvider {
     /// (Forgejo, GitLab) override it.
     fn push_review_comments(
         &self,
+        repo_path: &Path,
         mr_remote_id: u64,
         review: &Review,
         comments: &mut [ReviewComment],
     ) -> Result<usize> {
-        let _ = (mr_remote_id, review, comments);
+        let _ = (repo_path, mr_remote_id, review, comments);
         Ok(0)
     }
 }

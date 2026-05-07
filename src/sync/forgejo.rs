@@ -520,6 +520,147 @@ impl SyncProvider for ForgejoProvider {
 
         Ok(())
     }
+
+    fn push_review_comments(
+        &self,
+        repo_path: &std::path::Path,
+        mr_remote_id: u64,
+        review: &crate::review::Review,
+        comments: &mut [crate::review::ReviewComment],
+    ) -> Result<usize> {
+        use crate::review_sync::position;
+
+        const PROVIDER: &str = "forgejo";
+
+        // Filter comments that still need pushing.
+        let pending_indices: Vec<usize> = comments
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| !c.external_ids.contains_key(PROVIDER))
+            .map(|(i, _)| i)
+            .collect();
+
+        if pending_indices.is_empty() {
+            return Ok(0);
+        }
+
+        let repo = git2::Repository::open(repo_path)
+            .context("Failed to open git repository for review-comment push")?;
+
+        // Build the comment payload, skipping comments whose anchor is no
+        // longer valid (option 4a from the sign-off: skip + warn, never abort).
+        // Track which slice index each payload entry came from so we can
+        // write back the remote ID after the response comes in.
+        let mut payload_comments: Vec<serde_json::Value> = Vec::new();
+        let mut payload_to_slice: Vec<usize> = Vec::new();
+
+        for &idx in &pending_indices {
+            let c = &comments[idx];
+            match position::resolve(&repo, &c.file_path, c.line_number, &c.commit_sha) {
+                Ok(_pos) => {
+                    payload_comments.push(serde_json::json!({
+                        "body": c.text,
+                        "path": c.file_path,
+                        "new_position": c.line_number,
+                        "old_position": 0,
+                    }));
+                    payload_to_slice.push(idx);
+                }
+                Err(e) => {
+                    log::warn!(
+                        "skipping review comment {} on {}:{} — {}",
+                        c.id,
+                        c.file_path,
+                        c.line_number,
+                        e
+                    );
+                }
+            }
+        }
+
+        if payload_comments.is_empty() {
+            log::info!("No resolvable review comments to push to Forgejo.");
+            return Ok(0);
+        }
+
+        let token = self.get_token()?;
+        let url = format!("{}/pulls/{}/reviews", self.base_url(), mr_remote_id);
+
+        let body = serde_json::json!({
+            "body": review.summary.clone().unwrap_or_default(),
+            "commit_id": review.commit_sha,
+            "event": "COMMENT",
+            "comments": payload_comments,
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("token {}", token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .context(format!("Failed POST /pulls/{}/reviews", mr_remote_id))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().unwrap_or_default();
+            return Err(anyhow!(
+                "Forgejo refused review (status {}): {}",
+                status,
+                err_body
+            ));
+        }
+
+        // The response is a PullReview with `id` but does NOT inline its
+        // comments. Follow up with GET /reviews/{id}/comments to retrieve
+        // their forge IDs, then match by index (Forgejo preserves order).
+        let review_resp: serde_json::Value = response
+            .json()
+            .context("Failed to decode Forgejo review response")?;
+        let review_id = review_resp
+            .get("id")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| anyhow!("Forgejo review response missing `id`"))?;
+
+        let comments_url = format!(
+            "{}/pulls/{}/reviews/{}/comments",
+            self.base_url(),
+            mr_remote_id,
+            review_id
+        );
+        let listed: Vec<serde_json::Value> = self
+            .client
+            .get(&comments_url)
+            .header("Authorization", format!("token {}", token))
+            .send()
+            .context("Failed GET /reviews/{id}/comments")?
+            .json()
+            .context("Failed to decode Forgejo review comments list")?;
+
+        if listed.len() != payload_to_slice.len() {
+            log::warn!(
+                "Forgejo returned {} comments for {} pushed; matching by index anyway",
+                listed.len(),
+                payload_to_slice.len()
+            );
+        }
+
+        let mut filled = 0usize;
+        for (response_idx, slice_idx) in payload_to_slice.iter().enumerate() {
+            let Some(returned) = listed.get(response_idx) else {
+                continue;
+            };
+            if let Some(remote_id) = returned.get("id").and_then(|v| v.as_i64()) {
+                comments[*slice_idx]
+                    .external_ids
+                    .insert(PROVIDER.to_string(), remote_id.to_string());
+                filled += 1;
+            }
+        }
+
+        Ok(filled)
+    }
 }
 
 // Forgejo Pull Request API Models

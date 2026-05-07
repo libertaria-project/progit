@@ -628,4 +628,161 @@ impl SyncProvider for GitLabProvider {
         log::info!("✅ Closed MR !{}", remote_id);
         Ok(())
     }
+
+    fn push_review_comments(
+        &self,
+        repo_path: &std::path::Path,
+        mr_remote_id: u64,
+        review: &crate::review::Review,
+        comments: &mut [crate::review::ReviewComment],
+    ) -> Result<usize> {
+        use crate::review_sync::position;
+
+        const PROVIDER: &str = "gitlab";
+
+        let pending_indices: Vec<usize> = comments
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| !c.external_ids.contains_key(PROVIDER))
+            .map(|(i, _)| i)
+            .collect();
+
+        if pending_indices.is_empty() {
+            return Ok(0);
+        }
+
+        let repo = git2::Repository::open(repo_path)
+            .context("Failed to open git repository for review-comment push")?;
+        let token = self.get_token()?;
+
+        // GitLab needs base/start/head SHAs from the MR's diff_refs.
+        // Fetch the MR once and reuse the SHAs across all comment posts.
+        let mr_url = self.api_url(&format!("merge_requests/{}", mr_remote_id));
+        let mr_resp: serde_json::Value = self
+            .client
+            .get(&mr_url)
+            .header("PRIVATE-TOKEN", &token)
+            .send()
+            .context(format!("Failed GET /merge_requests/{}", mr_remote_id))?
+            .json()
+            .context("Failed to decode GitLab MR response")?;
+
+        let diff_refs = mr_resp
+            .get("diff_refs")
+            .ok_or_else(|| anyhow!("GitLab MR response missing diff_refs"))?;
+        let base_sha = diff_refs
+            .get("base_sha")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("diff_refs.base_sha missing"))?
+            .to_string();
+        let start_sha = diff_refs
+            .get("start_sha")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("diff_refs.start_sha missing"))?
+            .to_string();
+        let head_sha = diff_refs
+            .get("head_sha")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("diff_refs.head_sha missing"))?
+            .to_string();
+
+        let discussions_url = self.api_url(&format!(
+            "merge_requests/{}/discussions",
+            mr_remote_id
+        ));
+
+        let mut filled = 0usize;
+        for &idx in &pending_indices {
+            let c = &comments[idx];
+            // Anchor verification — the user's commit_sha may be older
+            // than diff_refs.head_sha, but we still want to verify the
+            // line existed at the user's anchor. Skip + warn on failure.
+            if let Err(e) = position::resolve(&repo, &c.file_path, c.line_number, &c.commit_sha)
+            {
+                log::warn!(
+                    "skipping review comment {} on {}:{} — {}",
+                    c.id,
+                    c.file_path,
+                    c.line_number,
+                    e
+                );
+                continue;
+            }
+
+            let body = serde_json::json!({
+                "body": c.text,
+                "position": {
+                    "position_type": "text",
+                    "base_sha": base_sha,
+                    "start_sha": start_sha,
+                    "head_sha": head_sha,
+                    "new_path": c.file_path,
+                    "new_line": c.line_number,
+                },
+            });
+
+            let resp = self
+                .client
+                .post(&discussions_url)
+                .header("PRIVATE-TOKEN", &token)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .context(format!(
+                    "Failed POST /merge_requests/{}/discussions",
+                    mr_remote_id
+                ))?;
+
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let err_body = resp.text().unwrap_or_default();
+                log::warn!(
+                    "GitLab refused comment {} (status {}): {}",
+                    c.id,
+                    status,
+                    err_body
+                );
+                continue;
+            }
+
+            let json: serde_json::Value = resp
+                .json()
+                .context("Failed to decode GitLab discussion response")?;
+
+            // The comment ID we want is notes[0].id — the actual note,
+            // not the parent discussion. Fall back to the discussion ID
+            // if notes is empty (shouldn't happen for line comments).
+            let note_id = json
+                .get("notes")
+                .and_then(|n| n.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|n| n.get("id"))
+                .and_then(|v| v.as_i64())
+                .map(|n| n.to_string())
+                .or_else(|| {
+                    json.get("id")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                });
+
+            if let Some(rid) = note_id {
+                comments[idx]
+                    .external_ids
+                    .insert(PROVIDER.to_string(), rid);
+                filled += 1;
+            } else {
+                log::warn!(
+                    "GitLab discussion response for comment {} had no usable id",
+                    c.id
+                );
+            }
+        }
+
+        // `review` is unused for GitLab — there's no parallel concept of a
+        // top-level review session; each line comment is its own discussion.
+        // Tell the compiler we know.
+        let _ = review;
+
+        Ok(filled)
+    }
 }
