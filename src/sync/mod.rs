@@ -9,6 +9,7 @@ pub mod local;
 
 use crate::issue::Issue;
 use crate::mr::MergeRequest;
+use crate::review::{Review, ReviewComment};
 use crate::storage::config::SyncConfig;
 use anyhow::Result;
 
@@ -36,6 +37,31 @@ pub trait SyncProvider {
     fn merge_mr(&self, remote_id: u64) -> Result<()>;
     /// Close MR without merging
     fn close_mr(&self, remote_id: u64) -> Result<()>;
+
+    /// Push line-level review comments to the forge.
+    ///
+    /// `comments` is mutated in-place: every successfully-pushed comment
+    /// gets its `external_ids[<provider>]` filled with the forge-assigned
+    /// remote comment ID. Returns the count of newly-pushed comments;
+    /// already-synced comments (those with the provider key already set)
+    /// are skipped silently — re-running this method is a no-op.
+    ///
+    /// Comments whose anchor position cannot be resolved at
+    /// `review.commit_sha` (file removed, line out of range) are skipped
+    /// with a `log::warn!` rather than aborting the whole batch — option
+    /// (a) from the Sprint C-heavy sign-off.
+    ///
+    /// Default implementation is a no-op; only forge providers
+    /// (Forgejo, GitLab) override it.
+    fn push_review_comments(
+        &self,
+        mr_remote_id: u64,
+        review: &Review,
+        comments: &mut [ReviewComment],
+    ) -> Result<usize> {
+        let _ = (mr_remote_id, review, comments);
+        Ok(0)
+    }
 }
 
 pub fn create_provider(config: SyncConfig) -> Box<dyn SyncProvider> {

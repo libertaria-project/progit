@@ -13,6 +13,7 @@ pub mod panopticum;
 pub mod plugins;
 pub mod rebase;
 pub mod review;
+pub mod review_sync;
 pub mod storage;
 pub mod sync;
 pub mod tui;

@@ -18,6 +18,7 @@ mod panopticum;
 mod plugins;
 mod rebase;
 mod review;
+mod review_sync;
 mod runner;
 mod storage;
 mod sync;
