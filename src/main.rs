@@ -210,10 +210,24 @@ enum MrAction {
         /// MR number to merge
         id: u64,
     },
+    /// Review operations on a merge request
+    Review {
+        #[command(subcommand)]
+        action: ReviewAction,
+    },
     /// Reject a merge request (close without merging)
     Reject {
         /// MR number to reject
         id: u64,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReviewAction {
+    /// Push local line-level review comments to the configured forge
+    Push {
+        /// MR number on the remote forge
+        mr_id: u64,
     },
 }
 
@@ -223,6 +237,74 @@ enum SyncAction {
     Push,
     /// Pull remote forge issues to local
     Pull,
+}
+
+/// Push the most-recently-updated local review's comments to the
+/// configured forge for the given remote MR id.
+///
+/// Picks the latest review by `updated_at` so users don't have to remember
+/// review IDs — this matches the "I just wrote my comments, now ship them"
+/// mental model. If multi-review semantics matter later, add a `--review-id`
+/// flag.
+fn run_review_push(provider: &dyn crate::sync::SyncProvider, mr_id: u64) -> Result<()> {
+    let project_root = workspace::find_project_root()?;
+    let storage = crate::review::ReviewStorage::new(&project_root);
+
+    let mut reviews = storage.list().context("Failed to list local reviews")?;
+    if reviews.is_empty() {
+        return Err(anyhow!(
+            "No local reviews found. Enter review mode (`:review <file>` in TUI) and add comments first."
+        ));
+    }
+
+    reviews.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    let mut review = reviews.into_iter().next().unwrap();
+
+    let total = review.comments.len();
+    if total == 0 {
+        println!(
+            "{} Latest review has no comments to push.",
+            "ℹ️".cyan()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} Pushing review {} ({} local comment{}) to MR !{}...",
+        "🔄".blue(),
+        review.id,
+        total,
+        if total == 1 { "" } else { "s" },
+        mr_id
+    );
+
+    let pushed = provider
+        .push_review_comments(&project_root, mr_id, &review.clone(), &mut review.comments)
+        .context("forge refused review-comment push")?;
+
+    // Persist the (possibly mutated) review with new external_ids.
+    storage
+        .save(&review)
+        .context("Failed to save review after push")?;
+
+    let already_synced = review
+        .comments
+        .iter()
+        .filter(|c| !c.external_ids.is_empty())
+        .count()
+        - pushed;
+    let skipped = total.saturating_sub(pushed + already_synced);
+
+    println!(
+        "{} Synced {} new (already-synced: {}, skipped: {}) of {} on MR !{}",
+        "✅".green(),
+        pushed,
+        already_synced,
+        skipped,
+        total,
+        mr_id
+    );
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -555,6 +637,14 @@ fn main() -> Result<()> {
                         Err(e) => println!("{} Failed to reject: {}", "❌".red(), e),
                     }
                 }
+                Some(MrAction::Review { action }) => match action {
+                    ReviewAction::Push { mr_id } => {
+                        if let Err(e) = run_review_push(&*provider, mr_id) {
+                            eprintln!("{} {}", "❌".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                },
             }
         }
         Some(Commands::Clean) => {
