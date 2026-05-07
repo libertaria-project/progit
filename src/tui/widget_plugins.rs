@@ -1,19 +1,24 @@
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: LCL-1.0
 // Copyright (c) 2025 Markus Maiwald
 
-//! Widget Plugins - Plugin manager modal overlay
+//! Widget Plugins — plugin manager modal overlay.
 //!
-//! Shows installed plugins with metadata (name, version, hooks).
-//! Opened via `P` key, navigated with j/k, closed with Esc.
+//! Shows installed plugins with metadata (name, version, hooks) and
+//! their quarantine state. Quarantined plugins are flagged in red with
+//! the failure reason; pressing `u` while one is highlighted clears
+//! its quarantine.
+//!
+//! Opened via `P` (or `Q` as alias), navigated with j/k, closed with Esc.
 
 use crate::tui::app::App;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Modifier,
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
+use std::collections::HashMap;
 
 /// Render the plugin manager modal (centered overlay)
 pub fn render(frame: &mut Frame, app: &App) {
@@ -34,32 +39,60 @@ pub fn render(frame: &mut Frame, app: &App) {
             let count = infos.len();
             let selected = app.plugin_selected.min(count.saturating_sub(1));
 
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("{} plugin{} loaded", count, if count == 1 { "" } else { "s" }),
-                    colors.header().add_modifier(Modifier::BOLD),
-                ),
-            ]));
+            // Snapshot quarantine state once per render.
+            let quarantined: HashMap<&str, &str> = pm.quarantined_plugins().collect();
+
+            let header_text = if quarantined.is_empty() {
+                format!("{} plugin{} loaded", count, if count == 1 { "" } else { "s" })
+            } else {
+                format!(
+                    "{} plugin{} loaded · {} quarantined",
+                    count,
+                    if count == 1 { "" } else { "s" },
+                    quarantined.len()
+                )
+            };
+            lines.push(Line::from(vec![Span::styled(
+                header_text,
+                colors.header().add_modifier(Modifier::BOLD),
+            )]));
             lines.push(Line::from(""));
 
             for (idx, meta) in infos.iter().enumerate() {
                 let is_selected = idx == selected;
                 let cursor = if is_selected { "▶ " } else { "  " };
-                let name_style = if is_selected {
+                let is_quarantined = quarantined.contains_key(meta.name.as_str());
+
+                let name_style = if is_quarantined {
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                } else if is_selected {
                     colors.selected().add_modifier(Modifier::BOLD)
                 } else {
                     colors.accent().add_modifier(Modifier::BOLD)
                 };
                 let row_style = if is_selected { colors.selected() } else { colors.normal() };
 
-                lines.push(Line::from(vec![
-                    Span::styled(cursor, colors.accent()),
-                    Span::styled(meta.name.clone(), name_style),
-                    Span::styled("  v", colors.dim()),
-                    Span::styled(meta.version.clone(), colors.dim()),
-                    Span::styled("  by ", colors.dim()),
-                    Span::styled(meta.author.clone(), row_style),
-                ]));
+                let mut row = vec![Span::styled(cursor, colors.accent())];
+                if is_quarantined {
+                    row.push(Span::styled(
+                        "[QUARANTINED] ",
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    ));
+                }
+                row.push(Span::styled(meta.name.clone(), name_style));
+                row.push(Span::styled("  v", colors.dim()));
+                row.push(Span::styled(meta.version.clone(), colors.dim()));
+                row.push(Span::styled("  by ", colors.dim()));
+                row.push(Span::styled(meta.author.clone(), row_style));
+                lines.push(Line::from(row));
+
+                if let Some(reason) = quarantined.get(meta.name.as_str()) {
+                    lines.push(Line::from(vec![
+                        Span::styled("    ", colors.dim()),
+                        Span::styled("reason: ", Style::default().fg(Color::Red)),
+                        Span::styled((*reason).to_string(), Style::default().fg(Color::Red)),
+                    ]));
+                }
 
                 if !meta.description.is_empty() {
                     lines.push(Line::from(vec![
@@ -84,12 +117,18 @@ pub fn render(frame: &mut Frame, app: &App) {
                 lines.push(Line::from(""));
             }
 
-            lines.push(Line::from(vec![
+            // Help line. Mention `u` only when there's something to clear.
+            let mut help: Vec<Span> = vec![
                 Span::styled("j/k", colors.accent()),
                 Span::styled(" navigate  ", colors.dim()),
-                Span::styled("Esc/P/q", colors.accent()),
-                Span::styled(" close", colors.dim()),
-            ]));
+            ];
+            if !quarantined.is_empty() {
+                help.push(Span::styled("u", colors.accent()));
+                help.push(Span::styled(" unquarantine  ", colors.dim()));
+            }
+            help.push(Span::styled("Esc/P/Q/q", colors.accent()));
+            help.push(Span::styled(" close", colors.dim()));
+            lines.push(Line::from(help));
         }
         _ => {
             lines.push(Line::from(""));

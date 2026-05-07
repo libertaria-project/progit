@@ -98,7 +98,11 @@ fn handle_normal_mode_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
         // Global Actions
         KeyCode::Char('S') => KeyAction::Sync,
-        KeyCode::Char('P') => {
+        KeyCode::Char('P') | KeyCode::Char('Q') => {
+            // Q is an alias for P that lands you on the plugin manager
+            // modal where quarantined plugins are flagged. Same modal,
+            // same close keys; one extra entry point because users
+            // who hit a quarantine event think "Q" before "P".
             app.show_plugins = !app.show_plugins;
             app.plugin_selected = 0;
             KeyAction::Refresh
@@ -223,7 +227,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
     // Plugin manager modal
     if app.show_plugins {
         match key.code {
-            KeyCode::Esc | KeyCode::Char('P') | KeyCode::Char('q') => {
+            KeyCode::Esc
+            | KeyCode::Char('P')
+            | KeyCode::Char('Q')
+            | KeyCode::Char('q') => {
                 app.show_plugins = false;
                 return KeyAction::Refresh;
             }
@@ -241,6 +248,20 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
                         app.plugin_selected = count - 1;
                     } else {
                         app.plugin_selected -= 1;
+                    }
+                }
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('u') => {
+                // Clear quarantine on the highlighted plugin, if any.
+                if let Some(pm) = app.plugin_manager.as_mut() {
+                    let infos = pm.plugin_info();
+                    let idx = app.plugin_selected.min(infos.len().saturating_sub(1));
+                    if let Some(meta) = infos.get(idx) {
+                        let name = meta.name.clone();
+                        if pm.unquarantine(&name) {
+                            log::info!("Cleared quarantine on plugin '{}'", name);
+                        }
                     }
                 }
                 return KeyAction::Refresh;

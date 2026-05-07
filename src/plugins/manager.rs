@@ -433,4 +433,31 @@ mod tests {
         let mut m = PluginManager::new(Path::new("/tmp/test"));
         assert!(!m.unquarantine("never-existed"));
     }
+
+    #[test]
+    fn record_failure_thresholds_into_quarantine_then_unquarantines() {
+        let mut m = PluginManager::new(Path::new("/tmp/test"));
+        let name = "noisy";
+
+        // Below the threshold → not quarantined yet.
+        for _ in 0..(QUARANTINE_THRESHOLD - 1) {
+            m.record_failure(name, "hook", "boom");
+        }
+        assert!(m.quarantined_plugins().count() == 0);
+
+        // One more failure crosses the threshold.
+        m.record_failure(name, "hook", "boom");
+        let quarantined: Vec<_> = m.quarantined_plugins().collect();
+        assert_eq!(quarantined.len(), 1);
+        assert_eq!(quarantined[0].0, name);
+        assert!(quarantined[0].1.contains("boom"));
+
+        // Manual unquarantine clears state and resets the counter.
+        assert!(m.unquarantine(name));
+        assert_eq!(m.quarantined_plugins().count(), 0);
+
+        // After clearing, failures restart from zero — old strikes don't carry.
+        m.record_failure(name, "hook", "fresh");
+        assert_eq!(m.quarantined_plugins().count(), 0);
+    }
 }
