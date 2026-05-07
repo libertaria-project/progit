@@ -263,7 +263,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
         ViewMode::Diff => {
             if let Some(ref state) = app.diff_state {
-                areas.diff_file_list = crate::diff::render_diff(frame, inner, state);
+                // Reborrow the plugin manager separately from diff_state
+                // so the borrow checker sees two distinct field accesses.
+                let pm = app.plugin_manager.as_mut();
+                areas.diff_file_list = crate::diff::render_diff(frame, inner, state, pm);
             }
             KanbanAreas::default()
         }

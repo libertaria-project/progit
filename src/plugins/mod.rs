@@ -14,6 +14,8 @@
 //! reference to them in old branches, that is the dead code, not this.
 
 pub mod cli;
+pub mod highlight_cache;
+pub mod lang_detect;
 pub mod lockfile;
 pub mod manager;
 pub mod registry;

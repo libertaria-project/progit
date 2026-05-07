@@ -17,6 +17,8 @@ use progit_plugin_sdk::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use super::highlight_cache::{key_for, HighlightCache};
+
 /// After this many consecutive failed hook calls a plugin is quarantined.
 const QUARANTINE_THRESHOLD: u32 = 5;
 
@@ -28,6 +30,8 @@ pub struct PluginManager {
     error_counts: HashMap<String, u32>,
     /// Plugin names currently quarantined, with the reason. Dispatch skips them.
     quarantined: HashMap<String, String>,
+    /// Render-time highlight cache. Lives as long as the manager.
+    highlight_cache: HighlightCache,
 }
 
 impl PluginManager {
@@ -38,6 +42,7 @@ impl PluginManager {
             plugin_dir: repo_root.join("plugins"),
             error_counts: HashMap::new(),
             quarantined: HashMap::new(),
+            highlight_cache: HighlightCache::new(),
         }
     }
 
@@ -336,6 +341,76 @@ impl PluginManager {
         }
 
         Ok(responses)
+    }
+
+    /// Cache-checked render-time highlight call.
+    ///
+    /// Iterates non-quarantined plugins, asks each `highlight()` until one
+    /// returns `Some`, caches and returns the result. Returns `None` if no
+    /// plugin handles the request — the host then falls through to plain
+    /// text. A plugin error increments its consecutive-error counter.
+    ///
+    /// Hot path: the lookup is a single blake3-truncated u64 hash + a
+    /// HashMap probe. Sub-microsecond on cache hit, which is the common case.
+    pub fn highlight_cached(
+        &mut self,
+        language: Option<&str>,
+        content: &str,
+    ) -> Option<HighlightResponse> {
+        if self.plugins.is_empty() {
+            return None;
+        }
+        let key = key_for(language, content);
+        if let Some(hit) = self.highlight_cache.get(key) {
+            return Some(hit);
+        }
+
+        let request = HighlightRequest {
+            language: language.map(str::to_string),
+            content: content.to_string(),
+        };
+
+        // Two-phase: collect the first non-None outcome with bookkeeping.
+        let mut chosen: Option<HighlightResponse> = None;
+        let mut failures: Vec<(String, String)> = Vec::new();
+
+        for plugin in &mut self.plugins {
+            let name = plugin.metadata().name.clone();
+            if self.quarantined.contains_key(&name) {
+                continue;
+            }
+            match plugin.highlight(&request) {
+                Ok(Some(resp)) => {
+                    chosen = Some(resp);
+                    self.error_counts.remove(&name);
+                    break;
+                }
+                Ok(None) => {
+                    self.error_counts.remove(&name);
+                }
+                Err(e) => failures.push((name, e.to_string())),
+            }
+        }
+
+        for (name, err) in failures {
+            self.record_failure(&name, "highlight", &err);
+        }
+
+        if let Some(ref resp) = chosen {
+            self.highlight_cache.insert(key, resp.clone());
+        }
+        chosen
+    }
+
+    /// Drop the highlight cache. Call after a plugin reload or theme
+    /// change so stale spans are not rendered.
+    pub fn clear_highlight_cache(&mut self) {
+        self.highlight_cache.clear();
+    }
+
+    /// Hit rate of the highlight cache, if any lookups have happened.
+    pub fn highlight_cache_hit_rate(&self) -> Option<f64> {
+        self.highlight_cache.hit_rate()
     }
 }
 

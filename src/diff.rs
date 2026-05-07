@@ -10,8 +10,10 @@ use std::cell::RefCell;
 use std::path::Path;
 
 // [NOTE] Syntax highlighting moved to plugin "syntax-highlight"
-// This module now provides plain-text diffs without highlighting
-// Install plugin for syntax highlighting: prog plugin install syntax-highlight
+// This module renders plain-text diffs by default. When a highlight
+// provider plugin is loaded (see progit-plugin-sdk::render::TokenSpan),
+// the renderer asks PluginManager::highlight_cached for spans and
+// applies them on top of the diff line-type background.
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiffMode {
@@ -356,7 +358,12 @@ impl DiffState {
     }
 }
 
-pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Option<Rect> {
+pub fn render_diff(
+    f: &mut ratatui::Frame,
+    area: Rect,
+    state: &DiffState,
+    mut plugin_manager: Option<&mut crate::plugins::PluginManager>,
+) -> Option<Rect> {
     use ratatui::layout::{Constraint, Direction, Layout};
     use ratatui::widgets::{List, ListItem, Paragraph};
 
@@ -420,14 +427,18 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
         let mut left_lines = Vec::new();
         let mut right_lines = Vec::new();
 
+        let language = crate::plugins::lang_detect::from_path(&file.path);
+
         let mut current_line_idx = 0;
         // Iterate over all hunks and their lines
         for hunk in &file.hunks {
             if !hunk.collapsed {
                 for line in &hunk.lines {
                     let is_selected = current_line_idx == state.cursor_y;
-                    left_lines.push(render_diff_line(&line.left, is_selected));
-                    right_lines.push(render_diff_line(&line.right, is_selected));
+                    let left_spans = highlight_for(plugin_manager.as_deref_mut(), language, &line.left);
+                    let right_spans = highlight_for(plugin_manager.as_deref_mut(), language, &line.right);
+                    left_lines.push(render_diff_line(&line.left, is_selected, left_spans.as_deref()));
+                    right_lines.push(render_diff_line(&line.right, is_selected, right_spans.as_deref()));
                     current_line_idx += 1;
                 }
             }
@@ -450,33 +461,83 @@ pub fn render_diff(f: &mut ratatui::Frame, area: Rect, state: &DiffState) -> Opt
     Some(chunks[0]) // Return file list area
 }
 
+/// Pull highlighted spans for a single optional `DiffLine`, if a plugin
+/// provider is loaded and recognises the language. Returns `None` for
+/// "no spans available, render plain text".
+fn highlight_for(
+    pm: Option<&mut crate::plugins::PluginManager>,
+    language: Option<&'static str>,
+    line: &Option<DiffLine>,
+) -> Option<Vec<progit_plugin_sdk::render::TokenSpan>> {
+    let line = line.as_ref()?;
+    let pm = pm?;
+    pm.highlight_cached(language, &line.content).map(|r| r.spans)
+}
+
 fn render_diff_line(
     line: &Option<DiffLine>,
     selected: bool,
+    spans: Option<&[progit_plugin_sdk::render::TokenSpan]>,
 ) -> Line<'static> {
     match line {
         Some(l) => {
-            let mut style = match l.line_type {
-                DiffLineType::Add => Style::default().bg(Color::Rgb(0, 50, 0)),
-                DiffLineType::Delete => Style::default().bg(Color::Rgb(50, 0, 0)),
-                DiffLineType::HunkHeader => Style::default().fg(Color::Cyan),
-                _ => Style::default(),
+            // Diff-row background: green for adds, red for deletes,
+            // selection grey wins over both. The plugin's per-token bg
+            // (rare) wins over this if present.
+            let line_bg = match l.line_type {
+                DiffLineType::Add => Some(Color::Rgb(0, 50, 0)),
+                DiffLineType::Delete => Some(Color::Rgb(50, 0, 0)),
+                _ => None,
             };
-
-            if selected {
-                style = style.bg(Color::Rgb(60, 60, 60));
-            }
+            let selection_bg = if selected { Some(Color::Rgb(60, 60, 60)) } else { None };
 
             let line_num = match l.line_number {
                 Some(n) => format!("{:4} ", n),
                 None => "     ".to_string(),
             };
+            let mut out = vec![Span::styled(line_num, Style::default().fg(Color::DarkGray))];
 
-            // Plain text rendering (syntax highlighting via plugin)
-            let mut s = vec![Span::styled(line_num, Style::default().fg(Color::DarkGray))];
-            s.push(Span::styled(l.content.clone(), style));
+            match (spans, &l.line_type) {
+                // Hunk headers stay cyan and never get plugin highlighting.
+                (_, DiffLineType::HunkHeader) => {
+                    out.push(Span::styled(l.content.clone(), Style::default().fg(Color::Cyan)));
+                }
+                (Some(spans), _) if !spans.is_empty() => {
+                    for span in spans {
+                        let mut style = Style::default();
+                        if let Some(rgb) = span.fg {
+                            style = style.fg(Color::Rgb(rgb.r, rgb.g, rgb.b));
+                        }
+                        // Background priority: selection > plugin > line_bg.
+                        if let Some(bg) = selection_bg {
+                            style = style.bg(bg);
+                        } else if let Some(rgb) = span.bg {
+                            style = style.bg(Color::Rgb(rgb.r, rgb.g, rgb.b));
+                        } else if let Some(bg) = line_bg {
+                            style = style.bg(bg);
+                        }
+                        if span.bold {
+                            style = style.add_modifier(Modifier::BOLD);
+                        }
+                        if span.italic {
+                            style = style.add_modifier(Modifier::ITALIC);
+                        }
+                        out.push(Span::styled(span.text.clone(), style));
+                    }
+                }
+                _ => {
+                    // Plain-text fallback (no plugin loaded, plugin declined,
+                    // or empty spans). Apply selection bg over the line bg.
+                    let style = match (selection_bg, line_bg) {
+                        (Some(bg), _) => Style::default().bg(bg),
+                        (None, Some(bg)) => Style::default().bg(bg),
+                        (None, None) => Style::default(),
+                    };
+                    out.push(Span::styled(l.content.clone(), style));
+                }
+            }
 
-            Line::from(s)
+            Line::from(out)
         }
         None => Line::from(Span::styled(
             " ".repeat(100),
