@@ -1,0 +1,22 @@
+{
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "description": "{{description}}",
+  "author": "{{author}}",
+  "license": "Apache-2.0",
+  "plugin_type": "utility",
+  "runtime": "lua",
+  "sdk_version": ">={{sdk_version}}",
+  "hooks": [
+    "on_issue_created"
+  ],
+  "capabilities": {
+    "network": false,
+    "network_allow": [],
+    "storage": true,
+    "env": false,
+    "memory_mb": 32,
+    "max_instructions": 5000000,
+    "http_timeout_secs": 5
+  }
+}

@@ -1,0 +1,49 @@
+# {{name}}
+
+{{description}}
+
+## Install
+
+```bash
+prog plugin install ./{{name}}
+```
+
+## Configure
+
+Add to `.project/config.kdl`:
+
+```kdl
+plugins {
+    {{name}} {
+        // your config keys here
+    }
+}
+```
+
+## Hooks
+
+This plugin reacts to:
+
+- `on_issue_created` — fires when a new issue is created.
+
+Add more hooks in `main.lua` and declare them in `.progit-plugin.json`.
+
+## Capabilities
+
+This plugin currently declares:
+
+- `storage = true` — keeps state in `.progit/plugins/{{name}}/state.json`
+- `network = false` — to enable outbound HTTP, set `network = true` and
+  list allowed hosts in `network_allow`.
+
+## Development
+
+The SDK ships LuaCATS type stubs. Point your editor at them in
+`.luarc.json` to get autocomplete and inline docs:
+
+```json
+{
+  "Lua.workspace.library": ["../progit-plugin-sdk/stubs"],
+  "Lua.diagnostics.globals": ["plugin", "context", "init"]
+}
+```

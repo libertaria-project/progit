@@ -117,6 +117,13 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
                 }
             }
         }
+
+        PluginAction::New { name, author } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::new_plugin(&project_root, &name, author.as_deref())?;
+        }
     }
 
     Ok(())

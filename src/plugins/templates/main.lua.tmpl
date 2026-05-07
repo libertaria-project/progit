@@ -1,0 +1,23 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- {{name}}: {{description}}
+
+plugin = {
+    name        = "{{name}}",
+    version     = "0.1.0",
+    author      = "{{author}}",
+    description = "{{description}}",
+    sdk_api     = "{{sdk_version}}",
+    hooks = {
+        on_issue_created = true,
+    },
+}
+
+function init()
+    log.info("{{name}} initialised")
+end
+
+---@param issue Issue
+function on_issue_created(issue)
+    log.info("New issue: " .. issue.title)
+    return { success = true }
+end

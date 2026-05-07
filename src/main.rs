@@ -132,6 +132,14 @@ pub(crate) enum PluginAction {
         #[command(subcommand)]
         action: IndexAction,
     },
+    /// Scaffold a new plugin in plugins/<name>/
+    New {
+        /// Plugin name (lowercase, kebab-case recommended)
+        name: String,
+        /// Plugin author (defaults to git user.name or "Anonymous")
+        #[arg(long)]
+        author: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
