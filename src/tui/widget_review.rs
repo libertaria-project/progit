@@ -333,6 +333,7 @@ fn render_comments_sidebar(frame: &mut Frame, app: &App, state: &ReviewState, ar
             )),
             Line::from(""),
             Line::from(Span::raw("Press 'c' to add a comment.")),
+            Line::from(Span::raw("Press 'S' to sync the review to the forge.")),
         ])
         .wrap(Wrap { trim: true });
 

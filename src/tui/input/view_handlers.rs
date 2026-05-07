@@ -471,6 +471,19 @@ pub(super) fn handle_review_key(app: &mut App, key: KeyEvent) -> KeyAction {
             KeyAction::Refresh
         }
 
+        // Sync local review comments to the configured forge.
+        //
+        // [DEBT] v1 stub: surfaces the CLI command that does the work.
+        // Full in-TUI push (MR-id resolution from local UUID → remote_id,
+        // SyncProvider lifecycle inside the render loop, async progress
+        // indicator) is Sprint D scope.
+        KeyCode::Char('S') => {
+            app.set_status(
+                "Push review comments via CLI: `prog mr review push <mr_id>`",
+            );
+            KeyAction::Refresh
+        }
+
         // Quit review mode
         KeyCode::Char('q') | KeyCode::Esc => {
             app.review_state = None;
