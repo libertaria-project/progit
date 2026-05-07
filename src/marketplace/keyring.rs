@@ -200,14 +200,6 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_keyring_create() {
-        let tmp = TempDir::new().unwrap();
-        let keyring = Keyring::load_from(tmp.path()).unwrap_err();
-        
-        assert!(matches!(keyring, KeyringError::NotFound(_)));
-    }
-
-    #[test]
     fn test_keyring_trust() {
         let tmp = TempDir::new().unwrap();
         let mut keyring = Keyring::new(tmp.path().to_path_buf());

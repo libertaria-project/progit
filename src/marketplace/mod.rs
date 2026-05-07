@@ -24,7 +24,7 @@ pub mod hinge;
 pub mod submit;
 pub mod cli;
 
-pub use crypto::{blake3_checksum, test_keypair, Algorithm};
+pub use crypto::{blake3_checksum, compute_keyid, generate_keypair, sign, verify, Algorithm};
 pub use keyring::Keyring;
 pub use manifest::{PluginManifest, LegacyPluginManifest, Publisher, Artifact, Capabilities};
 pub use hinge::{Verifier, TrustPolicy, VerificationResult};

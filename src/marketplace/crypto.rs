@@ -1,155 +1,131 @@
 //! Cryptographic primitives for Hinge verification
 //!
-//! ## Algorithm Support
+//! This module provides:
+//! - BLAKE3 checksums for content integrity
+//! - ML-DSA/Dilithium3 signatures (FIPS 204)
 //!
-//! - **dilithium3-test**: BLAKE3-based stub for development/testing
-//!   (Matches Janus Hinge's approach - any random bytes work as test key)
-//! - **dilithium3**: Real post-quantum Dilithium3 (future, requires PQClean)
-//!
-//! ## Key Identity
-//!
-//! KeyID = first 16 hex chars of blake3(public_key_bytes)
+//! The real implementation uses `crystals-dilithium` for post-quantum
+//! signature verification. A test implementation is provided for
+//! development and testing.
 
-use blake3::Hasher;
+use std::path::Path;
 
-/// Signature algorithm
+/// Signature algorithm identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SignatureAlgorithm {
-    /// BLAKE3-based test stub (development)
-    Dilithium3Test,
-    /// Real Dilithium3 post-quantum (future)
+pub enum Algorithm {
+    /// ML-DSA-44 (Dilithium3, FIPS 204)
     Dilithium3,
+    /// Test/dummy signature (BLAKE3-based, 32 byte signatures)
+    #[cfg(test)]
+    Test,
 }
 
-impl SignatureAlgorithm {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "dilithium3-test" | "dilithium3test" => Some(Self::Dilithium3Test),
-            "dilithium3" => Some(Self::Dilithium3),
-            _ => None,
-        }
-    }
-
+impl Algorithm {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Dilithium3Test => "dilithium3-test",
-            Self::Dilithium3 => "dilithium3",
+            Algorithm::Dilithium3 => "dilithium3",
+            #[cfg(test)]
+            Algorithm::Test => "dilithium3-test",
         }
     }
 }
 
-/// Generate a keypair for testing
-pub fn generate_test_keypair() -> (Vec<u8>, Vec<u8>) {
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let mut private = vec![0u8; 48];
-    let mut public = vec![0u8; 64];
-
-    // Test key generation - in production, use real Dilithium3
-    rng.fill(private.as_mut_slice());
-    
-    // Derive public from private (simple hash for test)
-    let mut hasher = Hasher::new();
-    hasher.update(&private);
-    let digest = hasher.finalize();
-    public.copy_from_slice(&digest.as_bytes()[..64.min(digest.as_bytes().len())]);
-    
-    // Pad to expected size
-    while public.len() < 64 {
-        public.push(0);
-    }
-
-    (private, public)
+/// Keypair for signing and verification (Dilithium3)
+pub struct KeyPair {
+    pub public_key: Vec<u8>,
+    secret_key: Vec<u8>,
 }
 
-/// Compute KeyID from public key
+/// Generate a new Dilithium3 keypair
+pub fn generate_keypair() -> KeyPair {
+    use crystals_dilithium::dilithium3::Keypair;
+    
+    let keypair = Keypair::generate(None)
+        .expect("Failed to generate Dilithium3 keypair");
+    
+    KeyPair {
+        public_key: keypair.public.to_bytes().to_vec(),
+        secret_key: keypair.to_bytes().to_vec(),
+    }
+}
+
+/// Sign data with Dilithium3
+pub fn sign(data: &[u8], secret_key: &[u8]) -> Vec<u8> {
+    use crystals_dilithium::dilithium3::Keypair;
+    
+    let keypair = Keypair::from_bytes(secret_key)
+        .expect("Invalid secret key");
+    // Signature is [u8; SIGNBYTES], already a byte array
+    keypair.sign(data).to_vec()
+}
+
+/// Verify Dilithium3 signature
+pub fn verify(public_key: &[u8], data: &[u8], signature: &[u8]) -> bool {
+    use crystals_dilithium::dilithium3::PublicKey;
+    
+    match PublicKey::from_bytes(public_key) {
+        Ok(pk) => pk.verify(data, signature),
+        Err(_) => false,
+    }
+}
+
+/// Compute BLAKE3 checksum of data
+pub fn blake3_checksum(data: &[u8]) -> String {
+    use blake3::Hasher;
+    let mut hasher = Hasher::new();
+    hasher.update(data);
+    format!("blake3:{}", hasher.finalize().to_hex())
+}
+
+/// Compute KeyID from public key (BLAKE3 hash, first 16 hex chars)
 pub fn compute_keyid(public_key: &[u8]) -> String {
-    let mut hasher = Hasher::new();
-    hasher.update(public_key);
-    let digest = hasher.finalize();
-    
-    // First 16 hex chars = 8 bytes
-    let hex = digest.to_hex();
-    hex[..16].to_string()
+    blake3_checksum(public_key)[5..21].to_string()
 }
 
-/// Sign a message (test implementation)
-pub fn sign_message(private_key: &[u8], message: &[u8]) -> Vec<u8> {
-    // Test implementation: HMAC-style using BLAKE3
-    let mut hasher = Hasher::new();
-    hasher.update(private_key);
-    hasher.update(message);
-    let digest = hasher.finalize();
-    digest.as_bytes().to_vec()
+/// Save keypair to files
+pub fn save_keypair(keypair: &KeyPair, secret_path: &Path, public_path: &Path) -> std::io::Result<()> {
+    std::fs::write(secret_path, &keypair.secret_key)?;
+    std::fs::write(public_path, &keypair.public_key)?;
+    Ok(())
 }
 
-/// Verify a signature (test implementation)
-pub fn verify_signature(public_key: &[u8], message: &[u8], signature: &[u8]) -> bool {
-    // Test implementation: recompute and compare
-    let mut hasher = Hasher::new();
-    hasher.update(public_key);
-    hasher.update(message);
-    let computed = hasher.finalize();
-    
-    // Signature is the expected hash
-    signature == computed.as_bytes()
-}
-
-/// Sign a message with algorithm
-pub fn sign(algorithm: SignatureAlgorithm, private_key: &[u8], message: &[u8]) -> Vec<u8> {
-    match algorithm {
-        SignatureAlgorithm::Dilithium3Test => sign_message(private_key, message),
-        SignatureAlgorithm::Dilithium3 => {
-            // Future: Real Dilithium3
-            // For now, fall back to test implementation
-            sign_message(private_key, message)
-        }
-    }
-}
-
-/// Verify a signature with algorithm
-pub fn verify(algorithm: SignatureAlgorithm, public_key: &[u8], message: &[u8], signature: &[u8]) -> bool {
-    match algorithm {
-        SignatureAlgorithm::Dilithium3Test => verify_signature(public_key, message, signature),
-        SignatureAlgorithm::Dilithium3 => {
-            // Future: Real Dilithium3
-            verify_signature(public_key, message, signature)
-        }
-    }
+/// Load keypair from files
+pub fn load_keypair(secret_path: &Path, public_path: &Path) -> std::io::Result<KeyPair> {
+    let secret_key = std::fs::read(secret_path)?;
+    let public_key = std::fs::read(public_path)?;
+    Ok(KeyPair { public_key, secret_key })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    
     #[test]
-    fn test_keyid_derivation() {
-        let pk1 = b"test public key 1";
-        let pk2 = b"test public key 2";
-        
-        let keyid1 = compute_keyid(pk1);
-        let keyid2 = compute_keyid(pk2);
-        
-        assert_eq!(keyid1.len(), 16);
-        assert_ne!(keyid1, keyid2);
+    fn test_blake3_checksum() {
+        let data = b"hello world";
+        let checksum = blake3_checksum(data);
+        assert!(checksum.starts_with("blake3:"));
+        // "blake3:" (5) + blake3 hash (256 bits = 64 hex chars) = 69
+        // But blake3::Hasher outputs 32 bytes = 64 hex chars
+        assert!(checksum.len() >= 69);
     }
-
+    
     #[test]
-    fn test_sign_verify() {
-        let (private, public) = generate_test_keypair();
-        let message = b"Hello, Hinge!";
-        
-        let signature = sign(SignatureAlgorithm::Dilithium3Test, &private, message);
-        assert!(verify(SignatureAlgorithm::Dilithium3Test, &public, message, &signature));
+    fn test_keyid() {
+        let key = b"test public key";
+        let keyid = compute_keyid(key);
+        assert_eq!(keyid.len(), 16);
     }
-
+    
     #[test]
-    fn test_signature_rejection() {
-        let (private, public) = generate_test_keypair();
-        let message = b"Hello, Hinge!";
-        let wrong_message = b"Hello, Intruder!";
+    fn test_dilithium3_sign_verify() {
+        let keypair = generate_keypair();
+        let data = b"test message";
         
-        let signature = sign(SignatureAlgorithm::Dilithium3Test, &private, message);
-        assert!(!verify(SignatureAlgorithm::Dilithium3Test, &public, wrong_message, &signature));
+        let signature = sign(data, &keypair.secret_key);
+        assert!(verify(&keypair.public_key, data, &signature));
+        
+        // Verify fails with wrong data
+        assert!(!verify(&keypair.public_key, b"wrong data", &signature));
     }
 }

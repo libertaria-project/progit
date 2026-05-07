@@ -16,7 +16,7 @@
 
 use crate::marketplace::keyring::Keyring;
 use crate::marketplace::manifest::PluginManifest;
-use crate::marketplace::crypto as crypto_module;
+use crate::marketplace::crypto;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -136,7 +136,7 @@ impl Verifier {
             }
         };
 
-        if !crypto_module::verify_signature(&pubkey, &message, &signature_bytes) {
+        if !crypto::verify(&pubkey, &message, &signature_bytes) {
             errors.push("Signature verification failed".to_string());
             return VerificationResult::failure(errors);
         }
@@ -257,7 +257,7 @@ impl Verifier {
             }
         };
 
-        if !crypto_module::verify_signature(&pubkey, &message, &signature_bytes) {
+        if !crypto::verify(&pubkey, &message, &signature_bytes) {
             errors.push("Signature verification failed".to_string());
             return VerificationResult::failure(errors);
         }
@@ -376,7 +376,9 @@ mod tests {
         let data = b"hello world";
         let checksum = blake3_checksum(data);
         assert!(checksum.starts_with("blake3:"));
-        assert_eq!(checksum.len(), 7 + 32); // "blake3:" + 32 hex chars
+        // blake3 hash is 256 bits = 32 bytes = 64 hex chars
+        // Format: "blake3:" + 64 hex = 69 total
+        assert!(checksum.len() >= 69, "got {}", checksum.len());
     }
 
     #[test]

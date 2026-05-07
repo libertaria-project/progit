@@ -50,41 +50,44 @@ fn trust_add(key_source: &str) -> Result<()> {
     let mut verifier = Verifier::new(TrustPolicy::Strict);
     
     // Determine if source is a URL, keyid, or special "core-team" keyword
-    let (keyid, public_key) = if key_source.starts_with("https://") || key_source.starts_with("http://") {
+    let keyid: String;
+    let public_key: Option<Vec<u8>>;
+    
+    if key_source.starts_with("https://") || key_source.starts_with("http://") {
         // Fetch public key from URL
         let response = reqwest::blocking::get(key_source)
             .context("Failed to fetch key from URL")?;
         
-        let public_key = response.bytes()
+        let pk_bytes = response.bytes()
             .context("Failed to read key data")?
             .to_vec();
         
-        let keyid = compute_keyid(&public_key);
+        keyid = compute_keyid(&pk_bytes);
+        public_key = Some(pk_bytes);
         println!("  {} Key fetched: {}", "✓".green(), keyid);
-        
-        (keyid, Some(public_key))
     } else if key_source == "progit-core-team" || key_source == "core-team" {
-        // Generate test key for core team
+        // Use the known test key for core team
         let test_key = b"progit-core-team-test-key-2026";
-        let keyid = compute_keyid(test_key);
+        keyid = compute_keyid(test_key);
+        public_key = Some(test_key.to_vec());
         println!("  {} Using ProGit Core Team test key: {}", "✓".green(), keyid);
-        (keyid, Some(test_key.to_vec()))
     } else if key_source.starts_with("progit-") && key_source.len() < 50 {
         // Treat as test key identifier
         let test_key = key_source.as_bytes();
-        let keyid = compute_keyid(test_key);
+        keyid = compute_keyid(test_key);
+        public_key = Some(test_key.to_vec());
         println!("  {} Using test key: {}", "✓".green(), keyid);
-        (keyid, Some(test_key.to_vec()))
     } else {
         // Assume it's a KeyID to trust directly (no public key available)
-        println!("  {} Trusting key by ID only: {}", "ℹ️".yellow(), key_source);
-        (key_source.to_string(), None)
-    };
+        keyid = key_source.to_string();
+        public_key = None;
+        println!("  {} Trusting key by ID only: {}", "ℹ️".yellow(), keyid);
+    }
     
     // Add key to keyring if we have it
-    if let Some(pk) = public_key {
+    if let Some(ref pk) = public_key {
         let mut keyring = Keyring::load_default();
-        keyring.add_key(&keyid, &pk)?;
+        keyring.add_key(&keyid, pk)?;
         println!("  {} Public key stored in keyring", "✓".green());
     }
     
