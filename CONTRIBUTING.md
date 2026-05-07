@@ -102,52 +102,50 @@ progit/
 
 ## 🌿 Branch Strategy
 
-ProGit uses a three-branch model:
+ProGit uses a two-branch model:
 
 ```
-forge  →  main  →  stable
- (dev)    (integration)  (releases)
+main  →  stable
+ (integration)  (releases)
 ```
 
 | Branch | Purpose | Merges Into |
 |--------|---------|-------------|
 | `stable` | Tagged releases only. Always deployable. What users download and build from. | — |
-| `main` | Integration branch. Reviewed, tested code. PRs land here. | `stable` (on release) |
-| `forge` | Agent and contributor landing zone. Work-in-progress, worktree branches, and experimental work merge here first. | `main` (after review) |
+| `main` | Integration branch. All reviewed, tested work lands here through merge requests. | `stable` (on release) |
 
 ### How it works
 
 **For contributors:**
-1. Branch off `forge` (or `main` for hotfixes)
-2. Do your work, push your branch
-3. Open a merge request targeting `forge`
-4. After review, it gets merged to `forge`
-5. Maintainers promote tested work from `forge` to `main`
+1. Branch off `main` for new work (or hotfixes)
+2. Do your work on a feature branch (`feat/...`, `fix/...`)
+3. Push your branch and open a merge request targeting `main`
+4. After review, it gets merged to `main`
+5. Maintainers cut releases by merging `main` to `stable` and tagging
 
 **For AI agents (Claude Code, etc.):**
-- Agents work in isolated git worktrees
-- Worktree branches target `forge`
-- After validation, merged to `forge` automatically
-- Maintainers review and promote to `main`
+- Agents work in isolated git worktrees off `main`
+- Worktree branches target `main` directly
+- After validation and review, merged to `main`
 
 **For releases:**
 - When `main` is stable and tested, it gets merged to `stable`
-- A version tag is created on `stable` (e.g., `v0.7.0-alpha`)
+- A version tag is created on `stable` (e.g., `v0.7.0-beta`)
 - Only tagged commits on `stable` are considered official releases
 
 **Rules:**
 - Never push directly to `stable` – it only receives merges from `main`
-- Never push untested code to `main` – use `forge` for work-in-progress
+- All work goes through merge requests targeting `main`
 - All commits follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/)
 
 ```bash
 # Start new work
 git fetch origin
-git checkout -b feat/my-feature origin/forge
+git checkout -b feat/my-feature origin/main
 
 # When done
 git push origin feat/my-feature
-# Open MR targeting forge
+# Open MR targeting main
 ```
 
 ---
@@ -158,7 +156,7 @@ git push origin feat/my-feature
 
 **Before submitting:**
 1. Search existing issues
-2. Try latest `forge` branch
+2. Try latest `main` branch
 3. Gather reproduction steps
 
 **When submitting:**
@@ -205,10 +203,10 @@ Mockups, examples, related issues
 
 **Workflow:**
 
-1. **Branch off `forge`**
+1. **Branch off `main`**
    ```bash
    git fetch origin
-   git checkout -b feat/your-feature origin/forge
+   git checkout -b feat/your-feature origin/main
    ```
 
 2. **Make Changes**
@@ -226,7 +224,7 @@ Mockups, examples, related issues
    ```bash
    git push origin feat/your-feature
    ```
-   - Open merge request targeting `forge`
+   - Open merge request targeting `main`
    - Link related issues
    - Request review
 

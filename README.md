@@ -282,15 +282,14 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full gu
 ### Branch Strategy
 
 ```
-forge  →  main  →  stable
- (dev)    (integration)  (releases)
+main  →  stable
+ (integration)  (releases)
 ```
 
-- **`forge`** – where contributors and AI agents land their work
-- **`main`** – reviewed, tested code
-- **`stable`** – tagged releases only
+- **`main`** – integration branch. All work lands here through reviewed merge requests.
+- **`stable`** – tagged releases only. Receives merges from `main` on release.
 
-Branch off `forge`, open MRs targeting `forge`. See [CONTRIBUTING.md](CONTRIBUTING.md#-branch-strategy) for details.
+Branch off `main`, open MRs targeting `main`. See [CONTRIBUTING.md](CONTRIBUTING.md#-branch-strategy) for details.
 
 **Quick Links:**
 - [Issue Tracker](https://git.sovereign-society.org/ProGit/progit/issues)
