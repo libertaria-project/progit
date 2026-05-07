@@ -7,7 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes yet — `forge` is at the `v0.7.0-beta` release commit. Next focus: Code Review Mode (`c` to comment on a diff line, the feature designed to remove the browser from the PR loop) and plugin marketplace expansion (more community plugins, install-from-URL)._
+### Added
+- **Render-time plugin contract** — plugins can now provide syntax-
+  highlighted spans for any code view. New `progit_plugin_sdk::render`
+  module: `TokenSpan`, `Rgb`, `HighlightRequest`, `HighlightResponse`.
+  `Plugin::highlight()` is the synchronous host hook; default impl
+  returns `None` so legacy plugins ignore it.
+- **Diff renderer is plugin-aware.** `diff.rs::render_diff` consults a
+  loaded highlight provider on each line, falls through to plain text
+  when no plugin handles the language. Backed by a `blake3`-keyed
+  cache (`HighlightCache`) with bulk-evict-at-cap (4096 entries) so
+  the Lua roundtrip happens once per unique line, not once per frame.
+- **Language detection** for 13 file extensions
+  (`plugins/lang_detect.rs`), shipped to the plugin via
+  `HighlightRequest.language`.
+- **Manifest-driven runtime configuration.** `PluginManager` now
+  reads `.progit-plugin.json` next to the entry point and derives
+  `LuaPluginOptions` (memory cap, instruction cap, HTTP timeout,
+  network allowlist) from `capabilities`. SDK API version is
+  cross-checked at load.
+- **Per-plugin failure isolation with TUI surface.** Five consecutive
+  failures quarantine a plugin; `P` (or `Q` as alias) opens the
+  plugin manager modal, which now flags quarantined plugins in red
+  with the failure reason. Press `u` to clear quarantine.
+- **`prog plugin new <name>`** scaffold command — generates a fresh
+  plugin directory (`main.lua`, `.progit-plugin.json`, `README.md`,
+  `.luarc.json`) from embedded templates wired to the SDK's LuaCATS
+  stubs.
+
+### Changed
+- **Trait Firewall consolidated.** Deleted dead parallel `Plugin` /
+  `PluginEngine` trait pair and `LuaPluginEngine` struct in
+  `progit/src/plugins/{sdk,lua_engine}.rs` — they were never wired
+  in. The published `progit-plugin-sdk` is now the single source of
+  truth.
+- `PluginEvent` re-exported from the SDK so existing call sites
+  (`crate::plugins::PluginEvent::...`) keep resolving.
+- SPDX headers in `plugins/*` and `tui/widget_plugins.rs` migrated
+  EUPL-1.2 → LCL-1.0 to match the host crate's declared license.
+
+### Fixed
+- `.envrc` was tracked in HEAD with local filesystem paths; removed
+  from working tree. (Note: file remains reachable in git history;
+  rotate any sensitive value or run a history rewrite separately.)
+- `.gitignore` extended with operational/agent dirs (`.claude`,
+  `.agents`, `.kiro`, `CLAUDE.md`, etc.) and Cloudflare Wrangler
+  cache (`.wrangler/`) — repo firewall doctrine.
+
+### Plugins (this release cycle)
+- `slack-notify` v1.1.0 — rewritten against the v0.2 injected stdlib
+  (real `http.post` / `log.*` / `json.encode`); declares network
+  capability with `hooks.slack.com` allowlist.
+- `syntax-highlight` v1.0.0 — pure-Lua highlighter for 12 languages
+  (rust, python, js/ts, go, c/cpp, bash, json, yaml, lua, toml +
+  basic markdown). The flagship v0.2 plugin proving the render-time
+  hook end-to-end. ~80% of syntect quality, 0 KB host binary cost.
+- `git-hooks` v1.0.0 + `forgejo-notify` v1.0.0 — manifests added
+  with explicit capability declarations. Silences the v0.2
+  deprecation warning.
+- `syntax-highlight-wasm/` — January-2026 syntect-via-Rust-rlib
+  scaffold preserved as documentation of intent for the future
+  WASM runtime path. NOT runnable today.
+
+
 
 ## [0.7.0-beta] - 2026-05-06
 
