@@ -62,6 +62,7 @@ logs/
 .env
 .env.local
 .env.*.local
+.envrc
 
 # Package managers
 node_modules/
@@ -72,14 +73,12 @@ node_modules/
 
 
 # Agent / AI operational dirs
-.claude/
 .agents/
-.agent/
-.kiro/
-CLAUDE.md
 AGENTS.md
-GEMINI.md
 
 # Editor / IDE
 .vscode/
 .idea/
+
+# Cloudflare Wrangler cache
+.wrangler/
