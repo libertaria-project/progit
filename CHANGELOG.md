@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Added (Sprint C — review-comment forge sync)
+- **`prog mr review push <mr_id>`** pushes the latest local review's
+  line comments to the configured forge. Idempotent (re-runs are
+  no-ops). Reports synced/already-synced/skipped counts.
+- **`SyncProvider::push_review_comments`** trait method, implemented
+  for both Forgejo and GitLab. Forgejo creates one PullReview with
+  inline comments per push; GitLab creates one Discussion per
+  comment with `position.text` payload built from MR `diff_refs`.
+- **`ReviewComment.external_ids: HashMap<String, String>`** — keyed
+  by provider name (`"forgejo"`, `"gitlab"`). Presence of a key is
+  the idempotency signal. Default-empty so v0.1 reviews on disk
+  migrate forward losslessly.
+- **`crate::review_sync::position`** module — verifies a comment's
+  anchor (`file_path`, `line_number`, `commit_sha`) exists at the
+  named commit before pushing. Stale anchors get a `log::warn!` and
+  are skipped per Sprint C-heavy decision (4a) — never abort the
+  whole batch over one bad anchor.
+- **`S` keybinding** in code review mode advertises the CLI command
+  (full in-TUI push is Sprint D scope).
+
+### Added (Sprint A+B — plugin economy)
 - **Render-time plugin contract** — plugins can now provide syntax-
   highlighted spans for any code view. New `progit_plugin_sdk::render`
   module: `TokenSpan`, `Rgb`, `HighlightRequest`, `HighlightResponse`.
