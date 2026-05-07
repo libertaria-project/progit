@@ -55,8 +55,8 @@ pub fn sign(data: &[u8], secret_key: &[u8]) -> Vec<u8> {
     
     let keypair = Keypair::from_bytes(secret_key)
         .expect("Invalid secret key");
-    // Signature is [u8; SIGNBYTES], already a byte array
-    keypair.sign(data).to_vec()
+    let sig = keypair.sign(data);
+    sig.to_vec()
 }
 
 /// Verify Dilithium3 signature
