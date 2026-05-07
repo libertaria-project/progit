@@ -113,6 +113,7 @@ impl ReviewState {
             created_at: chrono::Utc::now().to_rfc3339(),
             resolved: false,
             replies: vec![],
+            external_ids: std::collections::HashMap::new(),
         };
 
         // Add to local state
