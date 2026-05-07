@@ -13,6 +13,7 @@ mod fuzzy;
 mod git;
 mod hooks;
 mod issue;
+mod marketplace;
 mod mr;
 mod panopticum;
 mod plugins;
@@ -32,6 +33,7 @@ use clap::{Parser, Subcommand};
 use colored::*;
 
 use crate::git::detect_repo;
+use crate::marketplace::cli::{handle_trust_command, TrustAction};
 use crate::storage::paths;
 
 /// ProGit - Lean Git Issue Tracker
@@ -79,6 +81,11 @@ enum Commands {
     Plugin {
         #[command(subcommand)]
         action: PluginAction,
+    },
+    /// Manage trusted publisher keys (Hinge security)
+    Trust {
+        #[command(subcommand)]
+        action: TrustAction,
     },
     /// Internal: Interactive rebase editor (triggered by git)
     #[command(hide = true)]
@@ -140,6 +147,11 @@ pub(crate) enum PluginAction {
         /// Plugin author (defaults to git user.name or "Anonymous")
         #[arg(long)]
         author: Option<String>,
+    },
+    /// Verify plugin integrity (Hinge signature verification)
+    Verify {
+        /// Plugin name to verify
+        name: String,
     },
 }
 
@@ -307,10 +319,75 @@ fn run_review_push(provider: &dyn crate::sync::SyncProvider, mr_id: u64) -> Resu
     Ok(())
 }
 
+/// Handle progit:// URL scheme
+fn handle_deeplink(url: &str) -> Result<()> {
+    use colored::*;
+    
+    let parts: Vec<&str> = url.split('/').collect();
+    
+    match parts[..] {
+        ["install", plugin] => {
+            let (name, version) = match plugin.split('@').collect::<Vec<_>>()[..] {
+                [n, v] => (n, Some(v)),
+                [n] => (n, None),
+                _ => (plugin, None),
+            };
+            
+            println!("{} Installing plugin '{}'", "📦".cyan(), name);
+            if let Some(v) = version {
+                println!("   Version: {}", v);
+            }
+            println!();
+            println!("Run: {}", format!("prog plugin install {}", name).yellow());
+            println!();
+            println!("Then verify: {}", format!("prog plugin verify {}", name).yellow());
+        }
+        ["verify", plugin] => {
+            println!("{} Verifying plugin '{}'", "🔍".cyan(), plugin);
+            println!();
+            println!("Run: {}", format!("prog plugin verify {}", plugin).yellow());
+        }
+        ["update", plugin] => {
+            println!("{} Updating plugin '{}'", "🔄".cyan(), plugin);
+            println!();
+            println!("Run: {}", format!("prog plugin update {}", plugin).yellow());
+        }
+        ["uninstall", plugin] => {
+            println!("{} Uninstalling plugin '{}'", "🗑️".cyan(), plugin);
+            println!();
+            println!("Run: {}", format!("prog plugin remove {}", plugin).yellow());
+        }
+        ["search", query] => {
+            println!("{} Searching plugins for '{}'", "🔎".cyan(), query);
+            println!();
+            println!("Run: {}", format!("prog plugin search {}", query).yellow());
+        }
+        ["trust", keyid] => {
+            println!("{} Trusting key '{}'", "🔑".cyan(), keyid);
+            println!();
+            println!("Run: {}", format!("prog trust add {}", keyid).yellow());
+        }
+        _ => {
+            eprintln!("{} Unknown deeplink: progit://{}", "⚠️".yellow(), url);
+            eprintln!("   Supported: install, verify, update, uninstall, search, trust");
+        }
+    }
+    
+    Ok(())
+}
+
 fn main() -> Result<()> {
     // Initialize Logger — failure is non-fatal, continue without logging
     let _ = tui_logger::init_logger(log::LevelFilter::Trace);
     tui_logger::set_default_level(log::LevelFilter::Info);
+
+    // 0. Check for deeplinks (progit://install/plugin)
+    for arg in std::env::args() {
+        if let Some(url) = arg.strip_prefix("progit://") {
+            handle_deeplink(url)?;
+            return Ok(());
+        }
+    }
 
     // 1. Detect Root
     let project_root = workspace::find_project_root()?;
@@ -725,6 +802,9 @@ fn main() -> Result<()> {
         }
         Some(Commands::Plugin { action }) => {
             cli::handle_plugin_command(action)?;
+        }
+        Some(Commands::Trust { action }) => {
+            handle_trust_command(action)?;
         }
         Some(Commands::Hooks { action }) => {
             cli::handle_hooks_command(action, &project_root)?;

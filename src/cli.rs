@@ -124,6 +124,9 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
                 .unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::new_plugin(&project_root, &name, author.as_deref())?;
         }
+        PluginAction::Verify { name } => {
+            crate::marketplace::cli::handle_plugin_verify(&name)?;
+        }
     }
 
     Ok(())
