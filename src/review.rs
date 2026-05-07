@@ -318,6 +318,32 @@ mod tests {
     }
 
     #[test]
+    fn external_ids_round_trip_with_values() {
+        // After a successful forge push, external_ids is non-empty.
+        // It must persist through serde load/save cycles unchanged.
+        let mut ids = HashMap::new();
+        ids.insert("forgejo".to_string(), "1234".to_string());
+        ids.insert("gitlab".to_string(), "98765".to_string());
+
+        let comment = ReviewComment {
+            id: "c1".into(),
+            file_path: "src/main.rs".into(),
+            line_number: 10,
+            commit_sha: "abc".into(),
+            text: "comment".into(),
+            author: "alice".into(),
+            created_at: "2026-05-07T12:00:00Z".into(),
+            resolved: false,
+            replies: vec![],
+            external_ids: ids,
+        };
+        let json = serde_json::to_string(&comment).unwrap();
+        let back: ReviewComment = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.external_ids.get("forgejo"), Some(&"1234".to_string()));
+        assert_eq!(back.external_ids.get("gitlab"), Some(&"98765".to_string()));
+    }
+
+    #[test]
     fn loads_v01_review_without_external_ids_field() {
         // Pre-Sprint-C reviews don't have `external_ids` in their JSON.
         // Serde must default to an empty map — losslessly migrating forward.

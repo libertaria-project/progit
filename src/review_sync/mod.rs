@@ -16,3 +16,6 @@
 //! stale anchor (e.g. after the MR was rebased).
 
 pub mod position;
+
+#[cfg(test)]
+mod contract_tests;
