@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.8.0-beta] - 2026-05-09
+
+### Beta Promotion — Sovereign Data Plane
+
+This release lands the **`GitBackend` trait** and two interchangeable
+backend implementations behind a single `forge-backend` feature flag.
+The TUI can now route every git data-plane operation through a stable
+trait surface without caring whether bytes live on local disk (via
+`gix`) or in a sidecar `progit-forged` daemon (via gRPC). The trait
+abstraction is validated end-to-end by the new `prog clone` subcommand,
+which routes the same code path against both backends.
+
+Default builds are unchanged in size and behaviour — every new
+capability is opt-in.
+
+### Added (data plane — `forge-backend` feature)
+
+- **`GitBackend` trait** (re-exported from `progit-forge-client`) —
+  wire-independent abstraction for git data: `create_repo`,
+  `delete_repo`, `list_refs`, `push` (refs + optional pack),
+  `fetch`, `create_ephemeral_branch`. Trait types
+  (`RefEntry`, `RefUpdate`, `PushOutcome`, `EphemeralBranch`,
+  `BackendError`) are wire-version-stable.
+- **`LocalGitBackend`** at `progit::git::backend::LocalGitBackend` —
+  operates on a local-disk bare git directory via `gix`. Pack ingestion
+  via `gix_pack::Bundle::write_to_directory` (same pipeline as the
+  daemon). Strict CAS pre-check on every ref update mirrors the
+  daemon's sled-backed semantics — backend swap-out is byte-equivalent
+  at the ref-update layer.
+- **`ForgedBackend`** (re-exported) — daemon-backed `GitBackend` impl
+  for users who run a sidecar `progit-forged`. Cheap-clone, async,
+  cancellable.
+- **`prog clone <endpoint> <repo> [dest]`** subcommand — first
+  user-facing call site routed through `Box<dyn GitBackend>`. Reads
+  from a `ForgedBackend` (gRPC source) and writes into a
+  `LocalGitBackend` (local-disk sink). Same `clone_repo` function
+  works for any pair of backends — daemon→local, local→daemon, or
+  daemon→daemon. Subcommand bypasses workspace detection so it works
+  in any directory.
+- **Default-off feature flag.** Default build: 6.4 MB stripped
+  (unchanged from 0.7). With `--features forge-backend`: 6.7-8.3 MB
+  stripped depending on toolchain LTO behaviour. Comfortably under
+  the 10 MB doctrine cap; users who don't need the trait don't pay.
+
 ### Added (Sprint C — review-comment forge sync)
 - **`prog mr review push <mr_id>`** pushes the latest local review's
   line comments to the configured forge. Idempotent (re-runs are

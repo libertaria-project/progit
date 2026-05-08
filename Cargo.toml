@@ -1,6 +1,6 @@
 [package]
 name = "progit"
-version = "0.7.0-beta"
+version = "0.8.0-beta"
 edition = "2021"
 authors = ["Markus Maiwald"]
 description = "⚡ Blazing-fast terminal issue tracker with Kanban, GitLab/Forgejo sync, and intelligent time tracking"
