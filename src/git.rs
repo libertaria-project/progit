@@ -12,6 +12,12 @@ pub mod widget_gitbar;
 #[cfg(feature = "forge-backend")]
 pub mod backend;
 
+// Clone-via-trait — first call site demonstrating the GitBackend abstraction.
+// Generic over both source and destination backends, so the same code drives
+// daemon→local, local→daemon, and daemon→daemon flows.
+#[cfg(feature = "forge-backend")]
+pub mod clone;
+
 // Re-export public API
 pub use repository::{
     create_branch, create_remote_branch, delete_branch, detect_repo,

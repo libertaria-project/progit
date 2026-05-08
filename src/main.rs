@@ -98,6 +98,21 @@ enum Commands {
         #[command(subcommand)]
         action: HooksAction,
     },
+    /// Clone a repository from a progit-forged daemon into a local backend.
+    ///
+    /// Demonstrates the GitBackend trait abstraction: source and destination
+    /// are both implementations of the same trait, so the clone code path
+    /// is identical regardless of where the bytes live.
+    #[cfg(feature = "forge-backend")]
+    Clone {
+        /// Daemon endpoint URL, e.g. `http://127.0.0.1:7421`
+        endpoint: String,
+        /// Repository name on the daemon
+        repo: String,
+        /// Local destination directory (created if missing). Default: current directory.
+        #[arg(default_value = ".")]
+        dest: std::path::PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -328,6 +343,54 @@ fn run_review_push(provider: &dyn crate::sync::SyncProvider, mr_id: u64) -> Resu
 }
 
 /// Handle progit:// URL scheme
+#[cfg(feature = "forge-backend")]
+fn handle_clone(
+    endpoint: &str,
+    repo: &str,
+    dest: &std::path::Path,
+) -> Result<()> {
+    use colored::*;
+    use progit::git::backend::{ForgedBackend, LocalGitBackend};
+    use progit::git::clone::clone_repo;
+
+    println!(
+        "{} Cloning {} from {} into {}",
+        "📦".cyan(),
+        repo.bright_white(),
+        endpoint.dimmed(),
+        dest.display().to_string().dimmed()
+    );
+
+    // Build a tokio runtime on the fly — the rest of the CLI is sync.
+    // The runtime is dropped after the clone completes.
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| anyhow::anyhow!("tokio runtime: {e}"))?;
+
+    runtime.block_on(async {
+        let source = ForgedBackend::connect(endpoint.to_string())
+            .await
+            .map_err(|e| anyhow::anyhow!("connect to {endpoint}: {e}"))?;
+        let local_dest = LocalGitBackend::new(dest)
+            .map_err(|e| anyhow::anyhow!("init local backend at {}: {e}", dest.display()))?;
+
+        let outcome = clone_repo(&source, repo, &local_dest, repo).await?;
+
+        println!(
+            "{} Cloned {} ref(s), {} accepted, {} rejected, {} pack bytes",
+            "✓".green(),
+            outcome.refs_total,
+            outcome.refs_accepted,
+            outcome.refs_rejected,
+            outcome.pack_bytes
+        );
+        Ok::<(), anyhow::Error>(())
+    })?;
+
+    Ok(())
+}
+
 fn handle_deeplink(url: &str) -> Result<()> {
     use colored::*;
     
@@ -394,6 +457,22 @@ fn main() -> Result<()> {
         if let Some(url) = arg.strip_prefix("progit://") {
             handle_deeplink(url)?;
             return Ok(());
+        }
+    }
+
+    // 0b. Subcommands that should run BEFORE workspace detection.
+    // `prog clone` writes a new local backend at the dest path; it does
+    // NOT need an existing ProGit project at the current working directory.
+    // We do a fast peek at argv[1] rather than parsing the full clap tree
+    // here — full parse still happens later for normal commands.
+    #[cfg(feature = "forge-backend")]
+    {
+        let argv: Vec<String> = std::env::args().collect();
+        if argv.len() >= 2 && argv[1] == "clone" {
+            let cli = Cli::parse();
+            if let Some(Commands::Clone { endpoint, repo, dest }) = cli.command {
+                return handle_clone(&endpoint, &repo, &dest);
+            }
         }
     }
 
@@ -819,6 +898,10 @@ fn main() -> Result<()> {
         }
         Some(Commands::RebaseEditor { path }) => {
             crate::rebase::run(&path)?;
+        }
+        #[cfg(feature = "forge-backend")]
+        Some(Commands::Clone { endpoint, repo, dest }) => {
+            handle_clone(&endpoint, &repo, &dest)?;
         }
         None => {
             // No command - run TUI

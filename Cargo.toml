@@ -116,3 +116,9 @@ path = "src/main.rs"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+# Daemon as a dev-dep so integration tests can spin up a real progit-forged
+# in-process. Only used by tests gated on `forge-backend`; release builds do
+# not pull this. Adds gix + sled + tonic to the test compilation only.
+progit-forged = { path = "../progit-forged" }
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = "0.12"
