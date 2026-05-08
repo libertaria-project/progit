@@ -7,6 +7,11 @@ pub mod blame;
 pub mod repository;
 pub mod widget_gitbar;
 
+// Optional GitBackend trait + LocalGitBackend (gix) + ForgedBackend
+// (re-exported from progit-forge-client). Enabled with --features=forge-backend.
+#[cfg(feature = "forge-backend")]
+pub mod backend;
+
 // Re-export public API
 pub use repository::{
     create_branch, create_remote_branch, delete_branch, detect_repo,

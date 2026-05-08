@@ -60,10 +60,43 @@ mlua = { version = "0.11.5", features = ["luajit", "vendored", "send"] }
 dirs = "6.0.0"
 pulldown-cmark = "0.13.0"
 
+# --- forge-backend feature ---
+# Optional deps for the GitBackend trait + LocalGitBackend (gix-based).
+# Enabled by `--features=forge-backend`. Default build does NOT pull these.
+async-trait = { version = "0.1", optional = true }
+gix = { version = "0.69", default-features = false, features = ["max-performance-safe"], optional = true }
+gix-pack = { version = "0.56", optional = true }
+gix-hash = { version = "0.15", optional = true }
+gix-features = { version = "0.39", features = ["progress"], optional = true }
+gix-object = { version = "0.46", optional = true }
+progit-forge-client = { path = "../progit-forge-client", optional = true }
+# sha1 + hex used by the local backend's pack helpers and test fixtures.
+# Both are tiny (< 100 KB combined) and avoid awkward indirection through
+# gix-features re-exports.
+sha1 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+flate2 = { version = "1.0", optional = true }
+
 [features]
 default = []
 keyring-secrets = ["dep:keyring"]  # OS keyring for token storage (adds ~1.7MB on Linux)
-web = ["tokio", "axum", "askama"]
+web = ["dep:tokio", "dep:axum", "dep:askama"]
+# Opt-in git data plane: defines the GitBackend trait + LocalGitBackend (gix)
+# + ForgedBackend (re-exported from progit-forge-client). Adds ~3MB to the
+# binary; default off so the minimal TUI stays under the 8MB doctrine target.
+forge-backend = [
+    "dep:async-trait",
+    "dep:tokio",
+    "dep:gix",
+    "dep:gix-pack",
+    "dep:gix-hash",
+    "dep:gix-features",
+    "dep:gix-object",
+    "dep:progit-forge-client",
+    "dep:sha1",
+    "dep:hex",
+    "dep:flate2",
+]
 
 [profile.release]
 opt-level = "z"        # Optimize for size (vs "3" for speed)
