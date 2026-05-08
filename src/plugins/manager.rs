@@ -54,7 +54,6 @@ impl PluginManager {
     /// Load plugins from a specific directory.
     pub fn load_from_dir(&mut self, dir: &Path, context: &PluginContext) -> usize {
         if !dir.exists() {
-            log::info!("No plugins directory found at {:?}", dir);
             return 0;
         }
 
@@ -62,7 +61,6 @@ impl PluginManager {
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
             Err(e) => {
-                log::warn!("Failed to read plugins directory {:?}: {}", dir, e);
                 return 0;
             }
         };
@@ -74,10 +72,8 @@ impl PluginManager {
                 match self.load_plugin(&path, context) {
                     Ok(()) => {
                         loaded += 1;
-                        log::info!("Loaded plugin: {}", path.display());
                     }
                     Err(e) => {
-                        log::warn!("Failed to load plugin {}: {}", path.display(), e);
                     }
                 }
             } else if path.is_dir() {
@@ -96,12 +92,11 @@ impl PluginManager {
                     match self.load_plugin(&lua_path, context) {
                         Ok(()) => {
                             loaded += 1;
-                            log::info!("Loaded plugin from directory: {}", path.display());
                         }
                         Err(e) => {
-                            log::warn!("Failed to load plugin {}: {}", path.display(), e);
                         }
                     }
+                } else {
                 }
             }
         }
@@ -117,25 +112,69 @@ impl PluginManager {
     fn load_plugin(&mut self, path: &Path, context: &PluginContext) -> Result<()> {
         let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
-        let mut plugin: Box<dyn Plugin> = match extension {
-            "lua" => {
-                let options = self.options_from_neighbouring_manifest(path, context);
-                let lp = LuaPlugin::load_with_options(path, options)
-                    .context(format!("Failed to load Lua plugin from {:?}", path))?;
+
+        // Load plugin with panic isolation
+        let load_result = if extension == "lua" {
+            let options = self.options_from_neighbouring_manifest(path, context);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                LuaPlugin::load_with_options(path, options)
+            }))
+        } else {
+            Err(std::panic::panic_any("Unknown plugin extension"))
+        };
+
+        let mut plugin: Box<dyn Plugin> = match load_result {
+            Ok(Ok(lp)) => {
                 Box::new(lp)
             }
-            // WASM support can be added here when ready:
-            // "wasm" => Box::new(WasmPlugin::load(path)?),
-            _ => {
-                anyhow::bail!("Unknown plugin extension: {}", extension);
+            Ok(Err(e)) => {
+                anyhow::bail!("Failed to load Lua plugin from {:?}: {}", path, e);
+            }
+            Err(panic_info) => {
+                let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic".to_string()
+                };
+                anyhow::bail!("Plugin loading panicked: {}", msg);
             }
         };
 
-        plugin
-            .init(context)
-            .context("Failed to initialize plugin")?;
+        
+        // Use Box::into_raw to prevent automatic drop on panic
+        let plugin_ptr = Box::into_raw(plugin);
+        
+        let init_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // SAFETY: plugin_ptr is valid, we own it
+            unsafe { (*plugin_ptr).init(context) }
+        }));
+        
+        match init_result {
+            Ok(Ok(())) => {
+                // Re-box the raw pointer and push
+                self.plugins.push(unsafe { Box::from_raw(plugin_ptr) });
+            }
+            Ok(Err(e)) => {
+                // SAFETY: Init failed, drop the plugin
+                unsafe { drop(Box::from_raw(plugin_ptr)) };
+                return Err(anyhow::anyhow!("Failed to initialize plugin: {}", e));
+            }
+            Err(panic_info) => {
+                let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "Unknown panic".to_string()
+                };
+                // SAFETY: Init panicked, drop the plugin
+                unsafe { drop(Box::from_raw(plugin_ptr)) };
+                return Err(anyhow::anyhow!("Plugin init panicked: {}", msg));
+            }
+        }
 
-        self.plugins.push(plugin);
         Ok(())
     }
 
@@ -412,10 +451,83 @@ impl PluginManager {
     pub fn highlight_cache_hit_rate(&self) -> Option<f64> {
         self.highlight_cache.hit_rate()
     }
+
+    /// Dispatch a custom command to plugins that support the OnCommand hook.
+    ///
+    /// Plugins return `Some(result)` if they handle the command, `None` otherwise.
+    /// The first plugin that handles the command "wins" - subsequent plugins are
+    /// not consulted. This allows one plugin to own a command namespace.
+    pub fn dispatch_command(
+        &mut self,
+        command: &str,
+        args: &[String],
+    ) -> Option<CommandResult> {
+        let hook = PluginHook::OnCommand(command.to_string());
+        let data = serde_json::json!({
+            "command": command,
+            "args": args
+        });
+
+        
+        // Two-phase: collect result first, then update bookkeeping
+        let mut pending_failure: Option<(String, String)> = None;
+
+        for plugin in &mut self.plugins {
+            let name = plugin.metadata().name.clone();
+            let hooks = plugin.metadata().hooks.clone();
+            
+            if self.quarantined.contains_key(&name) {
+                continue;
+            }
+            let supports = plugin.supports_hook(&hook);
+            
+            if self.quarantined.contains_key(&name) {
+                continue;
+            }
+            
+            if !supports {
+                continue;
+            }
+
+            let result = plugin.execute_hook(&hook, &data);
+            
+            match result {
+                Ok(response) => {
+                    self.error_counts.remove(&name);
+                    return Some(CommandResult {
+                        plugin: name,
+                        success: response.get("success").and_then(|v| v.as_bool()).unwrap_or(true),
+                        output: response.get("output").and_then(|v| v.as_str()).map(String::from),
+                        error: response.get("error").and_then(|v| v.as_str()).map(String::from),
+                        data: response,
+                    });
+                }
+                Err(e) => {
+                    pending_failure = Some((name, e.to_string()));
+                }
+            }
+        }
+
+        if let Some((name, err)) = pending_failure {
+            self.record_failure(&name, &format!("command:{}", command), &err);
+        }
+
+        None
+    }
 }
 
 fn hook_label(hook: &PluginHook) -> String {
     format!("{:?}", hook)
+}
+
+/// Result of a plugin command execution
+#[derive(Debug)]
+pub struct CommandResult {
+    pub plugin: String,
+    pub success: bool,
+    pub output: Option<String>,
+    pub error: Option<String>,
+    pub data: serde_json::Value,
 }
 
 #[cfg(test)]

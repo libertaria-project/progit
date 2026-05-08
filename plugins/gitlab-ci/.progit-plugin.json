@@ -3,12 +3,12 @@
   "config_schema": {
     "gitlab_api_url": {
       "description": "GitLab API base URL (e.g., https://gitlab.com/api/v4)",
-      "required": true,
+      "required": false,
       "type": "string"
     },
     "gitlab_token": {
       "description": "GitLab Personal Access Token with read_api scope",
-      "required": true,
+      "required": false,
       "secret": true,
       "type": "string"
     }

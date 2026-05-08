@@ -1,0 +1,39 @@
+{
+  "author": "ProGit Team",
+  "capabilities": {
+    "env": false,
+    "http_timeout_secs": 5,
+    "max_instructions": 5000000,
+    "memory_mb": 16,
+    "network": false,
+    "network_allow": [],
+    "storage": false
+  },
+  "config_schema": {
+    "properties": {
+      "require_issue_ref": {
+        "default": false,
+        "description": "If true, blocks push when commit message contains no #N reference",
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "description": "Commit hygiene enforcement and issue auto-close from commit messages",
+  "homepage": "https://git.sovereign-society.org/ProGit/progit-plugins",
+  "hooks": [
+    "on_sync_push",
+    "on_issue_updated"
+  ],
+  "license": "LUL-1.0",
+  "name": "git-hooks",
+  "plugin_type": "policy",
+  "runtime": "lua",
+  "sdk_version": ">=0.2",
+  "signature": {
+    "algorithm": "dilithium3-test",
+    "keyid": "18a10eb52cf3c001",
+    "signature": "YL6eElS7OLT4P9Nfk0hhQCyAsPIPlBxgXIlJMBDaT6I="
+  },
+  "version": "1.0.0"
+}

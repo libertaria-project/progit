@@ -70,7 +70,7 @@ opt-level = "z"        # Optimize for size (vs "3" for speed)
 lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
+# panic = "unwind"     # Allow panic unwind for plugin isolation
 overflow-checks = false
 
 [lib]

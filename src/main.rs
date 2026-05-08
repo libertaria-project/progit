@@ -169,6 +169,14 @@ pub(crate) enum HooksAction {
     Uninstall,
     /// Show status of installed hooks
     Status,
+    /// Validate a commit message or branch name
+    Validate {
+        /// Type to validate: "commit-msg" or "branch" (auto-detected from content if omitted)
+        #[arg(long, default_value = "auto")]
+        hook_type: String,
+        /// The value to validate (commit message or branch name)
+        value: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]

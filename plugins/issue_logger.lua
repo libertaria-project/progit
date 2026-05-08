@@ -1,12 +1,12 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- Example ProGit Plugin: Issue Logger
--- Logs all issue events to a file for auditing
+-- Logs all issue events using the storage API for persistence
 
 plugin = {
     name = "issue-logger",
     version = "1.0.0",
     author = "ProGit Team",
-    description = "Logs all issue events to .progit/issue-log.txt",
+    description = "Logs all issue events using storage API",
     hooks = {
         on_issue_created = true,
         on_issue_updated = true,
@@ -14,54 +14,54 @@ plugin = {
     }
 }
 
-local log_file = nil
-
 function init()
-    -- Open log file in append mode
-    local log_path = context.repo_path .. "/.progit/issue-log.txt"
-    log_file = io.open(log_path, "a")
-    if log_file then
-        log_file:write("\n=== Plugin initialized at " .. os.date() .. " ===\n")
-        log_file:flush()
+    -- Initialize storage - logs are stored via storage API
+    log_info("issue-logger plugin initialized (using storage API)")
+end
+
+function log_event(event_type, issue)
+    local entry = string.format(
+        "[%s] %s: %s (ID: %s, Status: %s)",
+        os.date("%Y-%m-%d %H:%M:%S"),
+        event_type,
+        issue.title,
+        issue.id,
+        issue.status or "unknown"
+    )
+    
+    -- Get existing log entries
+    local log_key = "issue_events"
+    local ok, events = pcall(function()
+        return storage.get(log_key) or {}
+    end)
+    
+    if not ok or not events then
+        events = {}
     end
+    
+    -- Add new entry
+    table.insert(events, entry)
+    
+    -- Store updated log
+    ok, err = pcall(function()
+        storage.set(log_key, events)
+    end)
+    
+    if not ok then
+        log_error("Failed to log event: " .. tostring(err))
+    end
+    
+    return { success = true }
 end
 
 function on_issue_created(issue)
-    if log_file then
-        log_file:write(string.format(
-            "[%s] CREATED: %s (ID: %s, Status: %s)\n",
-            os.date("%Y-%m-%d %H:%M:%S"),
-            issue.title,
-            issue.id,
-            issue.status
-        ))
-        log_file:flush()
-    end
-    return { success = true }
+    return log_event("CREATED", issue)
 end
 
 function on_issue_updated(issue)
-    if log_file then
-        log_file:write(string.format(
-            "[%s] UPDATED: %s (ID: %s, Status: %s)\n",
-            os.date("%Y-%m-%d %H:%M:%S"),
-            issue.title,
-            issue.id,
-            issue.status
-        ))
-        log_file:flush()
-    end
-    return { success = true }
+    return log_event("UPDATED", issue)
 end
 
-function on_issue_deleted(data)
-    if log_file then
-        log_file:write(string.format(
-            "[%s] DELETED: Issue ID %s\n",
-            os.date("%Y-%m-%d %H:%M:%S"),
-            data.id
-        ))
-        log_file:flush()
-    end
-    return { success = true }
+function on_issue_deleted(issue)
+    return log_event("DELETED", issue)
 end
