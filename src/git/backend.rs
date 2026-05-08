@@ -318,14 +318,82 @@ fn ingest_pack(pack_dir: &Path, bytes: &[u8]) -> BackendResult<()> {
 
 /// Apply one ref update to a gix repository. CAS via `expected_old_oid`.
 ///
-/// Maps to `gix::refs::transaction::Change::Update` with appropriate
-/// previous-value expectations. Returns `Err` on CAS mismatch, malformed
-/// oid, or if the target OID is not reachable in the repo's object DB.
+/// CAS semantics intentionally mirror the daemon's `progit-forged`
+/// storage layer (sled `compare_and_swap`):
+///
+/// - `old_oid = ""` (create-only): ref MUST NOT already exist. If it
+///   does, regardless of what the new oid is, the update is rejected.
+/// - `old_oid = "<hex>"` (update or delete): the ref MUST currently
+///   point at exactly that oid. Mismatch or missing-ref → rejected.
+///
+/// gix's `edit_reference` with `PreviousValue::MustNotExist` is more
+/// permissive than this — it accepts idempotent reapplies when the new
+/// value matches an existing one. We pre-check explicitly to enforce
+/// strict CAS uniformly across backends, so the same RefUpdate yields
+/// the same outcome whether it routes through the daemon or local disk.
+///
+/// Returns `Err` on:
+/// - CAS pre-image mismatch (`BackendError::CasFailed`)
+/// - target OID not reachable in the repo's object DB (`BackendError::InvalidInput`)
+/// - malformed inputs (`BackendError::InvalidInput`)
 fn apply_ref_update(
     repo: &gix::Repository,
     upd: &RefUpdate,
 ) -> BackendResult<()> {
     use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
+
+    // ---- Parse + validate the ref name once.
+    let ref_name: gix::refs::FullName = upd
+        .ref_name
+        .as_str()
+        .try_into()
+        .map_err(|e| BackendError::InvalidInput(format!("ref_name: {e}")))?;
+
+    // ---- CAS pre-check. Look up the current ref state and enforce the
+    // strict semantics described above before we touch the transaction.
+    let existing_oid: Option<String> = match repo.try_find_reference(upd.ref_name.as_str()) {
+        Ok(Some(r)) => match r.target() {
+            gix::refs::TargetRef::Object(id) => Some(id.to_hex().to_string()),
+            gix::refs::TargetRef::Symbolic(_) => {
+                return Err(BackendError::CasFailed(format!(
+                    "ref {} is symbolic; cannot CAS",
+                    upd.ref_name
+                )));
+            }
+        },
+        Ok(None) => None,
+        Err(e) => {
+            return Err(BackendError::Internal(format!(
+                "find_reference {}: {e}",
+                upd.ref_name
+            )));
+        }
+    };
+
+    if upd.old_oid.is_empty() {
+        // Caller said "create" — strict: must not currently exist.
+        if existing_oid.is_some() {
+            return Err(BackendError::CasFailed(format!(
+                "ref {} already exists",
+                upd.ref_name
+            )));
+        }
+    } else {
+        // Caller said "update" or "delete" — strict: ref must exist with
+        // exactly the expected pre-image OID.
+        let actual = existing_oid.ok_or_else(|| {
+            BackendError::CasFailed(format!(
+                "ref {} does not exist; CAS expects it to point at {}",
+                upd.ref_name, upd.old_oid
+            ))
+        })?;
+        if actual != upd.old_oid {
+            return Err(BackendError::CasFailed(format!(
+                "ref {} CAS mismatch: expected {}, got {}",
+                upd.ref_name, upd.old_oid, actual
+            )));
+        }
+    }
 
     // ---- Resolve target oid (or treat as deletion if empty).
     let new_oid = if upd.new_oid.is_empty() {
@@ -346,9 +414,11 @@ fn apply_ref_update(
         Some(id)
     };
 
-    // ---- Build the previous-value expectation.
+    // ---- Build the previous-value expectation. We've already done the
+    // strict check above; pass the same expectation through to gix as
+    // a defense-in-depth layer (it'll catch the rare race window between
+    // our pre-check and the transaction commit).
     let previous = if upd.old_oid.is_empty() {
-        // Caller said "create" — require ref does not exist.
         PreviousValue::MustNotExist
     } else {
         let old_id = gix_hash::ObjectId::from_hex(upd.old_oid.as_bytes())
@@ -357,12 +427,6 @@ fn apply_ref_update(
     };
 
     // ---- Construct the edit.
-    let ref_name: gix::refs::FullName = upd
-        .ref_name
-        .as_str()
-        .try_into()
-        .map_err(|e| BackendError::InvalidInput(format!("ref_name: {e}")))?;
-
     let change = match new_oid {
         Some(id) => Change::Update {
             log: LogChange {
@@ -599,6 +663,168 @@ mod tests {
         let bytes = backend.fetch("rt", vec![]).await.unwrap();
         assert!(bytes.starts_with(b"PACK"));
         assert!(bytes.len() >= 32);
+    }
+
+    #[tokio::test]
+    async fn second_create_on_existing_ref_is_cas_failed() {
+        // Strict CAS: second push of the same ref with empty old_oid
+        // (create-only) must reject because the ref already exists. This
+        // matches the daemon's sled-backed update_ref semantics.
+        let (_tmp, backend) = fresh();
+        backend.create_repo("c").await.unwrap();
+        let (pack, oid) = build_pack_with_blob(b"twice over");
+
+        // First push lands the ref.
+        let first = backend
+            .push(
+                "c",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/main".into(),
+                    old_oid: String::new(),
+                    new_oid: oid.clone(),
+                }],
+                Some(pack),
+            )
+            .await
+            .unwrap();
+        assert!(first.ok);
+        assert_eq!(first.accepted.len(), 1);
+
+        // Second push with the same OID and old_oid="" must be rejected.
+        let second = backend
+            .push(
+                "c",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/main".into(),
+                    old_oid: String::new(),
+                    new_oid: oid.clone(),
+                }],
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(!second.ok, "second create-only push must reject");
+        assert_eq!(second.accepted.len(), 0);
+        assert_eq!(second.rejected.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn update_with_correct_old_oid_succeeds() {
+        // Positive CAS: with the correct pre-image OID, an update goes through.
+        let (_tmp, backend) = fresh();
+        backend.create_repo("u").await.unwrap();
+
+        let (pack_a, oid_a) = build_pack_with_blob(b"first");
+        backend
+            .push(
+                "u",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/main".into(),
+                    old_oid: String::new(),
+                    new_oid: oid_a.clone(),
+                }],
+                Some(pack_a),
+            )
+            .await
+            .unwrap();
+
+        let (pack_b, oid_b) = build_pack_with_blob(b"second");
+        let outcome = backend
+            .push(
+                "u",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/main".into(),
+                    old_oid: oid_a, // correct pre-image
+                    new_oid: oid_b.clone(),
+                }],
+                Some(pack_b),
+            )
+            .await
+            .unwrap();
+        assert!(outcome.ok);
+        assert_eq!(outcome.accepted.len(), 1);
+
+        // Ref now points at oid_b.
+        let refs = backend.list_refs("u", Some("refs/heads/")).await.unwrap();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].oid, oid_b);
+    }
+
+    #[tokio::test]
+    async fn update_with_wrong_old_oid_is_cas_failed() {
+        // Negative CAS: pre-image OID doesn't match → reject.
+        let (_tmp, backend) = fresh();
+        backend.create_repo("w").await.unwrap();
+
+        let (pack, oid) = build_pack_with_blob(b"present");
+        backend
+            .push(
+                "w",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/main".into(),
+                    old_oid: String::new(),
+                    new_oid: oid.clone(),
+                }],
+                Some(pack),
+            )
+            .await
+            .unwrap();
+
+        // Try to update with the wrong pre-image.
+        let outcome = backend
+            .push(
+                "w",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/main".into(),
+                    old_oid: "0".repeat(40), // wrong pre-image
+                    new_oid: oid.clone(),
+                }],
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(!outcome.ok);
+        assert_eq!(outcome.rejected.len(), 1);
+
+        // Ref still points at the original OID.
+        let refs = backend.list_refs("w", Some("refs/heads/")).await.unwrap();
+        assert_eq!(refs[0].oid, oid);
+    }
+
+    #[tokio::test]
+    async fn update_on_missing_ref_is_cas_failed() {
+        // Negative CAS: caller specifies an old_oid but ref doesn't exist.
+        let (_tmp, backend) = fresh();
+        backend.create_repo("m").await.unwrap();
+        let (pack, oid) = build_pack_with_blob(b"unattached");
+        backend
+            .push(
+                "m",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/scratch".into(),
+                    old_oid: String::new(),
+                    new_oid: oid.clone(),
+                }],
+                Some(pack),
+            )
+            .await
+            .unwrap();
+
+        // Try to update refs/heads/main (doesn't exist) with a pre-image.
+        let outcome = backend
+            .push(
+                "m",
+                vec![RefUpdate {
+                    ref_name: "refs/heads/main".into(),
+                    old_oid: oid.clone(),
+                    new_oid: oid,
+                }],
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(!outcome.ok);
+        assert_eq!(outcome.rejected.len(), 1);
     }
 
     #[tokio::test]

@@ -100,13 +100,19 @@ async fn clone_from_daemon_to_local_backend() {
         .collect();
     assert_eq!(pack_files.len(), 1, "exactly one pack file on local disk");
 
-    // Note on idempotency: a second clone into the same dest with create-only
-    // (old_oid="") refs hits backend-specific CAS semantics. The daemon's
-    // storage layer rejects (returns CAS-mismatch via sled's
-    // compare_and_swap on non-None vs None). LocalGitBackend's `gix`-based
-    // edit_reference is more permissive about `MustNotExist` reapplies.
-    // Cross-backend CAS uniformity is tracked for a follow-up; v0.1 ships
-    // first-clone + the abstraction proof, not idempotency guarantees.
+    // ---- 5. Idempotency: a second clone into the same dest with the
+    //         create-only (old_oid="") refs the trait emits hits strict
+    //         CAS — the refs already exist on dest. Both backends now
+    //         enforce this uniformly (the daemon via sled, LocalGitBackend
+    //         via the explicit pre-check in apply_ref_update). The second
+    //         clone's outcome reports the existing refs as rejected.
+    let second = clone_repo(&daemon, "source-repo", &local, "cloned").await.unwrap();
+    assert_eq!(second.refs_total, 1);
+    assert_eq!(
+        second.refs_rejected, 1,
+        "second clone refs rejected — refs already exist; strict CAS uniformly enforced"
+    );
+    assert_eq!(second.refs_accepted, 0);
 }
 
 #[tokio::test]
