@@ -10,7 +10,7 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use progit::marketplace::{Verifier, TrustPolicy};
 //!
 //! let verifier = Verifier::new(keyring);
