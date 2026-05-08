@@ -145,6 +145,62 @@ async fn clone_from_local_to_local_via_trait() {
 }
 
 #[tokio::test]
+async fn clone_from_multi_pack_daemon_repo() {
+    // Regression for the daemon's v0.1.3.1 multi-pack Fetch landing.
+    // Before that, this test would have failed with Unsupported on the
+    // second-pack fetch; now the trait abstraction propagates the daemon
+    // improvement transparently to every consumer — the TUI didn't need
+    // to change.
+    let (url, _daemon_tmp) = spawn_daemon().await;
+    let daemon = ForgedBackend::connect(url).await.unwrap();
+    daemon.create_repo("multi").await.unwrap();
+
+    // Two distinct pushes → two pack files in the source repo.
+    let mut pushed_oids = Vec::new();
+    for (i, blob) in [(0, b"first half" as &[u8]), (1, b"second half")].iter() {
+        let (pack, oid) = progit_forged::pack::build_pack_with_blob(blob);
+        pushed_oids.push(oid.clone());
+        let outcome = daemon
+            .push(
+                "multi",
+                vec![RefUpdate {
+                    ref_name: format!("refs/heads/branch-{i}"),
+                    old_oid: String::new(),
+                    new_oid: oid,
+                }],
+                Some(pack),
+            )
+            .await
+            .unwrap();
+        assert!(outcome.ok, "seed push {i} rejected: {}", outcome.message);
+    }
+
+    // Clone — via the trait — into a local backend. This used to fail
+    // with Unsupported; now it returns a combined pack that the local
+    // backend ingests like any other.
+    let local_root = tempfile::TempDir::new().unwrap();
+    let local = LocalGitBackend::new(local_root.path()).unwrap();
+    let result = clone_repo(&daemon, "multi", &local, "multi-cloned")
+        .await
+        .unwrap();
+    assert_eq!(result.refs_total, 2, "two refs on source");
+    assert_eq!(result.refs_accepted, 2, "both refs accepted on dest");
+    assert!(result.pack_bytes >= 64, "non-trivial pack streamed");
+
+    // Both refs landed on the destination, pointing at the original OIDs.
+    let local_refs = local
+        .list_refs("multi-cloned", Some("refs/heads/"))
+        .await
+        .unwrap();
+    assert_eq!(local_refs.len(), 2);
+    let mut local_oids: Vec<_> = local_refs.iter().map(|r| r.oid.clone()).collect();
+    local_oids.sort();
+    let mut expected = pushed_oids.clone();
+    expected.sort();
+    assert_eq!(local_oids, expected, "destination refs match source OIDs");
+}
+
+#[tokio::test]
 async fn clone_unknown_source_repo_is_a_clean_error() {
     let (url, _daemon_tmp) = spawn_daemon().await;
     let daemon = ForgedBackend::connect(url).await.unwrap();
