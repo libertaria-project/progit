@@ -14,6 +14,7 @@ pub mod panopticum;
 pub mod plugins;
 pub mod project_contract;
 pub mod rebase;
+pub mod remote;
 pub mod review;
 pub mod review_sync;
 pub mod storage;

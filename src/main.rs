@@ -19,6 +19,7 @@ mod panopticum;
 mod plugins;
 mod project_contract;
 mod rebase;
+mod remote;
 mod review;
 mod review_sync;
 mod runner;
@@ -92,6 +93,11 @@ enum Commands {
     Project {
         #[command(subcommand)]
         action: ProjectAction,
+    },
+    /// Inspect configured Git remotes and repository contract readiness
+    Remote {
+        #[command(subcommand)]
+        action: RemoteAction,
     },
     /// Internal: Interactive rebase editor (triggered by git)
     #[command(hide = true)]
@@ -232,6 +238,16 @@ enum RemoteBranchAction {
 enum ProjectAction {
     /// Validate the `.project/` repository contract
     Validate,
+}
+
+#[derive(Subcommand)]
+enum RemoteAction {
+    /// Check remote reachability and `.project/` contract readiness
+    Doctor {
+        /// Do not run the dry-run push probe
+        #[arg(long)]
+        skip_push: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -389,6 +405,78 @@ fn run_project_validate(project_root: &std::path::Path) -> Result<bool> {
     }
 
     Ok(report.is_valid())
+}
+
+fn run_remote_doctor(project_root: &std::path::Path, skip_push: bool) -> Result<bool> {
+    let report = remote::doctor_project(project_root, skip_push)?;
+
+    println!(
+        "{} Remote doctor: {}",
+        "==>".blue().bold(),
+        report.project_root.display().to_string().dimmed()
+    );
+
+    let contract_state = if report.project_contract.valid {
+        remote::ProbeState::Pass
+    } else {
+        remote::ProbeState::Fail
+    };
+    println!(
+        "{} .project contract: {} checks, {} warnings, {} errors",
+        validation_prefix(contract_state),
+        report.project_contract.checks_passed,
+        report.project_contract.warnings,
+        report.project_contract.errors
+    );
+
+    for message in &report.messages {
+        println!("{} {}", validation_prefix(message.state), message.message);
+    }
+
+    for remote in &report.remotes {
+        println!(
+            "{} remote {} [{}] {}",
+            "==>".blue().bold(),
+            remote.endpoint.name.cyan(),
+            remote.endpoint.kind.to_string().dimmed(),
+            remote.endpoint.display_url().dimmed()
+        );
+        println!(
+            "  {} fetch: {}",
+            validation_prefix(remote.fetch.state),
+            remote.fetch.message
+        );
+        println!(
+            "  {} push: {}",
+            validation_prefix(remote.push.state),
+            remote.push.message
+        );
+    }
+
+    if report.is_ok() {
+        println!(
+            "{} remote readiness valid ({} remote{})",
+            "OK".green().bold(),
+            report.remotes.len(),
+            if report.remotes.len() == 1 { "" } else { "s" }
+        );
+    } else {
+        println!(
+            "{}",
+            "FAIL remote readiness has blocking errors".red().bold()
+        );
+    }
+
+    Ok(report.is_ok())
+}
+
+fn validation_prefix(state: remote::ProbeState) -> colored::ColoredString {
+    match state {
+        remote::ProbeState::Pass => "OK".green().bold(),
+        remote::ProbeState::Warn => "WARN".yellow().bold(),
+        remote::ProbeState::Fail => "FAIL".red().bold(),
+        remote::ProbeState::Skipped => "SKIP".dimmed(),
+    }
 }
 
 fn print_validation_message(
@@ -555,6 +643,27 @@ fn main() -> Result<()> {
             {
                 let project_root = workspace::find_project_root()?;
                 if !run_project_validate(&project_root)? {
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    // `remote doctor` must also run before auto-initialization. It should
+    // report missing project metadata; not silently create it first.
+    {
+        let argv: Vec<String> = std::env::args().collect();
+        if argv.get(1).map(String::as_str) == Some("remote")
+            && argv.get(2).map(String::as_str) == Some("doctor")
+        {
+            let cli = Cli::parse();
+            if let Some(Commands::Remote {
+                action: RemoteAction::Doctor { skip_push },
+            }) = cli.command
+            {
+                let project_root = workspace::find_project_root()?;
+                if !run_remote_doctor(&project_root, skip_push)? {
                     std::process::exit(1);
                 }
                 return Ok(());
@@ -982,6 +1091,13 @@ fn main() -> Result<()> {
         Some(Commands::Project { action }) => match action {
             ProjectAction::Validate => {
                 if !run_project_validate(&project_root)? {
+                    std::process::exit(1);
+                }
+            }
+        },
+        Some(Commands::Remote { action }) => match action {
+            RemoteAction::Doctor { skip_push } => {
+                if !run_remote_doctor(&project_root, skip_push)? {
                     std::process::exit(1);
                 }
             }
