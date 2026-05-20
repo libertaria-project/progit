@@ -1,0 +1,6 @@
+schema "progit.issue" {
+    version 0
+    format "json"
+    owner "core"
+    status "declared"
+}

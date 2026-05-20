@@ -1,0 +1,27 @@
+plugins {
+    version 0
+    registry-url "https://plugins.progit.dev"
+
+    plugin "git-hooks" {
+        source "registry"
+        version ">=0.1.0"
+        required false
+
+        capabilities {
+            capability "project:read"
+            capability "git-hooks:write"
+        }
+    }
+
+    plugin "forgejo-notify" {
+        source "registry"
+        version ">=0.1.0"
+        required false
+
+        capabilities {
+            capability "project:read"
+            capability "issues:read"
+            capability "sync:read"
+        }
+    }
+}

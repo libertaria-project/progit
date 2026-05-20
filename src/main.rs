@@ -17,6 +17,7 @@ mod marketplace;
 mod mr;
 mod panopticum;
 mod plugins;
+mod project_contract;
 mod rebase;
 mod review;
 mod review_sync;
@@ -86,6 +87,11 @@ enum Commands {
     Trust {
         #[command(subcommand)]
         action: TrustAction,
+    },
+    /// Validate repository-owned project metadata
+    Project {
+        #[command(subcommand)]
+        action: ProjectAction,
     },
     /// Internal: Interactive rebase editor (triggered by git)
     #[command(hide = true)]
@@ -223,6 +229,12 @@ enum RemoteBranchAction {
 }
 
 #[derive(Subcommand)]
+enum ProjectAction {
+    /// Validate the `.project/` repository contract
+    Validate,
+}
+
+#[derive(Subcommand)]
 enum MrAction {
     /// List open merge requests (requires sync config)
     List,
@@ -340,6 +352,59 @@ fn run_review_push(provider: &dyn crate::sync::SyncProvider, mr_id: u64) -> Resu
         mr_id
     );
     Ok(())
+}
+
+fn run_project_validate(project_root: &std::path::Path) -> Result<bool> {
+    let report = project_contract::validate_project(project_root)?;
+
+    println!(
+        "{} Project contract: {}",
+        "==>".blue().bold(),
+        project_root.display().to_string().dimmed()
+    );
+
+    for error in &report.errors {
+        print_validation_message("ERROR".red().bold(), error);
+    }
+
+    for warning in &report.warnings {
+        print_validation_message("WARN".yellow().bold(), warning);
+    }
+
+    if report.is_valid() {
+        println!(
+            "{} valid ({} checks, {} warnings)",
+            "OK".green().bold(),
+            report.checks_passed,
+            report.warnings.len()
+        );
+    } else {
+        println!(
+            "{} invalid ({} errors, {} warnings, {} checks passed)",
+            "FAIL".red().bold(),
+            report.errors.len(),
+            report.warnings.len(),
+            report.checks_passed
+        );
+    }
+
+    Ok(report.is_valid())
+}
+
+fn print_validation_message(
+    prefix: colored::ColoredString,
+    message: &project_contract::ProjectValidationMessage,
+) {
+    if let Some(path) = &message.path {
+        println!(
+            "{} {}: {}",
+            prefix,
+            path.display().to_string().cyan(),
+            message.message
+        );
+    } else {
+        println!("{} {}", prefix, message.message);
+    }
 }
 
 /// Handle progit:// URL scheme
@@ -472,6 +537,27 @@ fn main() -> Result<()> {
             let cli = Cli::parse();
             if let Some(Commands::Clone { endpoint, repo, dest }) = cli.command {
                 return handle_clone(&endpoint, &repo, &dest);
+            }
+        }
+    }
+
+    // `project validate` must run before auto-initialization. Otherwise a
+    // missing `.project/` would be created before the validator can report it.
+    {
+        let argv: Vec<String> = std::env::args().collect();
+        if argv.get(1).map(String::as_str) == Some("project")
+            && argv.get(2).map(String::as_str) == Some("validate")
+        {
+            let cli = Cli::parse();
+            if let Some(Commands::Project {
+                action: ProjectAction::Validate,
+            }) = cli.command
+            {
+                let project_root = workspace::find_project_root()?;
+                if !run_project_validate(&project_root)? {
+                    std::process::exit(1);
+                }
+                return Ok(());
             }
         }
     }
@@ -893,6 +979,13 @@ fn main() -> Result<()> {
         Some(Commands::Trust { action }) => {
             handle_trust_command(action)?;
         }
+        Some(Commands::Project { action }) => match action {
+            ProjectAction::Validate => {
+                if !run_project_validate(&project_root)? {
+                    std::process::exit(1);
+                }
+            }
+        },
         Some(Commands::Hooks { action }) => {
             cli::handle_hooks_command(action, &project_root)?;
         }

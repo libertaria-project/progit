@@ -12,6 +12,7 @@ pub mod marketplace;
 pub mod mr;
 pub mod panopticum;
 pub mod plugins;
+pub mod project_contract;
 pub mod rebase;
 pub mod review;
 pub mod review_sync;

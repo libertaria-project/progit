@@ -1,0 +1,10 @@
+wiki {
+    version 0
+    root ".project/wiki/index.md"
+
+    page "index" {
+        title "ProGit"
+        path ".project/wiki/index.md"
+        required true
+    }
+}

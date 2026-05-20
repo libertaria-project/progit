@@ -1,0 +1,6 @@
+schema "progit.policy" {
+    version 0
+    format "kdl"
+    owner "core"
+    status "declared"
+}
