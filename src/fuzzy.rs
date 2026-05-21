@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_search_returns_sorted() {
-        let mut searcher = FuzzySearcher::new();
+        let searcher = FuzzySearcher::new();
         let results = searcher.search("new");
 
         // Should return results sorted by score

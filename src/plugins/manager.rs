@@ -60,7 +60,7 @@ impl PluginManager {
         let mut loaded = 0;
         let entries = match std::fs::read_dir(dir) {
             Ok(e) => e,
-            Err(e) => {
+            Err(_err) => {
                 return 0;
             }
         };
@@ -73,8 +73,7 @@ impl PluginManager {
                     Ok(()) => {
                         loaded += 1;
                     }
-                    Err(e) => {
-                    }
+                    Err(_err) => {}
                 }
             } else if path.is_dir() {
                 let main_lua = path.join("main.lua");
@@ -93,8 +92,7 @@ impl PluginManager {
                         Ok(()) => {
                             loaded += 1;
                         }
-                        Err(e) => {
-                        }
+                        Err(_err) => {}
                     }
                 } else {
                 }
@@ -112,18 +110,17 @@ impl PluginManager {
     fn load_plugin(&mut self, path: &Path, context: &PluginContext) -> Result<()> {
         let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
+        if extension != "lua" {
+            anyhow::bail!("Unsupported plugin extension for {:?}: {}", path, extension);
+        }
 
         // Load plugin with panic isolation
-        let load_result = if extension == "lua" {
-            let options = self.options_from_neighbouring_manifest(path, context);
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                LuaPlugin::load_with_options(path, options)
-            }))
-        } else {
-            Err(std::panic::panic_any("Unknown plugin extension"))
-        };
+        let options = self.options_from_neighbouring_manifest(path, context);
+        let load_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            LuaPlugin::load_with_options(path, options)
+        }));
 
-        let mut plugin: Box<dyn Plugin> = match load_result {
+        let plugin: Box<dyn Plugin> = match load_result {
             Ok(Ok(lp)) => {
                 Box::new(lp)
             }
@@ -142,15 +139,14 @@ impl PluginManager {
             }
         };
 
-        
         // Use Box::into_raw to prevent automatic drop on panic
         let plugin_ptr = Box::into_raw(plugin);
-        
+
         let init_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             // SAFETY: plugin_ptr is valid, we own it
             unsafe { (*plugin_ptr).init(context) }
         }));
-        
+
         match init_result {
             Ok(Ok(())) => {
                 // Re-box the raw pointer and push
@@ -468,29 +464,23 @@ impl PluginManager {
             "args": args
         });
 
-        
         // Two-phase: collect result first, then update bookkeeping
         let mut pending_failure: Option<(String, String)> = None;
 
         for plugin in &mut self.plugins {
             let name = plugin.metadata().name.clone();
-            let hooks = plugin.metadata().hooks.clone();
-            
+
             if self.quarantined.contains_key(&name) {
                 continue;
             }
             let supports = plugin.supports_hook(&hook);
-            
-            if self.quarantined.contains_key(&name) {
-                continue;
-            }
-            
+
             if !supports {
                 continue;
             }
 
             let result = plugin.execute_hook(&hook, &data);
-            
+
             match result {
                 Ok(response) => {
                     self.error_counts.remove(&name);

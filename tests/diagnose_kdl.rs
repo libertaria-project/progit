@@ -1,6 +1,5 @@
 use anyhow::Result;
-use progit::issue::Issue;
-use progit::storage::{kdl::parse_kdl, kdl::serialize_kdl};
+use progit::storage::kdl::parse_kdl;
 
 #[test]
 fn test_complex_kdl_parsing() -> Result<()> {
