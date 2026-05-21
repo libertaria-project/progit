@@ -111,7 +111,7 @@ chore: bump version to 0.3.0
    ```
 
    This will:
-   - Run tests
+   - Run quality checks
    - Merge `develop` → `main`
    - Create git tag
    - Push to remote
@@ -137,6 +137,7 @@ Test scripts without making changes:
 |--------|---------|
 | Create feature branch | `git checkout -b feature/name` |
 | Merge to develop | `git checkout develop && git merge feature/name --no-ff` |
+| Quality gate | `./scripts/check.sh` |
 | Bump version | `./scripts/bump-version.sh` |
 | Release | `./scripts/release.sh` |
 | Check current version | `grep '^version' Cargo.toml` |

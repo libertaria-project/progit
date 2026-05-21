@@ -63,8 +63,8 @@ cd progit
 # Build in debug mode (fast compilation)
 cargo build
 
-# Run tests
-cargo test
+# Run the local quality gate
+./scripts/check.sh
 
 # Run the TUI
 cargo run
@@ -231,8 +231,7 @@ Mockups, examples, related issues
    - Request review
 
 **PR Checklist:**
-- [ ] Tests pass (`cargo test`)
-- [ ] No compiler warnings (`cargo clippy`)
+- [ ] Local quality gate passes (`./scripts/check.sh`)
 - [ ] Formatted (`cargo fmt`)
 - [ ] Documentation updated
 - [ ] Changelog entry added
@@ -314,6 +313,9 @@ pub fn calculate_total(items: &[Item], tax_rate: f64) -> Result<f64> {
 ### Running Tests
 
 ```bash
+# Local quality gate
+./scripts/check.sh
+
 # All tests
 cargo test
 

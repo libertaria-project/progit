@@ -51,13 +51,13 @@ fi
 echo -e "${GREEN}✅ Pre-flight checks passed${NC}"
 echo -e "${BLUE}📦 Preparing release v${VERSION}${NC}"
 
-# Run tests
-echo -e "${BLUE}🧪 Running tests...${NC}"
-if ! cargo test --quiet; then
-    echo -e "${RED}❌ Tests failed. Fix issues before releasing.${NC}"
+# Run quality checks
+echo -e "${BLUE}Running quality checks...${NC}"
+if ! bash ./scripts/check.sh; then
+    echo -e "${RED}Quality checks failed. Fix issues before releasing.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✅ Tests passed${NC}"
+echo -e "${GREEN}Quality checks passed${NC}"
 
 # Build release binary to verify
 echo -e "${BLUE}🔨 Building release binary...${NC}"
