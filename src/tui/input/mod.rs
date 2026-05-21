@@ -288,6 +288,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::Settings => handle_settings_key(app, key),
         InputMode::FuzzyPalette => handle_fuzzy_palette_key(app, key),
         InputMode::DiffComment => handle_diff_comment_key(app, key),
+        InputMode::ProjectWiki => handle_project_wiki_key(app, key),
+        InputMode::ProjectIssues => handle_project_issues_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -714,5 +716,7 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::Settings => "t:theme │ O/Esc:close",
         InputMode::FuzzyPalette => "Type to search │ Enter:select │ Esc:close",
         InputMode::DiffComment => "Type comment │ Enter:save │ Esc:cancel",
+        InputMode::ProjectWiki => "h/l:page │ j/k:scroll │ g/G:top/bottom │ q/Esc:close",
+        InputMode::ProjectIssues => "j/k:nav │ Enter:open loaded issue │ q/Esc:close",
     }
 }

@@ -199,6 +199,16 @@ impl FuzzySearcher {
                 description: "Create or view merge requests".to_string(),
                 action: "mr".to_string(),
             },
+            FuzzyItem::Command {
+                name: "Project Wiki".to_string(),
+                description: "Open repository-owned wiki pages".to_string(),
+                action: "project_wiki".to_string(),
+            },
+            FuzzyItem::Command {
+                name: "Project Issues".to_string(),
+                description: "Browse repository-owned issue files".to_string(),
+                action: "project_issues".to_string(),
+            },
         ]
     }
 
@@ -366,5 +376,22 @@ mod tests {
         for i in 1..results.len() {
             assert!(results[i - 1].score >= results[i].score);
         }
+    }
+
+    #[test]
+    fn test_search_finds_project_view_commands() {
+        let searcher = FuzzySearcher::new();
+
+        let wiki = searcher.search("project wiki");
+        let issues = searcher.search("project issues");
+
+        assert!(wiki.iter().any(|m| matches!(
+            &m.item,
+            FuzzyItem::Command { action, .. } if action == "project_wiki"
+        )));
+        assert!(issues.iter().any(|m| matches!(
+            &m.item,
+            FuzzyItem::Command { action, .. } if action == "project_issues"
+        )));
     }
 }

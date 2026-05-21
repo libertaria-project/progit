@@ -506,6 +506,14 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
                                 app.input_mode = InputMode::Search;
                                 return KeyAction::Refresh;
                             }
+                            "project_wiki" => {
+                                app.open_project_wiki();
+                                return KeyAction::Refresh;
+                            }
+                            "project_issues" => {
+                                app.open_project_issues();
+                                return KeyAction::Refresh;
+                            }
                             _ => {}
                         }
                     }
@@ -541,6 +549,84 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
         KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.fuzzy_query.push(c);
             app.fuzzy_selected = 0;
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in the project wiki overlay.
+pub(super) fn handle_project_wiki_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.close_project_overlay();
+            KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            app.project_wiki_scroll = app.project_wiki_scroll.saturating_add(1);
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            app.project_wiki_scroll = app.project_wiki_scroll.saturating_sub(1);
+            KeyAction::Refresh
+        }
+        KeyCode::Char('g') => {
+            app.project_wiki_scroll = 0;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('G') => {
+            app.project_wiki_scroll = u16::MAX;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('h') | KeyCode::Left => {
+            app.project_wiki_page = app.project_wiki_page.saturating_sub(1);
+            app.project_wiki_scroll = 0;
+            KeyAction::Refresh
+        }
+        KeyCode::Char('l') | KeyCode::Right => {
+            if let Some(view) = &app.project_wiki_view {
+                let last = view.pages.len().saturating_sub(1);
+                app.project_wiki_page = (app.project_wiki_page + 1).min(last);
+                app.project_wiki_scroll = 0;
+            }
+            KeyAction::Refresh
+        }
+        _ => KeyAction::None,
+    }
+}
+
+/// Handle keys in the project issues overlay.
+pub(super) fn handle_project_issues_key(app: &mut App, key: KeyEvent) -> KeyAction {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.close_project_overlay();
+            KeyAction::Refresh
+        }
+        KeyCode::Char('j') | KeyCode::Down => {
+            if let Some(view) = &app.project_issues_view {
+                let last = view.issues.len().saturating_sub(1);
+                app.project_issue_selected = (app.project_issue_selected + 1).min(last);
+            }
+            KeyAction::Refresh
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            app.project_issue_selected = app.project_issue_selected.saturating_sub(1);
+            KeyAction::Refresh
+        }
+        KeyCode::Enter => {
+            let selected_id = app
+                .project_issues_view
+                .as_ref()
+                .and_then(|view| view.issues.get(app.project_issue_selected))
+                .map(|entry| entry.issue.id.clone());
+
+            if let Some(id) = selected_id {
+                if app.issues.iter().any(|issue| issue.id == id) {
+                    app.open_detail(&id);
+                } else {
+                    app.set_status("Project issue is not loaded in the active issue set");
+                }
+            }
             KeyAction::Refresh
         }
         _ => KeyAction::None,
