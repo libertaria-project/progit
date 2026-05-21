@@ -3,7 +3,8 @@ set -euo pipefail
 
 # ProGit Release Script
 # Handles the full release workflow: main → stable with tagging
-# Usage: ./scripts/release.sh [--dry-run]
+# Usage: ./scripts/release.sh [--dry-run] [--yes|-y]
+#   --yes / -y : skip the interactive confirmation (for non-interactive CI)
 
 # Colors
 RED='\033[0;31m'
@@ -16,10 +17,21 @@ INTEGRATION_BRANCH="main"
 RELEASE_BRANCH="stable"
 
 DRY_RUN=false
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
-    echo -e "${YELLOW}🔍 DRY RUN MODE${NC}"
-fi
+ASSUME_YES=false
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=true; echo -e "${YELLOW}🔍 DRY RUN MODE${NC}" ;;
+        -y|--yes)  ASSUME_YES=true ;;
+    esac
+done
+
+# confirm "prompt" — success if the user agrees or --yes/-y was passed.
+confirm() {
+    [[ "$ASSUME_YES" == true ]] && return 0
+    read -p "$1 (y/N) " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]]
+}
 
 # Pre-flight checks
 echo -e "${BLUE}🔍 Running pre-flight checks...${NC}"
@@ -107,9 +119,7 @@ echo -e "  1. Merge ${INTEGRATION_BRANCH} → ${RELEASE_BRANCH}"
 echo -e "  2. Create tag v${VERSION} on ${RELEASE_BRANCH}"
 echo -e "  3. Push ${INTEGRATION_BRANCH}, ${RELEASE_BRANCH}, and tag"
 echo ""
-read -p "Continue? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+if ! confirm "Continue?"; then
     echo -e "${YELLOW}❌ Release cancelled${NC}"
     exit 0
 fi

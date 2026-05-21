@@ -4,7 +4,7 @@ version = "0.8.0-beta"
 edition = "2021"
 authors = ["Markus Maiwald"]
 description = "⚡ Blazing-fast terminal issue tracker with Kanban, GitLab/Forgejo sync, and intelligent time tracking"
-license = "LCL-1.0"
+license-file = "LICENSE"
 repository = "https://git.sovereign-society.org/ProGit/progit"
 keywords = ["git", "issue-tracker", "tui", "kanban", "project-management"]
 categories = ["command-line-utilities", "development-tools"]
@@ -35,7 +35,10 @@ clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"], optional = true }
 axum = { version = "0.7", optional = true }
 askama = { version = "0.12", optional = true }
-git2 = { version = "0.20.3" }
+# default-features = false drops the https (openssl-sys) and ssh (libssh2-sys)
+# transports — progit uses git2 only for LOCAL repo ops; network goes via the
+# git CLI + reqwest(rustls). This is what makes musl cross-compile work.
+git2 = { version = "0.20.3", default-features = false }
 once_cell = "1.18"
 
 # Sync & Security

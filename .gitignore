@@ -82,3 +82,9 @@ AGENTS.md
 
 # Cloudflare Wrangler cache
 .wrangler/
+
+# Release signing — secret key never enters the repo
+keys/*.key
+*.minisign.key
+# Release build output
+/dist/

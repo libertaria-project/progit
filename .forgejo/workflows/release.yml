@@ -1,0 +1,95 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+# Runner note: this instance maps `ubuntu-latest` -> a custom `nexus/build-env`
+# image that is NOT present on every host. We target `node-20` (-> public
+# `node:20`, always pullable) and install the Rust/Zig toolchain at runtime, so
+# ProGit's release CI stays self-contained and never depends on Nexus infra.
+jobs:
+  build:
+    runs-on: node-20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout sibling path-dep crates
+        run: |
+          set -euo pipefail
+          # progit/Cargo.toml has path deps on these sibling repos: plugin-sdk is
+          # compiled into prog; forge-client (optional) and forged (dev-dep) are
+          # only resolved. cargo reads ALL of them, so all must be on disk next
+          # to the repo or resolve fails.
+          for r in progit-plugin-sdk progit-forge-client progit-forged; do
+            dest="${GITHUB_WORKSPACE}/../$r"
+            [ -d "$dest/.git" ] || git clone --depth 1 "${GITHUB_SERVER_URL}/ProGit/$r.git" "$dest"
+          done
+
+      - name: System build deps
+        run: |
+          set -eux
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential curl ca-certificates xz-utils zip git minisign \
+            libssl-dev pkg-config
+
+      - name: Install Zig
+        run: |
+          set -eux
+          ZIG_VERSION=0.13.0
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+          mkdir -p /opt/zig
+          tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+          echo "/opt/zig" >> "$GITHUB_PATH"
+          /opt/zig/zig version
+
+      - name: Install Rust + cargo-zigbuild
+        run: |
+          set -eux
+          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          . "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustup target add \
+            x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
+            x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu
+          cargo install cargo-zigbuild --locked
+
+      - name: Provision signing key
+        run: |
+          set -eu
+          KEY="$RUNNER_TEMP/minisign.key"
+          PROBE="$RUNNER_TEMP/probe"
+          echo probe > "$PROBE"
+          # Validate the key by TEST-SIGNING, not by comment text — the key's
+          # untrusted comment is customized, so grepping for "minisign" would
+          # wrongly reject a valid key. Try base64 (whitespace-stripped) first,
+          # then raw 2-line text.
+          printf '%s' "$MINISIGN_SECRET_KEY" | tr -d '[:space:]' | base64 -d > "$KEY" 2>/dev/null || true
+          if minisign -S -s "$KEY" -m "$PROBE" -x "$PROBE.sig" </dev/null >/dev/null 2>&1; then
+            echo "provisioned signing key from base64 (validated by test-sign)"
+          else
+            printf '%s\n' "$MINISIGN_SECRET_KEY" > "$KEY"
+            minisign -S -s "$KEY" -m "$PROBE" -x "$PROBE.sig" </dev/null >/dev/null 2>&1 \
+              || { echo "FATAL: MINISIGN_SECRET_KEY cannot sign as base64 or raw — check the stored value"; exit 1; }
+            echo "provisioned signing key from raw text (validated by test-sign)"
+          fi
+          chmod 600 "$KEY"
+          rm -f "$PROBE" "$PROBE.sig"
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+
+      - name: Build, sign, checksum
+        env:
+          PROGIT_MINISIGN_KEY: ${{ runner.temp }}/minisign.key
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          bash scripts/build-release.sh "$VERSION"
+
+      - name: Publish Forgejo Release
+        uses: https://code.forgejo.org/actions/forgejo-release@v2
+        with:
+          direction: upload
+          release-dir: dist
+          tag: ${{ github.ref_name }}
+          # Auto-injected per-job Actions token — no PAT to mint, rotate, or leak.
+          token: ${{ secrets.GITHUB_TOKEN }}
