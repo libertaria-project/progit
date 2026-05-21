@@ -18,6 +18,7 @@ mod mr;
 mod panopticum;
 mod plugins;
 mod project_contract;
+mod project_view;
 mod rebase;
 mod remote;
 mod review;
@@ -238,6 +239,10 @@ enum RemoteBranchAction {
 enum ProjectAction {
     /// Validate the `.project/` repository contract
     Validate,
+    /// Render repository-owned wiki pages
+    Wiki,
+    /// List repository-owned issue files
+    Issues,
 }
 
 #[derive(Subcommand)]
@@ -405,6 +410,84 @@ fn run_project_validate(project_root: &std::path::Path) -> Result<bool> {
     }
 
     Ok(report.is_valid())
+}
+
+fn run_project_action(project_root: &std::path::Path, action: ProjectAction) -> Result<bool> {
+    match action {
+        ProjectAction::Validate => run_project_validate(project_root),
+        ProjectAction::Wiki => {
+            run_project_wiki(project_root)?;
+            Ok(true)
+        }
+        ProjectAction::Issues => {
+            run_project_issues(project_root)?;
+            Ok(true)
+        }
+    }
+}
+
+fn run_project_wiki(project_root: &std::path::Path) -> Result<()> {
+    let view = project_view::load_project_wiki(project_root)?;
+
+    println!(
+        "{} Project wiki: {}",
+        "==>".blue().bold(),
+        project_root.display().to_string().dimmed()
+    );
+    println!("root: {}", view.root.display().to_string().cyan());
+
+    for page in view.pages {
+        let required = if page.required { "required" } else { "optional" };
+        println!();
+        println!(
+            "{} {} [{}] {}",
+            "==>".blue().bold(),
+            page.name.cyan(),
+            required.dimmed(),
+            page.title.bold()
+        );
+        println!("path: {}", page.path.display().to_string().dimmed());
+        println!("{}", "---".dimmed());
+        println!("{}", page.content.trim_end());
+    }
+
+    Ok(())
+}
+
+fn run_project_issues(project_root: &std::path::Path) -> Result<()> {
+    let view = project_view::load_project_issues(project_root)?;
+
+    println!(
+        "{} Project issues: {}",
+        "==>".blue().bold(),
+        project_root.display().to_string().dimmed()
+    );
+
+    if view.issues.is_empty() {
+        println!("No .project/issues/*.json files found.");
+        return Ok(());
+    }
+
+    for entry in view.issues {
+        let issue = entry.issue;
+        let tags = if issue.tags.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", issue.tags.join(","))
+        };
+        let blocker = if issue.is_blocker() { " blocked" } else { "" };
+        println!(
+            "{} {} [{}{}]{} {}",
+            issue.short_id().cyan(),
+            issue.title.bold(),
+            issue.status.as_str(),
+            blocker,
+            tags.dimmed(),
+            entry.path.display().to_string().dimmed()
+        );
+    }
+
+    Ok(())
 }
 
 fn run_remote_doctor(project_root: &std::path::Path, skip_push: bool) -> Result<bool> {
@@ -629,20 +712,15 @@ fn main() -> Result<()> {
         }
     }
 
-    // `project validate` must run before auto-initialization. Otherwise a
-    // missing `.project/` would be created before the validator can report it.
+    // `project` read commands must run before auto-initialization. Otherwise a
+    // missing `.project/` would be created before read-only commands can report it.
     {
         let argv: Vec<String> = std::env::args().collect();
-        if argv.get(1).map(String::as_str) == Some("project")
-            && argv.get(2).map(String::as_str) == Some("validate")
-        {
+        if argv.get(1).map(String::as_str) == Some("project") {
             let cli = Cli::parse();
-            if let Some(Commands::Project {
-                action: ProjectAction::Validate,
-            }) = cli.command
-            {
+            if let Some(Commands::Project { action }) = cli.command {
                 let project_root = workspace::find_project_root()?;
-                if !run_project_validate(&project_root)? {
+                if !run_project_action(&project_root, action)? {
                     std::process::exit(1);
                 }
                 return Ok(());
@@ -1088,13 +1166,11 @@ fn main() -> Result<()> {
         Some(Commands::Trust { action }) => {
             handle_trust_command(action)?;
         }
-        Some(Commands::Project { action }) => match action {
-            ProjectAction::Validate => {
-                if !run_project_validate(&project_root)? {
-                    std::process::exit(1);
-                }
+        Some(Commands::Project { action }) => {
+            if !run_project_action(&project_root, action)? {
+                std::process::exit(1);
             }
-        },
+        }
         Some(Commands::Remote { action }) => match action {
             RemoteAction::Doctor { skip_push } => {
                 if !run_remote_doctor(&project_root, skip_push)? {

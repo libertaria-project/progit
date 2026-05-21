@@ -13,6 +13,7 @@ pub mod mr;
 pub mod panopticum;
 pub mod plugins;
 pub mod project_contract;
+pub mod project_view;
 pub mod rebase;
 pub mod remote;
 pub mod review;
