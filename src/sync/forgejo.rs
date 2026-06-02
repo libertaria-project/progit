@@ -9,11 +9,13 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 
 pub struct ForgejoProvider {
     config: SyncConfig,
     client: Client,
     auth_mode: AuthMode,
+    token_cache: Mutex<Option<String>>,
 }
 
 impl ForgejoProvider {
@@ -32,18 +34,26 @@ impl ForgejoProvider {
             config,
             client,
             auth_mode,
+            token_cache: Mutex::new(None),
         }
     }
 
     fn get_token(&self) -> Result<String> {
         match keyring::get_token(&self.config.url, &self.config.owner) {
             Ok(token) => Ok(token),
-            Err(_) if self.auth_mode.allows_prompt() => self.login_interactive(),
-            Err(err) => Err(crate::sync::auth_required_error(
-                &self.config.provider,
-                &self.config.url,
-                err,
-            )),
+            Err(err) => {
+                if let Some(token) = self.cached_token()? {
+                    Ok(token)
+                } else if self.auth_mode.allows_prompt() {
+                    self.login_interactive()
+                } else {
+                    Err(crate::sync::auth_required_error(
+                        &self.config.provider,
+                        &self.config.url,
+                        err,
+                    ))
+                }
+            }
         }
     }
 
@@ -53,15 +63,40 @@ impl ForgejoProvider {
         if let Err(err) = keyring::set_token(&self.config.url, &self.config.owner, &token) {
             log::warn!("Token will be used for this command only: {}", err);
         }
+        self.remember_token(&token)?;
         Ok(token)
     }
 
     // API Models
+    fn cached_token(&self) -> Result<Option<String>> {
+        self.token_cache
+            .lock()
+            .map(|token| token.clone())
+            .map_err(|_| anyhow!("Token cache lock poisoned"))
+    }
+
+    fn remember_token(&self, token: &str) -> Result<()> {
+        *self
+            .token_cache
+            .lock()
+            .map_err(|_| anyhow!("Token cache lock poisoned"))? = Some(token.to_string());
+        Ok(())
+    }
+
+    fn clear_cached_token(&self) {
+        if let Ok(mut token) = self.token_cache.lock() {
+            *token = None;
+        }
+    }
+
+    fn api_root(&self) -> String {
+        format!("{}/api/v1", self.config.url.trim_end_matches('/'))
+    }
 
     fn base_url(&self) -> String {
         format!(
-            "{}/api/v1/repos/{}/{}",
-            self.config.url, self.config.owner, self.config.repo
+            "{}/repos/{}/{}",
+            self.api_root(), self.config.owner, self.config.repo
         )
     }
 }
@@ -102,7 +137,23 @@ struct CreateIssuePayload {
 
 impl SyncProvider for ForgejoProvider {
     fn login(&self) -> Result<()> {
-        let _ = self.get_token()?;
+        let token = self.get_token()?;
+        let url = format!("{}/user", self.api_root());
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("token {}", token))
+            .send()
+            .context("Failed to connect to Forgejo")?;
+
+        if !response.status().is_success() {
+            if response.status().as_u16() == 401 {
+                self.clear_cached_token();
+                let _ = keyring::delete_token(&self.config.url, &self.config.owner);
+            }
+            return Err(anyhow!("Forgejo authentication failed: {}", response.status()));
+        }
+
         log::info!("✅ Authenticated with Forgejo");
         Ok(())
     }
@@ -705,4 +756,29 @@ struct ForgejoPullRequest {
 struct ForgejoBranch {
     #[serde(rename = "ref")]
     ref_name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sync_config() -> SyncConfig {
+        SyncConfig {
+            provider: "forgejo".to_string(),
+            url: "https://git.example.test".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+        }
+    }
+
+    #[test]
+    fn caches_prompted_token_for_provider_lifetime() {
+        let provider = ForgejoProvider::with_auth_mode(sync_config(), AuthMode::Interactive);
+
+        assert!(provider.cached_token().unwrap().is_none());
+        provider.remember_token("token-123").unwrap();
+        assert_eq!(provider.cached_token().unwrap().as_deref(), Some("token-123"));
+        provider.clear_cached_token();
+        assert!(provider.cached_token().unwrap().is_none());
+    }
 }
