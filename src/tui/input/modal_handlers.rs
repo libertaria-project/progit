@@ -3,6 +3,7 @@
 use super::super::app::{App, InputMode};
 use super::KeyAction;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::io::{self, Write};
 
 /// Handle a key event in search mode
 pub(super) fn handle_search_key(app: &mut App, key: KeyEvent) -> KeyAction {
@@ -78,7 +79,7 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     // Suspend TUI
                     let _ = crossterm::terminal::disable_raw_mode();
                     let _ = crossterm::execute!(
-                        std::io::stdout(),
+                        io::stdout(),
                         crossterm::terminal::LeaveAlternateScreen
                     );
 
@@ -87,24 +88,27 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                         .args(&args[1..])
                         .status();
 
+                    let status_msg = match status {
+                        Ok(s) if s.success() => "Command executed successfully".to_string(),
+                        Ok(s) => format!("Command failed with code: {}", s),
+                        Err(e) => format!("Failed to run command: {}", e),
+                    };
+
+                    println!();
+                    println!("[ProGit] {status_msg}");
+                    print!("[ProGit] Press Enter to return to the TUI...");
+                    let _ = io::stdout().flush();
+                    let mut pause = String::new();
+                    let _ = io::stdin().read_line(&mut pause);
+
                     // Resume TUI
                     let _ = crossterm::terminal::enable_raw_mode();
                     let _ = crossterm::execute!(
-                        std::io::stdout(),
+                        io::stdout(),
                         crossterm::terminal::EnterAlternateScreen
                     );
 
-                    match status {
-                        Ok(s) if s.success() => {
-                            app.set_status("Command executed successfully".to_string());
-                        }
-                        Ok(s) => {
-                            app.set_status(format!("Command failed with code: {}", s));
-                        }
-                        Err(e) => {
-                            app.set_status(format!("Failed to run command: {}", e));
-                        }
-                    }
+                    app.set_status(status_msg);
                     KeyAction::Refresh
                 }
             }
