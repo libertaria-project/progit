@@ -238,6 +238,26 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         return KeyAction::Refresh;
     }
 
+    if app.input_mode == InputMode::CommandOutput {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                app.command_output = None;
+                app.command_output_scroll = 0;
+                app.input_mode = InputMode::Normal;
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                app.command_output_scroll = app.command_output_scroll.saturating_add(1);
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                app.command_output_scroll = app.command_output_scroll.saturating_sub(1);
+                return KeyAction::Refresh;
+            }
+            _ => return KeyAction::None,
+        }
+    }
+
     // Plugin manager modal
     if app.show_plugins {
         match key.code {
@@ -297,6 +317,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::DetailView => handle_detail_view_key(app, key),
         InputMode::DetailEdit => handle_detail_edit_key(app, key),
         InputMode::Command => handle_command_key(app, key),
+        InputMode::CommandOutput => KeyAction::Refresh,
         InputMode::MRCreate => handle_mr_create_key(app, key),
         InputMode::RepoFilter => handle_repo_filter_key(app, key),
         InputMode::Settings => handle_settings_key(app, key),
@@ -725,6 +746,7 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::DetailView => "j/k:fields │ Space:cycle │ Enter:edit │ Esc:close",
         InputMode::DetailEdit => "Type to edit │ Enter:save │ Esc:cancel",
         InputMode::Command => "Type command │ Enter:exec │ Esc:cancel",
+        InputMode::CommandOutput => "Enter/Esc/q:close │ j/k:scroll",
         InputMode::MRCreate => "Tab:next field │ Enter:submit │ Esc:cancel",
         InputMode::RepoFilter => "j/k:nav │ Enter:select │ c:clear │ Esc:cancel",
         InputMode::Settings => "t:theme │ O/Esc:close",

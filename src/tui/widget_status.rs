@@ -19,14 +19,37 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) -> Option<Rect> {
 
     let colors = app.theme.colors();
     let engine = &app.theme_engine;
+    let border_style = engine.get("status.border", colors.border());
+
+    if matches!(app.input_mode, InputMode::Search | InputMode::Command) {
+        let content = match app.input_mode {
+            InputMode::Search => Line::from(vec![
+                Span::styled("/ ", engine.get("status.mode.search", colors.accent())),
+                Span::raw(&app.search_query),
+                Span::styled("█", engine.get("status.cursor", colors.accent())),
+            ]),
+            InputMode::Command => Line::from(vec![
+                Span::styled(": ", engine.get("status.mode.command", colors.accent())),
+                Span::raw(&app.command_input),
+                Span::styled("█", engine.get("status.cursor", colors.accent())),
+            ]),
+            _ => unreachable!(),
+        };
+
+        let input = Paragraph::new(content).block(
+            Block::default()
+                .borders(Borders::TOP)
+                .border_style(border_style),
+        );
+        frame.render_widget(input, area);
+        return None;
+    }
 
     // Split into left (git/path info) and right (clock/search)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
         .split(area);
-
-    let border_style = engine.get("status.border", colors.border());
 
     // LEFT: Git info + repo path
     let left_content = if let Some(ref repo) = app.repo_info {

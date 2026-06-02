@@ -75,6 +75,43 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     app.set_status(format!("Error: {}", err));
                     KeyAction::Refresh
                 }
+                CommandAction::RunAndShowOutput(args) => {
+                    let output = std::process::Command::new(&args[0])
+                        .args(&args[1..])
+                        .output();
+
+                    let command = args.join(" ");
+                    let command_output = match output {
+                        Ok(output) => {
+                            let success = output.status.success();
+                            let status = if success {
+                                "Command executed successfully".to_string()
+                            } else {
+                                format!("Command failed with code: {}", output.status)
+                            };
+                            crate::tui::app::CommandOutput {
+                                command,
+                                status,
+                                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                                success,
+                            }
+                        }
+                        Err(e) => crate::tui::app::CommandOutput {
+                            command,
+                            status: format!("Failed to run command: {}", e),
+                            stdout: String::new(),
+                            stderr: String::new(),
+                            success: false,
+                        },
+                    };
+
+                    app.set_status(command_output.status.clone());
+                    app.command_output = Some(command_output);
+                    app.command_output_scroll = 0;
+                    app.input_mode = InputMode::CommandOutput;
+                    KeyAction::Refresh
+                }
                 CommandAction::SuspendAndRun(args) => {
                     // Suspend TUI
                     let _ = crossterm::terminal::disable_raw_mode();

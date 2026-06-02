@@ -9,6 +9,7 @@ pub enum CommandAction {
     Status(String),
     Error(String),
     SuspendAndRun(Vec<String>),
+    RunAndShowOutput(Vec<String>),
 }
 
 pub fn execute(app: &mut App, input: &str) -> CommandAction {
@@ -183,11 +184,11 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
             }
         }
         "sober" => match crate::sober::tui_command_args(&parts[1..]) {
-            Ok(args) => CommandAction::SuspendAndRun(args),
+            Ok(args) => CommandAction::RunAndShowOutput(args),
             Err(e) => CommandAction::Error(e.to_string()),
         },
         "plugin" => match crate::plugins::cli::tui_command_args(&parts[1..]) {
-            Ok(args) => CommandAction::SuspendAndRun(args),
+            Ok(args) => CommandAction::RunAndShowOutput(args),
             Err(e) => CommandAction::Error(e.to_string()),
         },
         "review" => {
