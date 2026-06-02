@@ -514,6 +514,12 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
                                 app.open_project_issues();
                                 return KeyAction::Refresh;
                             }
+                            "plugin_command" => {
+                                app.input_mode = InputMode::Command;
+                                app.command_input = "plugin ".to_string();
+                                app.set_status("Type plugin command and press Enter".to_string());
+                                return KeyAction::Refresh;
+                            }
                             "sober_doctor" => {
                                 app.input_mode = InputMode::Command;
                                 app.command_input = "sober doctor".to_string();
@@ -535,6 +541,13 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
                                 return KeyAction::Refresh;
                             }
                             _ => {}
+                        }
+
+                        if let Some(command) = action.strip_prefix("plugin_command:") {
+                            app.input_mode = InputMode::Command;
+                            app.command_input = format!("plugin {command} ");
+                            app.set_status(format!("Press Enter to run plugin command: {command}"));
+                            return KeyAction::Refresh;
                         }
                     }
                     FuzzyItem::File { .. } => {

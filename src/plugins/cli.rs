@@ -20,6 +20,18 @@ use super::manager::CommandResult;
 use super::registry::{PluginRegistry, PluginSource};
 use crate::storage::config;
 
+/// Convert a TUI `:plugin ...` command into a `prog plugin ...` process.
+pub fn tui_command_args(parts: &[&str]) -> Result<Vec<String>> {
+    if parts.is_empty() {
+        anyhow::bail!("Usage: :plugin <command> [args...]");
+    }
+
+    let current_exe = std::env::current_exe().unwrap_or_else(|_| "prog".into());
+    let mut args = vec![current_exe.display().to_string(), "plugin".to_string()];
+    args.extend(parts.iter().map(|part| (*part).to_string()));
+    Ok(args)
+}
+
 /// Helper to create a registry with config support
 fn get_registry(project_root: &Path) -> Result<PluginRegistry> {
     let config_path = project_root.join(".project").join("config.kdl");
@@ -472,5 +484,26 @@ fn detect_git_user_name() -> Option<String> {
         None
     } else {
         Some(trimmed.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tui_plugin_args_wrap_current_executable() {
+        let args = tui_command_args(&["sober", "preflight", "--base", "HEAD"]).unwrap();
+
+        assert!(args.len() >= 6);
+        assert_eq!(args[1], "plugin");
+        assert_eq!(args[2..], ["sober", "preflight", "--base", "HEAD"]);
+    }
+
+    #[test]
+    fn tui_plugin_args_require_command() {
+        let err = tui_command_args(&[]).unwrap_err().to_string();
+
+        assert!(err.contains("Usage: :plugin"));
     }
 }

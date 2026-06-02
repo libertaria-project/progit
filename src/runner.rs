@@ -153,6 +153,7 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
         }
 
         app.plugin_manager = Some(plugin_manager);
+        app.fuzzy_searcher.update_plugin_commands(&project_root);
     }
 
     // ─── Panopticum Integration ───────────────────────────────────────────────

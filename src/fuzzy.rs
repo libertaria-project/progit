@@ -13,6 +13,8 @@
 
 use crate::issue::Issue;
 // No ordering needed
+use std::collections::HashSet;
+use std::path::Path;
 
 /// Fuzzy search result
 #[derive(Debug, Clone)]
@@ -210,6 +212,11 @@ impl FuzzySearcher {
                 action: "project_issues".to_string(),
             },
             FuzzyItem::Command {
+                name: "Plugin Command".to_string(),
+                description: "Run an installed plugin command".to_string(),
+                action: "plugin_command".to_string(),
+            },
+            FuzzyItem::Command {
                 name: "Sober Doctor".to_string(),
                 description: "Run repository governance health checks".to_string(),
                 action: "sober_doctor".to_string(),
@@ -225,6 +232,79 @@ impl FuzzySearcher {
                 action: "sober_review_preview".to_string(),
             },
         ]
+    }
+
+    /// Update command cache with installed plugin command namespaces.
+    pub fn update_plugin_commands(&mut self, repo_root: &Path) {
+        let mut commands = Self::build_command_list();
+        commands.extend(Self::discover_plugin_commands(repo_root));
+        self.commands = commands;
+    }
+
+    fn discover_plugin_commands(repo_root: &Path) -> Vec<FuzzyItem> {
+        let mut items = Vec::new();
+        let mut seen = HashSet::new();
+
+        for plugin_root in [
+            repo_root.join("plugins"),
+            repo_root.join(".progit").join("plugins"),
+        ] {
+            let Ok(entries) = std::fs::read_dir(plugin_root) else {
+                continue;
+            };
+
+            for entry in entries.flatten() {
+                let manifest_path = entry.path().join(".progit-plugin.json");
+                if !manifest_path.exists() {
+                    continue;
+                }
+
+                let Ok(raw) = std::fs::read_to_string(&manifest_path) else {
+                    continue;
+                };
+                let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&raw) else {
+                    continue;
+                };
+
+                let plugin_name = manifest
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| entry.file_name().to_string_lossy().to_string());
+                let plugin_description = manifest
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Installed plugin command")
+                    .to_string();
+
+                let Some(commands) = manifest.get("commands").and_then(|v| v.as_array()) else {
+                    continue;
+                };
+
+                for command in commands {
+                    let Some(command_name) = plugin_command_name(command) else {
+                        continue;
+                    };
+                    if !seen.insert(command_name.clone()) {
+                        continue;
+                    }
+
+                    let command_description = command
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                        .unwrap_or_else(|| plugin_description.clone());
+
+                    items.push(FuzzyItem::Command {
+                        name: format!("Plugin: {command_name}"),
+                        description: format!("{plugin_name}: {command_description}"),
+                        action: format!("plugin_command:{command_name}"),
+                    });
+                }
+            }
+        }
+
+        items
     }
 
     /// Perform fuzzy search across all items
@@ -335,6 +415,15 @@ impl FuzzySearcher {
     }
 }
 
+fn plugin_command_name(command: &serde_json::Value) -> Option<String> {
+    command.as_str().map(str::to_string).or_else(|| {
+        command
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    })
+}
+
 impl Default for FuzzySearcher {
     fn default() -> Self {
         Self::new()
@@ -407,6 +496,36 @@ mod tests {
         assert!(issues.iter().any(|m| matches!(
             &m.item,
             FuzzyItem::Command { action, .. } if action == "project_issues"
+        )));
+    }
+
+    #[test]
+    fn update_plugin_commands_discovers_manifest_commands() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugin_dir = dir.path().join("plugins").join("sober-raccoon");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        std::fs::write(
+            plugin_dir.join(".progit-plugin.json"),
+            r#"{
+                "name": "sober-raccoon",
+                "description": "Premium Sober governance cockpit",
+                "commands": ["sober", {"name": "sober-raccoon", "description": "Open Sober cockpit"}]
+            }"#,
+        )
+        .unwrap();
+
+        let mut searcher = FuzzySearcher::new();
+        searcher.update_plugin_commands(dir.path());
+
+        let results = searcher.search("sober");
+
+        assert!(results.iter().any(|m| matches!(
+            &m.item,
+            FuzzyItem::Command { action, .. } if action == "plugin_command:sober"
+        )));
+        assert!(results.iter().any(|m| matches!(
+            &m.item,
+            FuzzyItem::Command { action, .. } if action == "plugin_command:sober-raccoon"
         )));
     }
 }

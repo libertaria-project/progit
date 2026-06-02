@@ -186,6 +186,10 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
             Ok(args) => CommandAction::SuspendAndRun(args),
             Err(e) => CommandAction::Error(e.to_string()),
         },
+        "plugin" => match crate::plugins::cli::tui_command_args(&parts[1..]) {
+            Ok(args) => CommandAction::SuspendAndRun(args),
+            Err(e) => CommandAction::Error(e.to_string()),
+        },
         "review" => {
             // Enter code review mode
             if parts.len() < 2 {
