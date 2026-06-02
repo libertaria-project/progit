@@ -464,3 +464,52 @@ impl PluginRegistry {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    #[test]
+    fn sober_raccoon_marketplace_listing_is_registry_installable() -> Result<()> {
+        let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("progit-market")
+            .join("plugins")
+            .join("sober-raccoon.json");
+        let content = std::fs::read_to_string(manifest_path)?;
+        let manifest: PluginManifest = serde_json::from_str(&content)?;
+
+        assert_eq!(manifest.name, "sober-raccoon");
+        assert_eq!(manifest.runtime, "lua");
+        assert_eq!(manifest.source_url, "https://git.sovereign-society.org/ProGit/progit.git");
+        assert_eq!(manifest.source_path.as_deref(), Some("plugins/sober-raccoon"));
+        assert_eq!(manifest.sdk_version, ">=0.3");
+
+        Ok(())
+    }
+
+    #[test]
+    fn sober_raccoon_marketplace_mascot_checksum_matches_asset() -> Result<()> {
+        let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("progit-market")
+            .join("plugins")
+            .join("sober-raccoon.json");
+        let content = std::fs::read_to_string(manifest_path)?;
+        let manifest: serde_json::Value = serde_json::from_str(&content)?;
+        let expected = manifest
+            .pointer("/mascot/sha256")
+            .and_then(serde_json::Value::as_str)
+            .context("sober-raccoon marketplace listing is missing mascot.sha256")?;
+
+        let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("progit-market")
+            .join("assets")
+            .join("sober-raccoon-daemon.png");
+        let bytes = std::fs::read(asset_path)?;
+        let actual = format!("{:x}", Sha256::digest(&bytes));
+
+        assert_eq!(actual, expected);
+
+        Ok(())
+    }
+}

@@ -1,32 +1,64 @@
 {
   "id": "sober-raccoon",
-  "name": "Sober Raccoon",
+  "name": "sober-raccoon",
+  "display_name": "Sober Raccoon",
   "version": "0.1.0",
   "author": "ProGit Team",
-  "description": "Premium Sober governance cockpit for ProGit. Runs doctor, preflight, hygiene, hooks, and review-preview through ProGit's sandboxed Sober host capability.",
+  "description": "Premium ProGit cockpit for Sober, a local-first repository governance assistant for agentic coding.",
+  "long_description": "Runs Sober doctor, preflight, hygiene, hook status, hook install, and review-preview flows through ProGit's narrow sober.run host capability. The plugin does not spawn shell commands from Lua and receives only the allowlisted Sober actions exposed by the ProGit host.",
   "license": "LicenseRef-ProGit-Premium",
+  "plugin_type": "ai",
   "runtime": "lua",
+  "source_url": "https://git.sovereign-society.org/ProGit/progit.git",
+  "source_path": "plugins/sober-raccoon",
+  "sdk_version": ">=0.3",
   "premium": true,
+  "edition": "ProGit Premium",
   "price": {
     "edition": "ProGit Premium",
     "billing": "subscription",
     "starts_at_usd_per_user_month": 15
   },
-  "repository": "https://git.sovereign-society.org/ProGit/progit-premium-plugins/src/branch/main/sober-raccoon",
+  "repository": "https://git.sovereign-society.org/ProGit/progit/src/branch/main/plugins/sober-raccoon",
   "download_url": "https://plugins.progit.dev/premium/sober-raccoon/0.1.0/main.lua",
   "install_path": "progit-plugins/sober-raccoon",
+  "homepage": "https://plugins.progit.dev/sober-raccoon",
+  "project": {
+    "name": "Sober",
+    "tagline": "Sober second thought for your code.",
+    "repository": "https://git.sovereign-society.org/Sober/sober.git",
+    "local_source": "../Sober/sober",
+    "language": "Go",
+    "storage": "SQLite",
+    "license": "Libertaria Sovereign License v1.0",
+    "summary": "Sober keeps repositories moving under owner rules with Git authority, deterministic preflight checks, model routing, private steering, stored evidence, managed hooks, recoverable background work, and explicit Forgejo/Gitea posting."
+  },
+  "mascot": {
+    "name": "Sober daemon",
+    "kind": "raccoon",
+    "asset": "../assets/sober-raccoon-daemon.png",
+    "source_path": "../Sober/sober-dev/assets/sober-raccoon-daemon.png",
+    "width": 1672,
+    "height": 941,
+    "mime": "image/png",
+    "sha256": "0ddbc4ae833ca8a32714be728829ce354eebaf60a0c65d3b8f9bbe416d201827"
+  },
+  "icon": "../assets/sober-raccoon-daemon.png",
+  "screenshots": [
+    "../assets/sober-raccoon-daemon.png"
+  ],
   "tags": [
     "sober",
     "governance",
     "security",
     "release-gates",
+    "preflight",
     "premium"
   ],
   "capabilities": [
     "sober"
   ],
   "config_required": {},
-  "screenshots": [],
   "downloads": 0,
   "rating": 0.0,
   "created_at": "2026-06-02T00:00:00Z",
