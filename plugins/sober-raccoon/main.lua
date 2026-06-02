@@ -23,6 +23,18 @@ local config = {
     hygiene_profile = "standard",
 }
 
+local routes = {
+    { name = "status", description = "Run doctor, preflight, and hooks status summary" },
+    { name = "doctor [--online]", description = "Run Sober doctor checks" },
+    { name = "preflight [--base REF]", description = "Run deterministic release-gate checks" },
+    { name = "hygiene [--profile PROFILE]", description = "Run Sober hygiene checks" },
+    { name = "review-preview [--base REF] [--provider NAME] [--model NAME]", description = "Preview a model review prompt" },
+    { name = "hooks status [HOOK]", description = "Show managed hook status" },
+    { name = "hooks install [HOOK]", description = "Install managed hooks" },
+    { name = "route list", description = "List Sober Raccoon routes" },
+    { name = "help", description = "Show command usage" },
+}
+
 local function merge_config(source)
     if not source then
         return
@@ -161,6 +173,27 @@ local function hooks(payload)
     }
 end
 
+local function route(payload)
+    local method = payload.method or "list"
+    if method ~= "list" then
+        return {
+            plugin = "sober-raccoon",
+            premium = true,
+            action = "route",
+            ok = false,
+            error = "Unsupported route command: " .. tostring(method) .. ". Use: route list",
+        }
+    end
+
+    return {
+        plugin = "sober-raccoon",
+        premium = true,
+        action = "route list",
+        ok = true,
+        routes = routes,
+    }
+end
+
 local function action_response(action, payload)
     if action == "status" then
         return status(payload)
@@ -174,6 +207,8 @@ local function action_response(action, payload)
         return hygiene(payload)
     elseif action == "hooks" then
         return hooks(payload)
+    elseif action == "route" or action == "routes" or action == "list" then
+        return route(payload)
     end
 
     return {
@@ -181,7 +216,7 @@ local function action_response(action, payload)
         premium = true,
         action = action,
         ok = false,
-        error = "Unsupported sober-raccoon action: " .. tostring(action),
+        error = "Unsupported sober-raccoon action: " .. tostring(action) .. ". Use `route list` or `help`.",
     }
 end
 
@@ -221,6 +256,8 @@ local function command_payload(args)
     if action == "hooks" then
         payload.method = args[2] or "status"
         payload.hook = args[3]
+    elseif action == "route" then
+        payload.method = args[2] or "list"
     end
 
     return action, payload
@@ -257,18 +294,27 @@ end
 
 local function usage()
     return table.concat({
-        "Usage: prog plugin sober <status|doctor|preflight|hygiene|review-preview|hooks> [options]",
+        "Usage: prog plugin sober <status|doctor|preflight|hygiene|review-preview|hooks|route> [options]",
         "",
         "Examples:",
         "  prog plugin sober status",
         "  prog plugin sober preflight --base HEAD",
         "  prog plugin sober hygiene --profile standard",
         "  prog plugin sober hooks status",
+        "  prog plugin sober route list",
         "  prog plugin sober review-preview --provider kimi-coding --model kimi-k2.6",
     }, "\n")
 end
 
 local function command_output(response)
+    if response.routes then
+        local lines = { "Sober Raccoon routes:" }
+        for _, route_entry in ipairs(response.routes) do
+            table.insert(lines, "  " .. route_entry.name .. " - " .. route_entry.description)
+        end
+        return table.concat(lines, "\n")
+    end
+
     local ok = response_ok(response)
     local lines = {
         "Sober Raccoon " .. tostring(response.action or "command") .. ": " .. (ok and "OK" or "FAIL"),

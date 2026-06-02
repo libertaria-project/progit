@@ -699,6 +699,29 @@ mod tests {
     }
 
     #[test]
+    fn sober_raccoon_lists_command_routes() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let plugin_dir = repo.join("plugins").join("sober-raccoon");
+        let context = PluginContext {
+            repo_path: repo.to_string_lossy().to_string(),
+            user: None,
+            env: Default::default(),
+            config: Default::default(),
+        };
+        let mut manager = PluginManager::new(repo);
+
+        manager.load_from_dir(&plugin_dir, &context);
+        let result = manager
+            .dispatch_command("sober", &["route".to_string(), "list".to_string()])
+            .expect("sober-raccoon should handle route list");
+
+        assert!(result.success);
+        let output = result.output.expect("route list should return output");
+        assert!(output.contains("Sober Raccoon routes"));
+        assert!(output.contains("preflight [--base REF]"));
+    }
+
+    #[test]
     fn dispatch_command_skips_unhandled_responses() {
         let dir = tempfile::tempdir().unwrap();
         let first = dir.path().join("first.lua");
