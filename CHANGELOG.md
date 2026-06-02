@@ -8,6 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.8.1-beta] - 2026-06-02
+
+### Beta Promotion — Auth, Release, and Plugin Marketplace
+
+This beta ships the first binary release after the sovereign data-plane beta.
+It focuses on making ProGit usable as the local operator binary: the release
+binary is linked into `~/bin/prog`, sync authentication no longer wedges the
+TUI, token-file based Forgejo auth works in the default no-keyring build, and
+the Sober integration is visible through the premium plugin path.
+
+### Added
+- **Sober host bridge** through `src/sober.rs`, giving plugins a narrow
+  governance/release-check capability without leaking implementation details
+  into the TUI.
+- **`sober-raccoon` premium plugin** and marketplace listing, including mascot
+  asset integration for the ProGit plugin ecosystem.
+- **Repository-owned project views** for read-only `.project` wiki and issue
+  files inside the TUI.
+- **Signed binary release pipeline** with minisign signatures, checksum
+  manifest, size-gated default build, and `~/bin/prog` release-link helper.
+
+### Fixed
+- The TUI no longer performs blocking stdin token prompts while the terminal is
+  in raw mode. Missing sync credentials now show a dismissible authentication
+  notice instead of corrupting the shell.
+- Forgejo/GitLab sync accepts token files in the default build:
+  `PROGIT_TOKEN_FILE`, `FORGEJO_TOKEN_FILE`, `GITLAB_TOKEN_FILE`, plus
+  `TOKEN_ENV_FILE`/`TOKEN_ENV_VAR`.
+- Prompted CLI tokens are reused for the lifetime of a sync command when OS
+  keyring support is unavailable, avoiding repeated prompts during push/pull.
+- Forgejo auth is verified up front at `/api/v1/user`, so invalid tokens fail
+  during `Authenticating...` instead of later as a generic API `401`.
+- The release gate is hardened against mutable/unverified setup paths and keeps
+  the default release binary under the 7 MB doctrine budget.
+
 ## [0.8.0-beta] - 2026-05-09
 
 ### Beta Promotion — Sovereign Data Plane
@@ -530,7 +565,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 ProGit Core: **LCL-1.0** (file-level copyleft)
 Plugin SDK: **LSL-1.0** (file-level copyleft + patent grant)
 
-[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-beta...HEAD
+[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.1-beta...HEAD
+[0.8.1-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.0-beta...v0.8.1-beta
+[0.8.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-beta...v0.8.0-beta
 [0.7.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-alpha...v0.7.0-beta
 [0.7.0-alpha]: https://git.sovereign-society.org/ProGit/progit/compare/v0.6.0-beta...v0.7.0-alpha
 [0.6.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.5.2-beta...v0.6.0-beta

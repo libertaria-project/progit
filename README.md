@@ -3,7 +3,7 @@
 **A terminal-native project tracker. 6.5 MB binary. Your data, in your repo.**
 
 [![License: LCL-1.0](https://img.shields.io/badge/License-LCL--1.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.0--beta-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.1--beta-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org)
 
 > *"I replaced GitLab with a 6.5 MB binary."*
@@ -270,7 +270,7 @@ Branch off `forge`, open MRs targeting `forge`.
 
 ## Roadmap
 
-### v0.8.0-beta (Current)
+### v0.8.1-beta (Current)
 - [x] Kanban board, issues, merge requests
 - [x] Code review mode (line-level comments)
 - [x] CI/CD integration (GitLab, Forgejo)
