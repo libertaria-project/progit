@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # ProGit Release Script
-# Handles the full release workflow: develop → main with tagging
-# Usage: ./scripts/release.sh [--dry-run]
+# Handles the full release workflow: main → stable with tagging
+# Usage: ./scripts/release.sh [--dry-run] [--yes|-y]
+#   --yes / -y : skip the interactive confirmation (for non-interactive CI)
 
 # Colors
 RED='\033[0;31m'
@@ -12,11 +13,25 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+INTEGRATION_BRANCH="main"
+RELEASE_BRANCH="stable"
+
 DRY_RUN=false
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
-    echo -e "${YELLOW}🔍 DRY RUN MODE${NC}"
-fi
+ASSUME_YES=false
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=true; echo -e "${YELLOW}🔍 DRY RUN MODE${NC}" ;;
+        -y|--yes)  ASSUME_YES=true ;;
+    esac
+done
+
+# confirm "prompt" — success if the user agrees or --yes/-y was passed.
+confirm() {
+    [[ "$ASSUME_YES" == true ]] && return 0
+    read -p "$1 (y/N) " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]]
+}
 
 # Pre-flight checks
 echo -e "${BLUE}🔍 Running pre-flight checks...${NC}"
@@ -29,16 +44,25 @@ fi
 
 # Check current branch
 CURRENT_BRANCH=$(git branch --show-current)
-if [[ "$CURRENT_BRANCH" != "develop" ]]; then
-    echo -e "${RED}❌ Must be on 'develop' branch (currently on '${CURRENT_BRANCH}')${NC}"
+if [[ "$CURRENT_BRANCH" != "$INTEGRATION_BRANCH" ]]; then
+    echo -e "${RED}❌ Must be on '${INTEGRATION_BRANCH}' branch (currently on '${CURRENT_BRANCH}')${NC}"
+    exit 1
+fi
+
+# Check release branch exists locally or on origin
+if ! git show-ref --verify --quiet "refs/heads/${RELEASE_BRANCH}" \
+    && ! git show-ref --verify --quiet "refs/remotes/origin/${RELEASE_BRANCH}"; then
+    echo -e "${RED}❌ Release branch '${RELEASE_BRANCH}' not found locally or on origin${NC}"
     exit 1
 fi
 
 # Check for uncommitted changes
-if [[ -n $(git status --porcelain) ]]; then
+if [[ "$DRY_RUN" != true && -n $(git status --porcelain) ]]; then
     echo -e "${RED}❌ Working directory not clean. Commit or stash changes first.${NC}"
     git status --short
     exit 1
+elif [[ "$DRY_RUN" == true && -n $(git status --porcelain) ]]; then
+    echo -e "${YELLOW}⚠️  Dry run with uncommitted changes; real releases require a clean tree.${NC}"
 fi
 
 # Get current version from Cargo.toml
@@ -48,16 +72,25 @@ if [[ -z "$VERSION" ]]; then
     exit 1
 fi
 
+if git rev-parse -q --verify "refs/tags/v${VERSION}" > /dev/null; then
+    if [[ "$DRY_RUN" == true ]]; then
+        echo -e "${YELLOW}⚠️  Tag v${VERSION} already exists; real releases would stop here.${NC}"
+    else
+        echo -e "${RED}❌ Tag v${VERSION} already exists${NC}"
+        exit 1
+    fi
+fi
+
 echo -e "${GREEN}✅ Pre-flight checks passed${NC}"
 echo -e "${BLUE}📦 Preparing release v${VERSION}${NC}"
 
-# Run tests
-echo -e "${BLUE}🧪 Running tests...${NC}"
-if ! cargo test --quiet; then
-    echo -e "${RED}❌ Tests failed. Fix issues before releasing.${NC}"
+# Run quality checks
+echo -e "${BLUE}Running quality checks...${NC}"
+if ! bash ./scripts/check.sh; then
+    echo -e "${RED}Quality checks failed. Fix issues before releasing.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✅ Tests passed${NC}"
+echo -e "${GREEN}Quality checks passed${NC}"
 
 # Build release binary to verify
 echo -e "${BLUE}🔨 Building release binary...${NC}"
@@ -70,11 +103,12 @@ echo -e "${GREEN}✅ Release build successful${NC}"
 if [[ "$DRY_RUN" == true ]]; then
     echo -e "${YELLOW}🔍 Dry run complete - no changes made${NC}"
     echo -e "${BLUE}Would perform:${NC}"
-    echo -e "  1. Checkout main"
-    echo -e "  2. Merge develop → main"
-    echo -e "  3. Tag v${VERSION}"
-    echo -e "  4. Push main and tags"
-    echo -e "  5. Return to develop"
+    echo -e "  1. Checkout ${RELEASE_BRANCH}"
+    echo -e "  2. Merge ${INTEGRATION_BRANCH} → ${RELEASE_BRANCH}"
+    echo -e "  3. Tag v${VERSION} on ${RELEASE_BRANCH}"
+    echo -e "  4. Push ${INTEGRATION_BRANCH}, ${RELEASE_BRANCH}, and tag"
+    echo -e "  5. Return to ${INTEGRATION_BRANCH}"
+    echo -e "  6. Link target/release/prog to ~/bin/prog"
     exit 0
 fi
 
@@ -82,13 +116,12 @@ fi
 echo ""
 echo -e "${YELLOW}⚠️  Ready to release v${VERSION}${NC}"
 echo -e "${YELLOW}This will:${NC}"
-echo -e "  1. Merge develop → main"
-echo -e "  2. Create tag v${VERSION}"
-echo -e "  3. Push to remote"
+echo -e "  1. Merge ${INTEGRATION_BRANCH} → ${RELEASE_BRANCH}"
+echo -e "  2. Create tag v${VERSION} on ${RELEASE_BRANCH}"
+echo -e "  3. Push ${INTEGRATION_BRANCH}, ${RELEASE_BRANCH}, and tag"
+echo -e "  4. Link target/release/prog to ~/bin/prog"
 echo ""
-read -p "Continue? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+if ! confirm "Continue?"; then
     echo -e "${YELLOW}❌ Release cancelled${NC}"
     exit 0
 fi
@@ -96,15 +129,19 @@ fi
 # Perform release
 echo -e "${BLUE}🚀 Starting release process...${NC}"
 
-# Checkout main
-echo -e "${BLUE}📝 Switching to main branch...${NC}"
-git checkout main
+# Checkout stable
+echo -e "${BLUE}📝 Switching to ${RELEASE_BRANCH} branch...${NC}"
+if git show-ref --verify --quiet "refs/heads/${RELEASE_BRANCH}"; then
+    git checkout "${RELEASE_BRANCH}"
+else
+    git checkout -b "${RELEASE_BRANCH}" "origin/${RELEASE_BRANCH}"
+fi
 
-# Merge develop into main
-echo -e "${BLUE}📝 Merging develop → main...${NC}"
-if ! git merge develop --no-ff -m "chore: release v${VERSION}"; then
+# Merge main into stable
+echo -e "${BLUE}📝 Merging ${INTEGRATION_BRANCH} → ${RELEASE_BRANCH}...${NC}"
+if ! git merge "${INTEGRATION_BRANCH}" --no-ff -m "chore: release v${VERSION}"; then
     echo -e "${RED}❌ Merge failed. Resolve conflicts and try again.${NC}"
-    git checkout develop
+    git checkout "${INTEGRATION_BRANCH}"
     exit 1
 fi
 
@@ -114,21 +151,21 @@ git tag -a "v${VERSION}" -m "Release v${VERSION}"
 
 # Push to remote
 echo -e "${BLUE}📝 Pushing to remote...${NC}"
-git push origin main
+git push origin "${INTEGRATION_BRANCH}"
+git push origin "${RELEASE_BRANCH}"
 git push origin "v${VERSION}"
 
-# Return to develop
-echo -e "${BLUE}📝 Returning to develop branch...${NC}"
-git checkout develop
+# Return to main
+echo -e "${BLUE}📝 Returning to ${INTEGRATION_BRANCH} branch...${NC}"
+git checkout "${INTEGRATION_BRANCH}"
 
-# Merge main back to develop to keep them in sync
-echo -e "${BLUE}📝 Syncing develop with main...${NC}"
-git merge main --no-ff -m "chore: sync develop with main after v${VERSION} release"
+echo -e "${BLUE}🔗 Linking release binary to ~/bin/prog...${NC}"
+bash ./scripts/link-user-bin.sh target/release/prog
 
 echo ""
 echo -e "${GREEN}🎉 Release v${VERSION} completed successfully!${NC}"
 echo -e "${BLUE}📦 Tag: v${VERSION}${NC}"
-echo -e "${BLUE}🌿 Branch: main${NC}"
+echo -e "${BLUE}🌿 Branch: ${RELEASE_BRANCH}${NC}"
 echo ""
 echo -e "${YELLOW}💡 Next steps:${NC}"
 echo -e "  - Create GitHub/GitLab release notes"

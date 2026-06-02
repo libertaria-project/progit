@@ -1,0 +1,166 @@
+{
+  "name": "git-hooks",
+  "version": "1.0.0",
+  "description": "Smart git hooks management with validation and configuration",
+  "author": "Voxis Forge",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/progit/plugins/tree/main/git-hooks",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/progit/plugins.git"
+  },
+  "keywords": [
+    "git",
+    "hooks",
+    "validation",
+    "conventional-commits",
+    "linting",
+    "developer-tools"
+  ],
+  "categories": [
+    "utilities",
+    "git-integrations"
+  ],
+  "progit": {
+    "minVersion": "0.2.0",
+    "sdkVersion": "1.0.0"
+  },
+  "entry": "main.lua",
+  "capabilities": {
+    "filesystem": {
+      "read": [
+        "${repo}/**",
+        "${git}/**"
+      ],
+      "write": [
+        "${git}/hooks/*"
+      ]
+    },
+    "process": {
+      "spawn": true,
+      "commands": [
+        "git"
+      ]
+    },
+    "network": {
+      "enabled": false
+    }
+  },
+  "hooks": [
+    "on_command"
+  ],
+  "commands": [
+    {
+      "name": "hooks",
+      "description": "Manage git hooks",
+      "subcommands": [
+        {
+          "name": "install",
+          "description": "Install git hooks"
+        },
+        {
+          "name": "uninstall",
+          "description": "Remove installed hooks"
+        },
+        {
+          "name": "status",
+          "description": "Show hook installation status"
+        },
+        {
+          "name": "validate",
+          "description": "Validate commit messages or branch names"
+        },
+        {
+          "name": "list",
+          "description": "List available hook types"
+        }
+      ]
+    },
+    {
+      "name": "hook",
+      "description": "Alias for hooks command",
+      "alias": "hooks"
+    }
+  ],
+  "config": {
+    "schema": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable or disable all hooks"
+      },
+      "commit_msg": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": ["conventional", "angular", "custom"],
+            "default": "conventional"
+          },
+          "allow_empty": {
+            "type": "boolean",
+            "default": false
+          },
+          "min_length": {
+            "type": "number",
+            "default": 10
+          },
+          "max_length": {
+            "type": "number",
+            "default": 100
+          },
+          "custom_pattern": {
+            "type": "string",
+            "description": "Custom regex pattern for custom style"
+          }
+        }
+      },
+      "branch": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "default": "^(feat|fix|chore|docs|style|refactor|test|perf|ci)/[a-z0-9-]+$"
+          },
+          "require_issue": {
+            "type": "boolean",
+            "default": false
+          },
+          "issue_pattern": {
+            "type": "string",
+            "default": "\\[?[A-Z]+-\\d+\\]?"
+          }
+        }
+      },
+      "pre_commit": {
+        "type": "object",
+        "properties": {
+          "check_file_size": {
+            "type": "boolean",
+            "default": true
+          },
+          "max_file_size_kb": {
+            "type": "number",
+            "default": 500
+          },
+          "check_secrets": {
+            "type": "boolean",
+            "default": true
+          },
+          "check_conflicts": {
+            "type": "boolean",
+            "default": true
+          },
+          "run_linters": {
+            "type": "boolean",
+            "default": false
+          },
+          "fail_on_warning": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    }
+  }
+}

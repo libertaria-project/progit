@@ -1,0 +1,64 @@
+{
+  "name": "sober-raccoon",
+  "version": "0.1.0",
+  "description": "Premium Sober governance cockpit for ProGit",
+  "author": "ProGit Team",
+  "license": "LicenseRef-ProGit-Premium",
+  "plugin_type": "premium-governance",
+  "runtime": "lua",
+  "sdk_version": ">=0.3",
+  "hooks": [
+    "on_command"
+  ],
+  "commands": [
+    "sober",
+    "sober-raccoon"
+  ],
+  "events": [
+    "Custom:sober-raccoon",
+    "Custom:sober-raccoon.query"
+  ],
+  "capabilities": {
+    "network": false,
+    "network_allow": [],
+    "storage": true,
+    "env": false,
+    "sober": true,
+    "memory_mb": 32,
+    "max_instructions": 5000000,
+    "http_timeout_secs": 5
+  },
+  "config_schema": {
+    "base": {
+      "type": "string",
+      "default": "HEAD",
+      "description": "Default base ref for Sober diffs"
+    },
+    "provider": {
+      "type": "string",
+      "default": "kimi-coding",
+      "description": "Review-preview provider"
+    },
+    "model": {
+      "type": "string",
+      "default": "kimi-k2.6",
+      "description": "Review-preview model"
+    },
+    "reviewer": {
+      "type": "string",
+      "default": "security",
+      "description": "Sober reviewer profile"
+    },
+    "objective": {
+      "type": "string",
+      "default": "security",
+      "description": "Sober review objective"
+    },
+    "hygiene_profile": {
+      "type": "string",
+      "default": "standard",
+      "description": "Sober hygiene profile"
+    }
+  },
+  "homepage": "https://plugins.progit.dev/sober-raccoon"
+}

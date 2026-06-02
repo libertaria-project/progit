@@ -182,6 +182,10 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                 )),
             }
         }
+        "sober" => match crate::sober::tui_command_args(&parts[1..]) {
+            Ok(args) => CommandAction::SuspendAndRun(args),
+            Err(e) => CommandAction::Error(e.to_string()),
+        },
         "review" => {
             // Enter code review mode
             if parts.len() < 2 {

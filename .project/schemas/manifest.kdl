@@ -1,0 +1,21 @@
+schemas {
+    version 0
+
+    schema "progit.issue" {
+        owner "core"
+        path ".project/schemas/issue.v0.schema.kdl"
+        required true
+    }
+
+    schema "progit.policy" {
+        owner "core"
+        path ".project/schemas/policy.v0.schema.kdl"
+        required true
+    }
+
+    schema "progit.plugins" {
+        owner "core"
+        path ".project/schemas/plugins.v0.schema.kdl"
+        required true
+    }
+}

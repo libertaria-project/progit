@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+// Git Hooks Plugin Configuration
+//
+// This is the default configuration for the git-hooks plugin.
+// Copy to your PANOPTICUM.kdl and customize as needed.
+
+hooks {
+    // Enable or disable all hooks
+    enabled true
+
+    // Commit message validation
+    commit-msg {
+        // Style: conventional | angular | custom
+        style "conventional"
+        
+        // Allow empty commit messages
+        allow-empty false
+        
+        // Minimum and maximum length for first line
+        min-length 10
+        max-length 100
+    }
+
+    // Branch naming rules
+    branch {
+        // Regex pattern for valid branch names
+        pattern "^(feat|fix|chore|docs|style|refactor|test|perf|ci)/[a-z0-9-]+$"
+        
+        // Require issue reference in branch name (e.g., PROJECT-123)
+        require-issue false
+        
+        // Pattern to match issue references
+        issue-pattern "\\[?[A-Z]+-\\d+\\]?"
+    }
+
+    // Pre-commit checks
+    pre-commit {
+        // Check for file size limits
+        check-file-size true
+        max-file-size-kb 500
+        
+        // Scan for potential secrets
+        check-secrets true
+        
+        // Check for merge conflict markers
+        check-conflicts true
+        
+        // Run linters (requires linters to be installed)
+        run-linters false
+        
+        // Run formatters (requires formatters to be installed)
+        run-formatters false
+        
+        // Treat warnings as errors
+        fail-on-warning false
+    }
+
+    // Which hooks to install
+    install {
+        commit-msg true
+        pre-commit true
+        pre-push false
+        post-commit false
+    }
+}

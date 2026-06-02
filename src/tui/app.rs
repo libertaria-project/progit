@@ -52,6 +52,14 @@ pub enum InputMode {
     Settings,            // Settings pane
     FuzzyPalette,        // Fuzzy command palette (Ctrl+P)
     DiffComment,         // Adding a comment to a diff line
+    ProjectWiki,         // Viewing repository-owned wiki pages
+    ProjectIssues,       // Viewing repository-owned issue files
+}
+
+/// Dismissible authentication notice shown above the TUI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthNotice {
+    pub message: String,
 }
 
 /// Mouse drag state
@@ -106,6 +114,9 @@ pub struct App {
 
     /// Time when status message was set (for auto-clear)
     pub status_message_time: Option<std::time::Instant>,
+
+    /// Authentication notice raised by non-interactive sync providers
+    pub auth_notice: Option<AuthNotice>,
 
     /// Should quit
     pub should_quit: bool,
@@ -230,19 +241,40 @@ pub struct App {
 
     /// Channel receiver for agent events (polled in main loop)
     pub agent_event_rx: Option<Receiver<crate::agent::AgentEvent>>,
-    
+
     /// Show conflict resolution modal
     pub show_conflicts: bool,
-    
+
     /// Show agent menu modal
     pub show_agent_menu: bool,
 
     /// Selected action in agent menu
     pub agent_menu_selected: usize,
 
+    /// Show plugin manager modal
+    pub show_plugins: bool,
+
+    /// Selected plugin index in plugin modal
+    pub plugin_selected: usize,
+
     // ─── Code Review Integration ─────────────────────────────────────────────
     /// Review state for code review mode
     pub review_state: Option<crate::tui::widget_review::ReviewState>,
+
+    /// Loaded repository-owned wiki view
+    pub project_wiki_view: Option<crate::project_view::ProjectWikiView>,
+
+    /// Selected page in the project wiki view
+    pub project_wiki_page: usize,
+
+    /// Vertical scroll in the project wiki page body
+    pub project_wiki_scroll: u16,
+
+    /// Loaded repository-owned issues view
+    pub project_issues_view: Option<crate::project_view::ProjectIssuesView>,
+
+    /// Selected repository-owned issue entry
+    pub project_issue_selected: usize,
 }
 
 impl Default for App {
@@ -265,6 +297,7 @@ impl App {
             current_sprint: None,
             status_message: None,
             status_message_time: None,
+            auth_notice: None,
             should_quit: false,
             repo_info: None,
             drag_state: DragState::default(),
@@ -317,7 +350,14 @@ impl App {
             show_conflicts: false,
             show_agent_menu: false,
             agent_menu_selected: 0,
+            show_plugins: false,
+            plugin_selected: 0,
             review_state: None,
+            project_wiki_view: None,
+            project_wiki_page: 0,
+            project_wiki_scroll: 0,
+            project_issues_view: None,
+            project_issue_selected: 0,
         }
     }
 
@@ -349,7 +389,7 @@ impl App {
                     Ok(())
                 }
                 Err(e) => {
-                    self.set_status(format!("Failed to load MRs: {}", e));
+                    self.set_remote_error_status(format!("Failed to load MRs: {}", e));
                     Err(e)
                 }
             }
@@ -556,6 +596,24 @@ impl App {
     pub fn set_status(&mut self, msg: impl Into<String>) {
         self.status_message = Some(msg.into());
         self.status_message_time = Some(std::time::Instant::now());
+    }
+
+    /// Set a status message, promoting auth errors to a dismissible notice.
+    pub fn set_remote_error_status(&mut self, msg: impl Into<String>) {
+        let msg = msg.into();
+        if crate::sync::is_auth_required_message(&msg) {
+            self.auth_notice = Some(AuthNotice {
+                message: msg.clone(),
+            });
+            self.set_status("Authentication required");
+        } else {
+            self.set_status(msg);
+        }
+    }
+
+    /// Dismiss the current authentication notice.
+    pub fn dismiss_auth_notice(&mut self) {
+        self.auth_notice = None;
     }
 
     /// Clear status message
@@ -858,6 +916,45 @@ impl App {
             }
         }
     }
+
+    /// Open repository-owned wiki pages in a read-only TUI overlay.
+    pub fn open_project_wiki(&mut self) {
+        match crate::project_view::load_project_wiki(&self.repo_path) {
+            Ok(view) => {
+                let count = view.pages.len();
+                self.project_wiki_view = Some(view);
+                self.project_wiki_page = 0;
+                self.project_wiki_scroll = 0;
+                self.input_mode = InputMode::ProjectWiki;
+                self.set_status(format!("Loaded {} project wiki page(s)", count));
+            }
+            Err(err) => {
+                self.set_status(format!("Project wiki unavailable: {}", err));
+            }
+        }
+    }
+
+    /// Open repository-owned issue files in a read-only TUI overlay.
+    pub fn open_project_issues(&mut self) {
+        match crate::project_view::load_project_issues(&self.repo_path) {
+            Ok(view) => {
+                let count = view.issues.len();
+                self.project_issues_view = Some(view);
+                self.project_issue_selected = 0;
+                self.input_mode = InputMode::ProjectIssues;
+                self.set_status(format!("Loaded {} project issue file(s)", count));
+            }
+            Err(err) => {
+                self.set_status(format!("Project issues unavailable: {}", err));
+            }
+        }
+    }
+
+    /// Close repository-owned project overlays.
+    pub fn close_project_overlay(&mut self) {
+        self.input_mode = InputMode::Normal;
+        self.project_wiki_scroll = 0;
+    }
 }
 
 /// Helper: Parse date from string (supports YYYY-MM-DD and YYYYMMDD)
@@ -877,6 +974,7 @@ fn parse_date_input(input: &str) -> Option<chrono::NaiveDate> {
 mod tests {
     use super::*;
     use crate::issue::Effort;
+    use std::fs;
 
     #[test]
     fn test_app_navigation() {
@@ -948,5 +1046,54 @@ mod tests {
         assert_eq!(app.kanban_column, 2);
         app.kanban_right(); // Should stay at 2
         assert_eq!(app.kanban_column, 2);
+    }
+
+    #[test]
+    fn test_open_project_wiki_loads_overlay() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join(".project/wiki")).unwrap();
+        fs::write(dir.path().join(".project/wiki/index.md"), "# Index\n").unwrap();
+        fs::write(
+            dir.path().join(".project/wiki/manifest.kdl"),
+            r#"
+wiki {
+    version 0
+    root ".project/wiki/index.md"
+
+    page "index" {
+        title "Index"
+        path ".project/wiki/index.md"
+        required true
+    }
+}
+"#,
+        )
+        .unwrap();
+
+        let mut app = App::new();
+        app.repo_path = dir.path().to_path_buf();
+        app.open_project_wiki();
+
+        assert_eq!(app.input_mode, InputMode::ProjectWiki);
+        assert_eq!(app.project_wiki_view.as_ref().unwrap().pages.len(), 1);
+    }
+
+    #[test]
+    fn test_open_project_issues_loads_overlay() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join(".project/issues")).unwrap();
+        let issue = Issue::new("Project issue");
+        fs::write(
+            dir.path().join(".project/issues/issue.json"),
+            serde_json::to_string(&issue).unwrap(),
+        )
+        .unwrap();
+
+        let mut app = App::new();
+        app.repo_path = dir.path().to_path_buf();
+        app.open_project_issues();
+
+        assert_eq!(app.input_mode, InputMode::ProjectIssues);
+        assert_eq!(app.project_issues_view.as_ref().unwrap().issues.len(), 1);
     }
 }

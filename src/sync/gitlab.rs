@@ -1,4 +1,4 @@
-use super::{keyring, SyncProvider};
+use super::{keyring, AuthMode, SyncProvider};
 use crate::issue::{Effort, Issue, Status};
 use crate::storage::config::SyncConfig;
 use anyhow::{anyhow, Context, Result};
@@ -6,39 +6,84 @@ use chrono::{DateTime, Utc};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 /// GitLab Provider Implementation
 pub struct GitLabProvider {
     config: SyncConfig,
     client: Client,
+    auth_mode: AuthMode,
+    token_cache: Mutex<Option<String>>,
 }
 
 impl GitLabProvider {
     pub fn new(config: SyncConfig) -> Self {
+        Self::with_auth_mode(config, AuthMode::Interactive)
+    }
+
+    pub fn with_auth_mode(config: SyncConfig, auth_mode: AuthMode) -> Self {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .connect_timeout(std::time::Duration::from_secs(5))
             .build()
             .unwrap_or_else(|_| Client::new());
 
-        Self { config, client }
+        Self {
+            config,
+            client,
+            auth_mode,
+            token_cache: Mutex::new(None),
+        }
     }
 
     fn get_token(&self) -> Result<String> {
-        // Try keyring first
-        if let Ok(token) = keyring::get_token(&self.config.url, &self.config.owner) {
-            return Ok(token);
+        match keyring::get_token(&self.config.url, &self.config.owner) {
+            Ok(token) => Ok(token),
+            Err(err) => {
+                if let Some(token) = self.cached_token()? {
+                    Ok(token)
+                } else if self.auth_mode.allows_prompt() {
+                    self.login_interactive()
+                } else {
+                    Err(crate::sync::auth_required_error(
+                        &self.config.provider,
+                        &self.config.url,
+                        err,
+                    ))
+                }
+            }
         }
-
-        // If interactive, prompt
-        self.login_interactive()
     }
 
     fn login_interactive(&self) -> Result<String> {
         println!("🔒 Authentication required for {}", self.config.url);
         let token = keyring::prompt_for_token(&self.config.url)?;
-        keyring::set_token(&self.config.url, &self.config.owner, &token)?;
+        if let Err(err) = keyring::set_token(&self.config.url, &self.config.owner, &token) {
+            log::warn!("Token will be used for this command only: {}", err);
+        }
+        self.remember_token(&token)?;
         Ok(token)
+    }
+
+    fn cached_token(&self) -> Result<Option<String>> {
+        self.token_cache
+            .lock()
+            .map(|token| token.clone())
+            .map_err(|_| anyhow!("Token cache lock poisoned"))
+    }
+
+    fn remember_token(&self, token: &str) -> Result<()> {
+        *self
+            .token_cache
+            .lock()
+            .map_err(|_| anyhow!("Token cache lock poisoned"))? = Some(token.to_string());
+        Ok(())
+    }
+
+    fn clear_cached_token(&self) {
+        if let Ok(mut token) = self.token_cache.lock() {
+            *token = None;
+        }
     }
 
     // Convert project path (owner/repo) to URL or ID
@@ -127,6 +172,7 @@ impl SyncProvider for GitLabProvider {
             // If unauthorized, delete token and retry
             if response.status().as_u16() == 401 {
                 log::warn!("⚠️  Token invalid or expired.");
+                self.clear_cached_token();
                 keyring::delete_token(&self.config.url, &self.config.owner)?;
                 return self.login(); // Recursive retry with prompt
             }
@@ -627,5 +673,187 @@ impl SyncProvider for GitLabProvider {
 
         log::info!("✅ Closed MR !{}", remote_id);
         Ok(())
+    }
+
+    fn push_review_comments(
+        &self,
+        repo_path: &std::path::Path,
+        mr_remote_id: u64,
+        review: &crate::review::Review,
+        comments: &mut [crate::review::ReviewComment],
+    ) -> Result<usize> {
+        use crate::review_sync::position;
+
+        const PROVIDER: &str = "gitlab";
+
+        let pending_indices: Vec<usize> = comments
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| !c.external_ids.contains_key(PROVIDER))
+            .map(|(i, _)| i)
+            .collect();
+
+        if pending_indices.is_empty() {
+            return Ok(0);
+        }
+
+        let repo = git2::Repository::open(repo_path)
+            .context("Failed to open git repository for review-comment push")?;
+        let token = self.get_token()?;
+
+        // GitLab needs base/start/head SHAs from the MR's diff_refs.
+        // Fetch the MR once and reuse the SHAs across all comment posts.
+        let mr_url = self.api_url(&format!("merge_requests/{}", mr_remote_id));
+        let mr_resp: serde_json::Value = self
+            .client
+            .get(&mr_url)
+            .header("PRIVATE-TOKEN", &token)
+            .send()
+            .context(format!("Failed GET /merge_requests/{}", mr_remote_id))?
+            .json()
+            .context("Failed to decode GitLab MR response")?;
+
+        let diff_refs = mr_resp
+            .get("diff_refs")
+            .ok_or_else(|| anyhow!("GitLab MR response missing diff_refs"))?;
+        let base_sha = diff_refs
+            .get("base_sha")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("diff_refs.base_sha missing"))?
+            .to_string();
+        let start_sha = diff_refs
+            .get("start_sha")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("diff_refs.start_sha missing"))?
+            .to_string();
+        let head_sha = diff_refs
+            .get("head_sha")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("diff_refs.head_sha missing"))?
+            .to_string();
+
+        let discussions_url = self.api_url(&format!(
+            "merge_requests/{}/discussions",
+            mr_remote_id
+        ));
+
+        let mut filled = 0usize;
+        for &idx in &pending_indices {
+            let c = &comments[idx];
+            // Anchor verification — the user's commit_sha may be older
+            // than diff_refs.head_sha, but we still want to verify the
+            // line existed at the user's anchor. Skip + warn on failure.
+            if let Err(e) = position::resolve(&repo, &c.file_path, c.line_number, &c.commit_sha)
+            {
+                log::warn!(
+                    "skipping review comment {} on {}:{} — {}",
+                    c.id,
+                    c.file_path,
+                    c.line_number,
+                    e
+                );
+                continue;
+            }
+
+            let body = serde_json::json!({
+                "body": c.text,
+                "position": {
+                    "position_type": "text",
+                    "base_sha": base_sha,
+                    "start_sha": start_sha,
+                    "head_sha": head_sha,
+                    "new_path": c.file_path,
+                    "new_line": c.line_number,
+                },
+            });
+
+            let resp = self
+                .client
+                .post(&discussions_url)
+                .header("PRIVATE-TOKEN", &token)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send()
+                .context(format!(
+                    "Failed POST /merge_requests/{}/discussions",
+                    mr_remote_id
+                ))?;
+
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let err_body = resp.text().unwrap_or_default();
+                log::warn!(
+                    "GitLab refused comment {} (status {}): {}",
+                    c.id,
+                    status,
+                    err_body
+                );
+                continue;
+            }
+
+            let json: serde_json::Value = resp
+                .json()
+                .context("Failed to decode GitLab discussion response")?;
+
+            // The comment ID we want is notes[0].id — the actual note,
+            // not the parent discussion. Fall back to the discussion ID
+            // if notes is empty (shouldn't happen for line comments).
+            let note_id = json
+                .get("notes")
+                .and_then(|n| n.as_array())
+                .and_then(|arr| arr.first())
+                .and_then(|n| n.get("id"))
+                .and_then(|v| v.as_i64())
+                .map(|n| n.to_string())
+                .or_else(|| {
+                    json.get("id")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                });
+
+            if let Some(rid) = note_id {
+                comments[idx]
+                    .external_ids
+                    .insert(PROVIDER.to_string(), rid);
+                filled += 1;
+            } else {
+                log::warn!(
+                    "GitLab discussion response for comment {} had no usable id",
+                    c.id
+                );
+            }
+        }
+
+        // `review` is unused for GitLab — there's no parallel concept of a
+        // top-level review session; each line comment is its own discussion.
+        // Tell the compiler we know.
+        let _ = review;
+
+        Ok(filled)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sync_config() -> SyncConfig {
+        SyncConfig {
+            provider: "gitlab".to_string(),
+            url: "https://git.example.test".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+        }
+    }
+
+    #[test]
+    fn caches_prompted_token_for_provider_lifetime() {
+        let provider = GitLabProvider::with_auth_mode(sync_config(), AuthMode::Interactive);
+
+        assert!(provider.cached_token().unwrap().is_none());
+        provider.remember_token("token-123").unwrap();
+        assert_eq!(provider.cached_token().unwrap().as_deref(), Some("token-123"));
+        provider.clear_cached_token();
+        assert!(provider.cached_token().unwrap().is_none());
     }
 }

@@ -1,0 +1,24 @@
+policy {
+    version 0
+    mode "advisory"
+
+    issues {
+        require-uuid true
+        require-title true
+        allow-empty true
+    }
+
+    plugins {
+        trust-policy "advisory"
+    }
+
+    sync {
+        validate-before-push true
+        validate-after-pull true
+    }
+
+    audit {
+        enabled false
+        path ".project/audit/events.jsonl"
+    }
+}

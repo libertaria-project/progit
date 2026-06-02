@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: LCL-1.0
 // Copyright (c) 2025 Markus Maiwald
 
 //! Plugin CLI commands
@@ -11,12 +11,13 @@
 //! - search: Search the plugin registry
 //! - info: Show plugin details
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::*;
 use std::path::Path;
 
-use super::registry::{PluginRegistry, PluginSource};
 use super::lockfile::Lockfile;
+use super::manager::CommandResult;
+use super::registry::{PluginRegistry, PluginSource};
 use crate::storage::config;
 
 /// Helper to create a registry with config support
@@ -25,6 +26,84 @@ fn get_registry(project_root: &Path) -> Result<PluginRegistry> {
     let config = config::load_config(&config_path)?;
     let registry_url = config.plugins.and_then(|p| p.registry_url);
     PluginRegistry::new(project_root, registry_url)
+}
+
+fn load_command_manager(
+    project_root: &Path,
+    command: &str,
+) -> Result<crate::plugins::PluginManager> {
+    let mut manager = crate::plugins::PluginManager::new(project_root);
+    let context = progit_plugin_sdk::traits::PluginContext {
+        repo_path: project_root.to_string_lossy().to_string(),
+        user: None,
+        env: Default::default(),
+        config: Default::default(),
+    };
+
+    let plugin_dir = project_root.join("plugins");
+    manager.load_command_plugins_from_dir(&plugin_dir, &context, command);
+
+    let user_plugins = project_root.join(".progit").join("plugins");
+    if user_plugins.exists() {
+        manager.load_command_plugins_from_dir(&user_plugins, &context, command);
+    }
+
+    Ok(manager)
+}
+
+fn print_command_result(command: &str, result: CommandResult) -> Result<()> {
+    let CommandResult {
+        plugin,
+        success,
+        output,
+        error,
+        data: _,
+    } = result;
+
+    if let Some(output) = output {
+        println!("{output}");
+    }
+
+    if !success {
+        let error = error
+            .unwrap_or_else(|| format!("plugin command '{command}' failed"));
+        anyhow::bail!("{}: {}", plugin, error);
+    }
+
+    Ok(())
+}
+
+/// Try to run an installed plugin command.
+///
+/// Returns `Ok(false)` when no installed plugin owns the command. If a plugin
+/// owns the command and fails, this returns an error instead of falling back to
+/// a built-in implementation.
+pub fn try_run_command(project_root: &Path, command: &str, args: &[String]) -> Result<bool> {
+    let plugin_dir = project_root.join("plugins");
+    let user_plugin_dir = project_root.join(".progit").join("plugins");
+    if !plugin_dir.exists() && !user_plugin_dir.exists() {
+        return Ok(false);
+    }
+
+    let mut manager = load_command_manager(project_root, command)?;
+    let Some(result) = manager.dispatch_command(command, args) else {
+        return Ok(false);
+    };
+
+    print_command_result(command, result)?;
+    Ok(true)
+}
+
+/// Run an installed plugin command and fail if no plugin handles it.
+pub fn run_command(project_root: &Path, command: &str, args: &[String]) -> Result<()> {
+    if try_run_command(project_root, command, args)? {
+        return Ok(());
+    }
+
+    anyhow::bail!(
+        "No installed plugin handled command '{}'. Try: prog plugin list",
+        command
+    )
 }
 
 /// List installed plugins
@@ -120,6 +199,7 @@ pub fn install(project_root: &Path, name: &str, version: Option<&str>, git_url: 
                     name: manifest.name.clone(),
                     version: version.map(|v| v.to_string()).unwrap_or(manifest.version.clone()),
                     url: manifest.source_url.clone(),
+                    source_path: manifest.source_path.clone(),
                 }
             }
             None => {
@@ -307,4 +387,90 @@ pub fn index_update(project_root: &Path) -> Result<()> {
     println!("{} Plugin index updated.", "✅".green());
 
     Ok(())
+}
+
+/// Scaffold a new plugin in `<project_root>/plugins/<name>/`.
+///
+/// Generates `main.lua`, `.progit-plugin.json`, `README.md`, and
+/// `.luarc.json` from embedded templates. The `.luarc.json` points at
+/// the SDK's LuaCATS stubs so the author gets editor autocomplete from
+/// the first edit.
+pub fn new_plugin(project_root: &Path, name: &str, author: Option<&str>) -> Result<()> {
+    if !is_kebab_case(name) {
+        anyhow::bail!(
+            "plugin name '{}' is invalid: use lowercase letters, digits, and hyphens (e.g. 'jira-sync')",
+            name
+        );
+    }
+
+    let target_dir = project_root.join("plugins").join(name);
+    if target_dir.exists() {
+        anyhow::bail!("plugins/{} already exists", name);
+    }
+
+    let resolved_author = author
+        .map(|s| s.to_string())
+        .or_else(detect_git_user_name)
+        .unwrap_or_else(|| "Anonymous".to_string());
+
+    let description = format!("{} plugin", name);
+    let sdk_version = progit_plugin_sdk::SDK_API_VERSION;
+
+    let render = |tmpl: &str| -> String {
+        tmpl.replace("{{name}}", name)
+            .replace("{{author}}", &resolved_author)
+            .replace("{{description}}", &description)
+            .replace("{{sdk_version}}", sdk_version)
+    };
+
+    std::fs::create_dir_all(&target_dir)
+        .with_context(|| format!("Failed to create {}", target_dir.display()))?;
+
+    let main_lua = render(include_str!("templates/main.lua.tmpl"));
+    let manifest = render(include_str!("templates/manifest.json.tmpl"));
+    let readme = render(include_str!("templates/README.md.tmpl"));
+    let luarc = render(include_str!("templates/luarc.json.tmpl"));
+
+    std::fs::write(target_dir.join("main.lua"), main_lua)?;
+    std::fs::write(target_dir.join(".progit-plugin.json"), manifest)?;
+    std::fs::write(target_dir.join("README.md"), readme)?;
+    std::fs::write(target_dir.join(".luarc.json"), luarc)?;
+
+    println!(
+        "{} Scaffolded plugin {} at {}",
+        "✓".green(),
+        name.bold(),
+        target_dir.display()
+    );
+    println!();
+    println!("  Next steps:");
+    println!("    1. Edit plugins/{}/main.lua", name);
+    println!("    2. Edit plugins/{}/.progit-plugin.json (capabilities, hooks)", name);
+    println!("    3. Run: prog plugin list   # confirm it loads");
+    println!();
+    Ok(())
+}
+
+fn is_kebab_case(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().next().map(|c| c.is_ascii_lowercase()).unwrap_or(false)
+        && s.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+fn detect_git_user_name() -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["config", "--get", "user.name"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8(out.stdout).ok()?;
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }

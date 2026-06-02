@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 /// A code review comment on a specific line
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewComment {
-    /// Unique comment ID
+    /// Unique comment ID (local UUID).
     pub id: String,
 
     /// File path relative to repo root
@@ -36,12 +36,22 @@ pub struct ReviewComment {
     /// Timestamp (ISO 8601)
     pub created_at: String,
 
-    /// Resolved status
+    /// Resolved status — local UX hint only. Forge sync ignores this field
+    /// (option (b) from Sprint C-heavy: push all comments including resolved).
     pub resolved: bool,
 
     /// Optional thread (replies to this comment)
     #[serde(default)]
     pub replies: Vec<ReviewComment>,
+
+    /// Per-provider external comment IDs after a successful forge push.
+    ///
+    /// Keyed by provider name (`"forgejo"`, `"gitlab"`). The presence of
+    /// a key means the comment has been synced to that provider; sync
+    /// is idempotent — re-pushing skips comments that already have an
+    /// entry. Default empty so v0.1 reviews migrate forward losslessly.
+    #[serde(default)]
+    pub external_ids: HashMap<String, String>,
 }
 
 /// A code review session
@@ -296,6 +306,7 @@ mod tests {
             created_at: chrono::Utc::now().to_rfc3339(),
             resolved: false,
             replies: vec![],
+            external_ids: HashMap::new(),
         };
 
         storage.add_comment("test-review", comment).unwrap();
@@ -303,5 +314,63 @@ mod tests {
         let loaded = storage.load("test-review").unwrap();
         assert_eq!(loaded.comments.len(), 1);
         assert_eq!(loaded.comments[0].line_number, 42);
+        assert!(loaded.comments[0].external_ids.is_empty());
+    }
+
+    #[test]
+    fn external_ids_round_trip_with_values() {
+        // After a successful forge push, external_ids is non-empty.
+        // It must persist through serde load/save cycles unchanged.
+        let mut ids = HashMap::new();
+        ids.insert("forgejo".to_string(), "1234".to_string());
+        ids.insert("gitlab".to_string(), "98765".to_string());
+
+        let comment = ReviewComment {
+            id: "c1".into(),
+            file_path: "src/main.rs".into(),
+            line_number: 10,
+            commit_sha: "abc".into(),
+            text: "comment".into(),
+            author: "alice".into(),
+            created_at: "2026-05-07T12:00:00Z".into(),
+            resolved: false,
+            replies: vec![],
+            external_ids: ids,
+        };
+        let json = serde_json::to_string(&comment).unwrap();
+        let back: ReviewComment = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.external_ids.get("forgejo"), Some(&"1234".to_string()));
+        assert_eq!(back.external_ids.get("gitlab"), Some(&"98765".to_string()));
+    }
+
+    #[test]
+    fn loads_v01_review_without_external_ids_field() {
+        // Pre-Sprint-C reviews don't have `external_ids` in their JSON.
+        // Serde must default to an empty map — losslessly migrating forward.
+        let json = r#"{
+            "id": "old-review",
+            "mr_id": null,
+            "commit_sha": "deadbeef",
+            "status": "inprogress",
+            "reviewer": "alice",
+            "verdict": null,
+            "summary": null,
+            "comments": [{
+                "id": "c1",
+                "file_path": "src/x.rs",
+                "line_number": 7,
+                "commit_sha": "deadbeef",
+                "text": "nit",
+                "author": "alice",
+                "created_at": "2026-01-01T00:00:00Z",
+                "resolved": false
+            }],
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z"
+        }"#;
+        let r: Review = serde_json::from_str(json).expect("v0.1 review must still parse");
+        assert_eq!(r.comments.len(), 1);
+        assert!(r.comments[0].external_ids.is_empty());
+        assert!(r.comments[0].replies.is_empty());
     }
 }

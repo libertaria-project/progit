@@ -62,6 +62,7 @@ logs/
 .env
 .env.local
 .env.*.local
+.envrc
 
 # Package managers
 node_modules/
@@ -70,3 +71,21 @@ node_modules/
 .progit/
 .project/config.kdl
 
+
+# Agent / AI operational dirs
+.agents/
+AGENTS.md
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Cloudflare Wrangler cache
+.wrangler/
+
+# Release signing — secret key never enters the repo
+keys/*.key
+*.minisign.key
+# Release build output
+/dist/
+.sober/

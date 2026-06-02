@@ -1,6 +1,5 @@
 use anyhow::Result;
-use progit::issue::{Issue, Status};
-use progit::storage::{delete_issue, parse_kdl, read_kdl, save_issue, sync_kdl_to_json};
+use progit::storage::{delete_issue, read_kdl};
 use std::fs;
 use tempfile::tempdir;
 

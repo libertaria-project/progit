@@ -199,6 +199,31 @@ impl FuzzySearcher {
                 description: "Create or view merge requests".to_string(),
                 action: "mr".to_string(),
             },
+            FuzzyItem::Command {
+                name: "Project Wiki".to_string(),
+                description: "Open repository-owned wiki pages".to_string(),
+                action: "project_wiki".to_string(),
+            },
+            FuzzyItem::Command {
+                name: "Project Issues".to_string(),
+                description: "Browse repository-owned issue files".to_string(),
+                action: "project_issues".to_string(),
+            },
+            FuzzyItem::Command {
+                name: "Sober Doctor".to_string(),
+                description: "Run repository governance health checks".to_string(),
+                action: "sober_doctor".to_string(),
+            },
+            FuzzyItem::Command {
+                name: "Sober Preflight".to_string(),
+                description: "Run deterministic release-gate checks".to_string(),
+                action: "sober_preflight".to_string(),
+            },
+            FuzzyItem::Command {
+                name: "Sober Review Preview".to_string(),
+                description: "Preview a model review prompt without calling a model".to_string(),
+                action: "sober_review_preview".to_string(),
+            },
         ]
     }
 
@@ -359,12 +384,29 @@ mod tests {
 
     #[test]
     fn test_search_returns_sorted() {
-        let mut searcher = FuzzySearcher::new();
+        let searcher = FuzzySearcher::new();
         let results = searcher.search("new");
 
         // Should return results sorted by score
         for i in 1..results.len() {
             assert!(results[i - 1].score >= results[i].score);
         }
+    }
+
+    #[test]
+    fn test_search_finds_project_view_commands() {
+        let searcher = FuzzySearcher::new();
+
+        let wiki = searcher.search("project wiki");
+        let issues = searcher.search("project issues");
+
+        assert!(wiki.iter().any(|m| matches!(
+            &m.item,
+            FuzzyItem::Command { action, .. } if action == "project_wiki"
+        )));
+        assert!(issues.iter().any(|m| matches!(
+            &m.item,
+            FuzzyItem::Command { action, .. } if action == "project_issues"
+        )));
     }
 }

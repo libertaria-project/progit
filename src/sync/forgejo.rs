@@ -4,46 +4,99 @@
 
 use crate::issue::{Effort, Issue, Status};
 use crate::storage::config::SyncConfig;
-use crate::sync::{keyring, SyncProvider};
+use crate::sync::{keyring, AuthMode, SyncProvider};
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 
 pub struct ForgejoProvider {
     config: SyncConfig,
     client: Client,
+    auth_mode: AuthMode,
+    token_cache: Mutex<Option<String>>,
 }
 
 impl ForgejoProvider {
     pub fn new(config: SyncConfig) -> Self {
+        Self::with_auth_mode(config, AuthMode::Interactive)
+    }
+
+    pub fn with_auth_mode(config: SyncConfig, auth_mode: AuthMode) -> Self {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .connect_timeout(std::time::Duration::from_secs(5))
             .build()
             .unwrap_or_else(|_| Client::new());
 
-        Self { config, client }
+        Self {
+            config,
+            client,
+            auth_mode,
+            token_cache: Mutex::new(None),
+        }
     }
 
     fn get_token(&self) -> Result<String> {
-        keyring::get_token(&self.config.url, &self.config.owner)
-            .or_else(|_| self.login_interactive())
+        match keyring::get_token(&self.config.url, &self.config.owner) {
+            Ok(token) => Ok(token),
+            Err(err) => {
+                if let Some(token) = self.cached_token()? {
+                    Ok(token)
+                } else if self.auth_mode.allows_prompt() {
+                    self.login_interactive()
+                } else {
+                    Err(crate::sync::auth_required_error(
+                        &self.config.provider,
+                        &self.config.url,
+                        err,
+                    ))
+                }
+            }
+        }
     }
 
     fn login_interactive(&self) -> Result<String> {
         println!("🔒 Authentication required for {}", self.config.url);
         let token = keyring::prompt_for_token(&self.config.url)?;
-        keyring::set_token(&self.config.url, &self.config.owner, &token)?;
+        if let Err(err) = keyring::set_token(&self.config.url, &self.config.owner, &token) {
+            log::warn!("Token will be used for this command only: {}", err);
+        }
+        self.remember_token(&token)?;
         Ok(token)
     }
 
     // API Models
+    fn cached_token(&self) -> Result<Option<String>> {
+        self.token_cache
+            .lock()
+            .map(|token| token.clone())
+            .map_err(|_| anyhow!("Token cache lock poisoned"))
+    }
+
+    fn remember_token(&self, token: &str) -> Result<()> {
+        *self
+            .token_cache
+            .lock()
+            .map_err(|_| anyhow!("Token cache lock poisoned"))? = Some(token.to_string());
+        Ok(())
+    }
+
+    fn clear_cached_token(&self) {
+        if let Ok(mut token) = self.token_cache.lock() {
+            *token = None;
+        }
+    }
+
+    fn api_root(&self) -> String {
+        format!("{}/api/v1", self.config.url.trim_end_matches('/'))
+    }
 
     fn base_url(&self) -> String {
         format!(
-            "{}/api/v1/repos/{}/{}",
-            self.config.url, self.config.owner, self.config.repo
+            "{}/repos/{}/{}",
+            self.api_root(), self.config.owner, self.config.repo
         )
     }
 }
@@ -84,7 +137,23 @@ struct CreateIssuePayload {
 
 impl SyncProvider for ForgejoProvider {
     fn login(&self) -> Result<()> {
-        let _ = self.get_token()?;
+        let token = self.get_token()?;
+        let url = format!("{}/user", self.api_root());
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("token {}", token))
+            .send()
+            .context("Failed to connect to Forgejo")?;
+
+        if !response.status().is_success() {
+            if response.status().as_u16() == 401 {
+                self.clear_cached_token();
+                let _ = keyring::delete_token(&self.config.url, &self.config.owner);
+            }
+            return Err(anyhow!("Forgejo authentication failed: {}", response.status()));
+        }
+
         log::info!("✅ Authenticated with Forgejo");
         Ok(())
     }
@@ -520,6 +589,147 @@ impl SyncProvider for ForgejoProvider {
 
         Ok(())
     }
+
+    fn push_review_comments(
+        &self,
+        repo_path: &std::path::Path,
+        mr_remote_id: u64,
+        review: &crate::review::Review,
+        comments: &mut [crate::review::ReviewComment],
+    ) -> Result<usize> {
+        use crate::review_sync::position;
+
+        const PROVIDER: &str = "forgejo";
+
+        // Filter comments that still need pushing.
+        let pending_indices: Vec<usize> = comments
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| !c.external_ids.contains_key(PROVIDER))
+            .map(|(i, _)| i)
+            .collect();
+
+        if pending_indices.is_empty() {
+            return Ok(0);
+        }
+
+        let repo = git2::Repository::open(repo_path)
+            .context("Failed to open git repository for review-comment push")?;
+
+        // Build the comment payload, skipping comments whose anchor is no
+        // longer valid (option 4a from the sign-off: skip + warn, never abort).
+        // Track which slice index each payload entry came from so we can
+        // write back the remote ID after the response comes in.
+        let mut payload_comments: Vec<serde_json::Value> = Vec::new();
+        let mut payload_to_slice: Vec<usize> = Vec::new();
+
+        for &idx in &pending_indices {
+            let c = &comments[idx];
+            match position::resolve(&repo, &c.file_path, c.line_number, &c.commit_sha) {
+                Ok(_pos) => {
+                    payload_comments.push(serde_json::json!({
+                        "body": c.text,
+                        "path": c.file_path,
+                        "new_position": c.line_number,
+                        "old_position": 0,
+                    }));
+                    payload_to_slice.push(idx);
+                }
+                Err(e) => {
+                    log::warn!(
+                        "skipping review comment {} on {}:{} — {}",
+                        c.id,
+                        c.file_path,
+                        c.line_number,
+                        e
+                    );
+                }
+            }
+        }
+
+        if payload_comments.is_empty() {
+            log::info!("No resolvable review comments to push to Forgejo.");
+            return Ok(0);
+        }
+
+        let token = self.get_token()?;
+        let url = format!("{}/pulls/{}/reviews", self.base_url(), mr_remote_id);
+
+        let body = serde_json::json!({
+            "body": review.summary.clone().unwrap_or_default(),
+            "commit_id": review.commit_sha,
+            "event": "COMMENT",
+            "comments": payload_comments,
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("token {}", token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .context(format!("Failed POST /pulls/{}/reviews", mr_remote_id))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().unwrap_or_default();
+            return Err(anyhow!(
+                "Forgejo refused review (status {}): {}",
+                status,
+                err_body
+            ));
+        }
+
+        // The response is a PullReview with `id` but does NOT inline its
+        // comments. Follow up with GET /reviews/{id}/comments to retrieve
+        // their forge IDs, then match by index (Forgejo preserves order).
+        let review_resp: serde_json::Value = response
+            .json()
+            .context("Failed to decode Forgejo review response")?;
+        let review_id = review_resp
+            .get("id")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| anyhow!("Forgejo review response missing `id`"))?;
+
+        let comments_url = format!(
+            "{}/pulls/{}/reviews/{}/comments",
+            self.base_url(),
+            mr_remote_id,
+            review_id
+        );
+        let listed: Vec<serde_json::Value> = self
+            .client
+            .get(&comments_url)
+            .header("Authorization", format!("token {}", token))
+            .send()
+            .context("Failed GET /reviews/{id}/comments")?
+            .json()
+            .context("Failed to decode Forgejo review comments list")?;
+
+        if listed.len() != payload_to_slice.len() {
+            log::warn!(
+                "Forgejo returned {} comments for {} pushed; matching by index anyway",
+                listed.len(),
+                payload_to_slice.len()
+            );
+        }
+
+        let mut filled = 0usize;
+        for (response_idx, slice_idx) in payload_to_slice.iter().enumerate() {
+            let Some(returned) = listed.get(response_idx) else {
+                continue;
+            };
+            if let Some(remote_id) = returned.get("id").and_then(|v| v.as_i64()) {
+                comments[*slice_idx]
+                    .external_ids
+                    .insert(PROVIDER.to_string(), remote_id.to_string());
+                filled += 1;
+            }
+        }
+
+        Ok(filled)
+    }
 }
 
 // Forgejo Pull Request API Models
@@ -546,4 +756,29 @@ struct ForgejoPullRequest {
 struct ForgejoBranch {
     #[serde(rename = "ref")]
     ref_name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sync_config() -> SyncConfig {
+        SyncConfig {
+            provider: "forgejo".to_string(),
+            url: "https://git.example.test".to_string(),
+            owner: "owner".to_string(),
+            repo: "repo".to_string(),
+        }
+    }
+
+    #[test]
+    fn caches_prompted_token_for_provider_lifetime() {
+        let provider = ForgejoProvider::with_auth_mode(sync_config(), AuthMode::Interactive);
+
+        assert!(provider.cached_token().unwrap().is_none());
+        provider.remember_token("token-123").unwrap();
+        assert_eq!(provider.cached_token().unwrap().as_deref(), Some("token-123"));
+        provider.clear_cached_token();
+        assert!(provider.cached_token().unwrap().is_none());
+    }
 }

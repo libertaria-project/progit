@@ -7,6 +7,239 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.8.2-beta] - 2026-06-02
+
+### Beta Promotion — Native Plugin Command Chain
+
+This beta turns installed plugins into first-class `prog plugin <command>`
+operators instead of leaving them as passive marketplace assets.
+
+### Added
+- **Native plugin command dispatch** through `prog plugin run <command> ...`
+  and `prog plugin <command> ...`, with manifest-aware loading so unrelated
+  plugins do not initialize or print noise.
+- **Sober Raccoon command ownership** for `prog plugin sober ...` and
+  `prog plugin sober-raccoon ...`, backed by the existing narrow
+  `sober.run(action, opts)` host capability.
+- **Marketplace command metadata** for Sober Raccoon so the plugin registry
+  advertises its command namespaces.
+
+### Fixed
+- Plugin command dispatch now respects `handled = false`, allowing another
+  installed plugin to handle the command namespace.
+- Cached plugin indexes now rewrite stale `origin` URLs before pulling,
+  avoiding dead registry remotes after marketplace migration.
+
+## [0.8.1-beta] - 2026-06-02
+
+### Beta Promotion — Auth, Release, and Plugin Marketplace
+
+This beta ships the first binary release after the sovereign data-plane beta.
+It focuses on making ProGit usable as the local operator binary: the release
+binary is linked into `~/bin/prog`, sync authentication no longer wedges the
+TUI, token-file based Forgejo auth works in the default no-keyring build, and
+the Sober integration is visible through the premium plugin path.
+
+### Added
+- **Sober host bridge** through `src/sober.rs`, giving plugins a narrow
+  governance/release-check capability without leaking implementation details
+  into the TUI.
+- **`sober-raccoon` premium plugin** and marketplace listing, including mascot
+  asset integration for the ProGit plugin ecosystem.
+- **Repository-owned project views** for read-only `.project` wiki and issue
+  files inside the TUI.
+- **Signed binary release pipeline** with minisign signatures, checksum
+  manifest, size-gated default build, and `~/bin/prog` release-link helper.
+
+### Fixed
+- The TUI no longer performs blocking stdin token prompts while the terminal is
+  in raw mode. Missing sync credentials now show a dismissible authentication
+  notice instead of corrupting the shell.
+- Forgejo/GitLab sync accepts token files in the default build:
+  `PROGIT_TOKEN_FILE`, `FORGEJO_TOKEN_FILE`, `GITLAB_TOKEN_FILE`, plus
+  `TOKEN_ENV_FILE`/`TOKEN_ENV_VAR`.
+- Prompted CLI tokens are reused for the lifetime of a sync command when OS
+  keyring support is unavailable, avoiding repeated prompts during push/pull.
+- Forgejo auth is verified up front at `/api/v1/user`, so invalid tokens fail
+  during `Authenticating...` instead of later as a generic API `401`.
+- The release gate is hardened against mutable/unverified setup paths and keeps
+  the default release binary under the 7 MB doctrine budget.
+
+## [0.8.0-beta] - 2026-05-09
+
+### Beta Promotion — Sovereign Data Plane
+
+This release lands the **`GitBackend` trait** and two interchangeable
+backend implementations behind a single `forge-backend` feature flag.
+The TUI can now route every git data-plane operation through a stable
+trait surface without caring whether bytes live on local disk (via
+`gix`) or in a sidecar `progit-forged` daemon (via gRPC). The trait
+abstraction is validated end-to-end by the new `prog clone` subcommand,
+which routes the same code path against both backends.
+
+Default builds are unchanged in size and behaviour — every new
+capability is opt-in.
+
+### Added (data plane — `forge-backend` feature)
+
+- **`GitBackend` trait** (re-exported from `progit-forge-client`) —
+  wire-independent abstraction for git data: `create_repo`,
+  `delete_repo`, `list_refs`, `push` (refs + optional pack),
+  `fetch`, `create_ephemeral_branch`. Trait types
+  (`RefEntry`, `RefUpdate`, `PushOutcome`, `EphemeralBranch`,
+  `BackendError`) are wire-version-stable.
+- **`LocalGitBackend`** at `progit::git::backend::LocalGitBackend` —
+  operates on a local-disk bare git directory via `gix`. Pack ingestion
+  via `gix_pack::Bundle::write_to_directory` (same pipeline as the
+  daemon). Strict CAS pre-check on every ref update mirrors the
+  daemon's sled-backed semantics — backend swap-out is byte-equivalent
+  at the ref-update layer.
+- **`ForgedBackend`** (re-exported) — daemon-backed `GitBackend` impl
+  for users who run a sidecar `progit-forged`. Cheap-clone, async,
+  cancellable.
+- **`prog clone <endpoint> <repo> [dest]`** subcommand — first
+  user-facing call site routed through `Box<dyn GitBackend>`. Reads
+  from a `ForgedBackend` (gRPC source) and writes into a
+  `LocalGitBackend` (local-disk sink). Same `clone_repo` function
+  works for any pair of backends — daemon→local, local→daemon, or
+  daemon→daemon. Subcommand bypasses workspace detection so it works
+  in any directory.
+- **Default-off feature flag.** Default build: 6.4 MB stripped
+  (unchanged from 0.7). With `--features forge-backend`: 6.7-8.3 MB
+  stripped depending on toolchain LTO behaviour. Comfortably under
+  the 10 MB doctrine cap; users who don't need the trait don't pay.
+
+### Added (Sprint C — review-comment forge sync)
+- **`prog mr review push <mr_id>`** pushes the latest local review's
+  line comments to the configured forge. Idempotent (re-runs are
+  no-ops). Reports synced/already-synced/skipped counts.
+- **`SyncProvider::push_review_comments`** trait method, implemented
+  for both Forgejo and GitLab. Forgejo creates one PullReview with
+  inline comments per push; GitLab creates one Discussion per
+  comment with `position.text` payload built from MR `diff_refs`.
+- **`ReviewComment.external_ids: HashMap<String, String>`** — keyed
+  by provider name (`"forgejo"`, `"gitlab"`). Presence of a key is
+  the idempotency signal. Default-empty so v0.1 reviews on disk
+  migrate forward losslessly.
+- **`crate::review_sync::position`** module — verifies a comment's
+  anchor (`file_path`, `line_number`, `commit_sha`) exists at the
+  named commit before pushing. Stale anchors get a `log::warn!` and
+  are skipped per Sprint C-heavy decision (4a) — never abort the
+  whole batch over one bad anchor.
+- **`S` keybinding** in code review mode advertises the CLI command
+  (full in-TUI push is Sprint D scope).
+
+### Added (Sprint A+B — plugin economy)
+- **Render-time plugin contract** — plugins can now provide syntax-
+  highlighted spans for any code view. New `progit_plugin_sdk::render`
+  module: `TokenSpan`, `Rgb`, `HighlightRequest`, `HighlightResponse`.
+  `Plugin::highlight()` is the synchronous host hook; default impl
+  returns `None` so legacy plugins ignore it.
+- **Diff renderer is plugin-aware.** `diff.rs::render_diff` consults a
+  loaded highlight provider on each line, falls through to plain text
+  when no plugin handles the language. Backed by a `blake3`-keyed
+  cache (`HighlightCache`) with bulk-evict-at-cap (4096 entries) so
+  the Lua roundtrip happens once per unique line, not once per frame.
+- **Language detection** for 13 file extensions
+  (`plugins/lang_detect.rs`), shipped to the plugin via
+  `HighlightRequest.language`.
+- **Manifest-driven runtime configuration.** `PluginManager` now
+  reads `.progit-plugin.json` next to the entry point and derives
+  `LuaPluginOptions` (memory cap, instruction cap, HTTP timeout,
+  network allowlist) from `capabilities`. SDK API version is
+  cross-checked at load.
+- **Per-plugin failure isolation with TUI surface.** Five consecutive
+  failures quarantine a plugin; `P` (or `Q` as alias) opens the
+  plugin manager modal, which now flags quarantined plugins in red
+  with the failure reason. Press `u` to clear quarantine.
+- **`prog plugin new <name>`** scaffold command — generates a fresh
+  plugin directory (`main.lua`, `.progit-plugin.json`, `README.md`,
+  `.luarc.json`) from embedded templates wired to the SDK's LuaCATS
+  stubs.
+
+### Changed
+- **Trait Firewall consolidated.** Deleted dead parallel `Plugin` /
+  `PluginEngine` trait pair and `LuaPluginEngine` struct in
+  `progit/src/plugins/{sdk,lua_engine}.rs` — they were never wired
+  in. The published `progit-plugin-sdk` is now the single source of
+  truth.
+- `PluginEvent` re-exported from the SDK so existing call sites
+  (`crate::plugins::PluginEvent::...`) keep resolving.
+- SPDX headers in `plugins/*` and `tui/widget_plugins.rs` migrated
+  EUPL-1.2 → LCL-1.0 to match the host crate's declared license.
+
+### Fixed
+- `.envrc` was tracked in HEAD with local filesystem paths; removed
+  from working tree. (Note: file remains reachable in git history;
+  rotate any sensitive value or run a history rewrite separately.)
+- `.gitignore` extended with operational/agent dirs (`.claude`,
+  `.agents`, `.kiro`, `CLAUDE.md`, etc.) and Cloudflare Wrangler
+  cache (`.wrangler/`) — repo firewall doctrine.
+
+### Plugins (this release cycle)
+- `slack-notify` v1.1.0 — rewritten against the v0.2 injected stdlib
+  (real `http.post` / `log.*` / `json.encode`); declares network
+  capability with `hooks.slack.com` allowlist.
+- `syntax-highlight` v1.0.0 — pure-Lua highlighter for 12 languages
+  (rust, python, js/ts, go, c/cpp, bash, json, yaml, lua, toml +
+  basic markdown). The flagship v0.2 plugin proving the render-time
+  hook end-to-end. ~80% of syntect quality, 0 KB host binary cost.
+- `git-hooks` v1.0.0 + `forgejo-notify` v1.0.0 — manifests added
+  with explicit capability declarations. Silences the v0.2
+  deprecation warning.
+- `syntax-highlight-wasm/` — January-2026 syntect-via-Rust-rlib
+  scaffold preserved as documentation of intent for the future
+  WASM runtime path. NOT runnable today.
+
+
+
+## [0.7.0-beta] - 2026-05-06
+
+### Beta Promotion — Plugin Economy Hardened
+
+**Strategic Decision:** Promoted alpha → beta. The plugin install/uninstall/update
+loop now works end-to-end against the live marketplace, the plugin manager modal
+ships in the TUI, and the binary remains comfortably under target. Ready for a
+wider tester pool.
+
+#### Added
+- **Plugin manager modal (TUI):** Press `P` anywhere in the TUI to open a
+  centered overlay listing every loaded plugin with name, version, author,
+  description, and supported hooks. Navigate with `j/k`, close with `Esc/P/q`.
+  Empty state shows the install hint pointing to `prog plugin install`.
+- **`PluginManager::plugin_info()`** returns `Vec<&PluginMetadata>`, preserving
+  the trait firewall (TUI never sees concrete `LuaPlugin`/`WasmPlugin` types).
+- **Monorepo plugin layout support:** `PluginManifest` now carries
+  `source_path`, allowing a single source repo to host multiple plugins as
+  subdirectories. Install clones into a sibling tempdir and copies only the
+  named subdirectory into `plugins/<name>/`.
+
+#### Fixed
+- **Default registry URL** updated from `git.maiwald.work` (HTTP 530, defunct)
+  to `git.sovereign-society.org`, matching the rest of the codebase.
+- **`plugin install` no longer drags the entire monorepo** under each plugin
+  name. Previously, installing `csv-export` left every other plugin
+  (`jira-sync`, `slack-notify`, etc.) as junk subdirectories.
+- **`plugin remove` now handles directory installs** and updates the lockfile.
+  The dispatcher had a stale hand-rolled handler that only removed `*.lua`
+  files; routed it through `plugins::cli::remove()` like the other actions.
+- **Silenced noisy `fatal: Remote branch v1.0.0 not found`** stderr from the
+  first git-clone attempt. The fallback path (default branch) keeps stderr
+  visible so genuine clone failures stay loud.
+
+#### Verified End-to-End
+- `plugin index update` clones the marketplace from the live registry.
+- `plugin search`, `plugin info` resolve manifests correctly.
+- `plugin install csv-export` and `plugin install jira-sync` install only their
+  own files, side by side under `plugins/`.
+- `plugin list` shows both. `plugin update` walks the lockfile against the
+  registry. `plugin remove` cleans both the directory and the lockfile entry.
+
+#### Binary
+- Release build: **5.7MB** (well under the <10MB doctrine target).
+- Tests: 78 passing.
+
 ## [0.7.0-alpha] - 2026-03-15
 
 ### Alpha Release — Call for Testers
@@ -355,7 +588,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 ProGit Core: **LCL-1.0** (file-level copyleft)
 Plugin SDK: **LSL-1.0** (file-level copyleft + patent grant)
 
-[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-alpha...HEAD
+[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.2-beta...HEAD
+[0.8.2-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.1-beta...v0.8.2-beta
+[0.8.1-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.0-beta...v0.8.1-beta
+[0.8.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-beta...v0.8.0-beta
+[0.7.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-alpha...v0.7.0-beta
 [0.7.0-alpha]: https://git.sovereign-society.org/ProGit/progit/compare/v0.6.0-beta...v0.7.0-alpha
 [0.6.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.5.2-beta...v0.6.0-beta
 [0.5.2-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.4.0-alpha...v0.5.2-beta

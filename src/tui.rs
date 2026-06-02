@@ -15,6 +15,7 @@ pub mod markdown;
 pub mod style;
 pub mod theme;
 pub mod widget_agent_menu;
+pub mod widget_auth_notice;
 pub mod widget_blame;
 pub mod widget_conflicts;
 pub mod widget_dashboard;
@@ -27,6 +28,8 @@ pub mod widget_lanes;
 pub mod widget_mr_create;
 pub mod widget_mr_list;
 pub mod widget_pano_log;
+pub mod widget_plugins;
+mod widget_project;
 pub mod widget_review;
 pub mod widget_settings;
 pub mod widget_status;
@@ -262,7 +265,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         }
         ViewMode::Diff => {
             if let Some(ref state) = app.diff_state {
-                areas.diff_file_list = crate::diff::render_diff(frame, inner, state);
+                // Reborrow the plugin manager separately from diff_state
+                // so the borrow checker sees two distinct field accesses.
+                let pm = app.plugin_manager.as_mut();
+                areas.diff_file_list = crate::diff::render_diff(frame, inner, state, pm);
             }
             KanbanAreas::default()
         }
@@ -402,6 +408,14 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
         widget_fuzzy_palette::render(frame, app, &colors);
     }
 
+    // Render repository-owned project overlays.
+    if app.input_mode == InputMode::ProjectWiki {
+        widget_project::render_wiki(frame, app, &colors);
+    }
+    if app.input_mode == InputMode::ProjectIssues {
+        widget_project::render_issues(frame, app, &colors);
+    }
+
     // Render Comment Input Box if open
     if app.input_mode == InputMode::DiffComment {
         let area = centered_rect(size, 60, 20);
@@ -452,15 +466,25 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     if app.show_pano_log {
         widget_pano_log::render(frame, app);
     }
-    
+
+    // Plugin manager modal
+    if app.show_plugins {
+        widget_plugins::render(frame, app);
+    }
+
     // Conflict resolution modal
     if app.show_conflicts {
         widget_conflicts::render(frame, app);
     }
-    
+
     // Agent menu modal (top layer)
     if app.show_agent_menu {
         widget_agent_menu::render(frame, app, app.agent_menu_selected);
+    }
+
+    // Authentication notice (top layer)
+    if app.auth_notice.is_some() {
+        widget_auth_notice::render(frame, app);
     }
 
     areas

@@ -78,13 +78,17 @@ function init(ctx)
         config.private_token = ctx.config.gitlab_token or ctx.config.private_token
     end
     
-    -- Validate configuration
+    -- Make configuration optional - plugin works without config but just logs a warning
     if not config.api_url then
-        error("gitlab-ci plugin requires 'gitlab_api_url' in config")
+        print("gitlab-ci plugin: no GitLab API URL configured (plugin is optional)")
+        print("  To enable: set gitlab_api_url and gitlab_token in .progit/config.json")
+        return true
     end
     
     if not config.private_token then
-        error("gitlab-ci plugin requires 'gitlab_token' in config")
+        print("gitlab-ci plugin: no GitLab token configured (plugin is optional)")
+        print("  To enable: set gitlab_token in .progit/config.json")
+        return true
     end
     
     print("gitlab-ci plugin initialized")

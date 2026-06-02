@@ -1,32 +1,37 @@
 {
-  "name": "gitlab-ci",
-  "version": "1.0.0",
   "author": "ProGit Team",
-  "description": "Queries GitLab CI/CD pipeline status for merge requests",
-  "license": "Apache-2.0",
-  "runtime": "lua",
-  "entry_point": "main.lua",
   "config_schema": {
     "gitlab_api_url": {
-      "type": "string",
       "description": "GitLab API base URL (e.g., https://gitlab.com/api/v4)",
-      "required": true
+      "required": false,
+      "type": "string"
     },
     "gitlab_token": {
-      "type": "string",
       "description": "GitLab Personal Access Token with read_api scope",
-      "required": true,
-      "secret": true
+      "required": false,
+      "secret": true,
+      "type": "string"
     }
   },
+  "description": "Queries GitLab CI/CD pipeline status for merge requests",
+  "entry_point": "main.lua",
   "events": [
     "PipelineStatusQuery"
   ],
+  "license": "Apache-2.0",
+  "name": "gitlab-ci",
+  "runtime": "lua",
+  "signature": {
+    "algorithm": "dilithium3-test",
+    "keyid": "18a10eb52cf3c001",
+    "signature": "csJAQijrDTNmGXP2vOSBwWhKl6891ulhuOsCyFTOtI4="
+  },
   "tags": [
     "gitlab",
     "ci-cd",
     "pipelines",
     "devops",
     "automation"
-  ]
+  ],
+  "version": "1.0.0"
 }

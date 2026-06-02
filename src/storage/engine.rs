@@ -3,7 +3,7 @@
 //! Single source of truth for issues. No KDL parsing for issues.
 
 use crate::issue::Issue;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -47,21 +47,13 @@ impl StorageEngine {
         }
 
         let issues_dir = self.issues_path.parent().unwrap().join("issues");
-        if issues_dir.exists() {
-            for entry in fs::read_dir(issues_dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "json") {
-                    if let Ok(content) = fs::read_to_string(&path) {
-                        if let Ok(issue) = serde_json::from_str::<Issue>(&content) {
-                            if let Some(existing) =
-                                self.issues.iter_mut().find(|i| i.id == issue.id)
-                            {
-                                *existing = issue;
-                            } else {
-                                self.issues.push(issue);
-                            }
-                        }
+        for path in regular_json_files(&issues_dir)? {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(issue) = serde_json::from_str::<Issue>(&content) {
+                    if let Some(existing) = self.issues.iter_mut().find(|i| i.id == issue.id) {
+                        *existing = issue;
+                    } else {
+                        self.issues.push(issue);
                     }
                 }
             }
@@ -76,19 +68,13 @@ impl StorageEngine {
         }
 
         let mrs_dir = self.mrs_path.parent().unwrap().join("mrs");
-        if mrs_dir.exists() {
-            for entry in fs::read_dir(mrs_dir)? {
-                let entry = entry?;
-                let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "json") {
-                    if let Ok(content) = fs::read_to_string(&path) {
-                        if let Ok(mr) = serde_json::from_str::<crate::mr::MergeRequest>(&content) {
-                            if let Some(existing) = self.mrs.iter_mut().find(|m| m.id == mr.id) {
-                                *existing = mr;
-                            } else {
-                                self.mrs.push(mr);
-                            }
-                        }
+        for path in regular_json_files(&mrs_dir)? {
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(mr) = serde_json::from_str::<crate::mr::MergeRequest>(&content) {
+                    if let Some(existing) = self.mrs.iter_mut().find(|m| m.id == mr.id) {
+                        *existing = mr;
+                    } else {
+                        self.mrs.push(mr);
                     }
                 }
             }
@@ -185,6 +171,29 @@ impl StorageEngine {
     }
 }
 
+fn regular_json_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(dir).with_context(|| format!("Failed to read {}", dir.display()))? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "json") {
+            let file_type = entry
+                .file_type()
+                .with_context(|| format!("Failed to inspect {}", path.display()))?;
+            if !file_type.is_file() {
+                bail!("{} must be a regular JSON file", path.display());
+            }
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +233,27 @@ mod tests {
         let mut engine2 = StorageEngine::new(dir.path());
         engine2.load().unwrap();
         assert_eq!(engine2.issues().len(), 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_engine_rejects_symlinked_issue_file() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempdir().unwrap();
+        let issues_dir = dir.path().join(".project/issues");
+        fs::create_dir_all(&issues_dir).unwrap();
+        let outside = dir.path().join("outside.json");
+        fs::write(
+            &outside,
+            serde_json::to_string(&Issue::new("Outside")).unwrap(),
+        )
+        .unwrap();
+        symlink(&outside, issues_dir.join("link.json")).unwrap();
+
+        let mut engine = StorageEngine::new(dir.path());
+        let err = engine.load().unwrap_err().to_string();
+
+        assert!(err.contains("regular JSON file"));
     }
 }

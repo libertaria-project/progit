@@ -98,6 +98,15 @@ fn handle_normal_mode_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
         // Global Actions
         KeyCode::Char('S') => KeyAction::Sync,
+        KeyCode::Char('P') | KeyCode::Char('Q') => {
+            // Q is an alias for P that lands you on the plugin manager
+            // modal where quarantined plugins are flagged. Same modal,
+            // same close keys; one extra entry point because users
+            // who hit a quarantine event think "Q" before "P".
+            app.show_plugins = !app.show_plugins;
+            app.plugin_selected = 0;
+            KeyAction::Refresh
+        }
         KeyCode::Char('q') => KeyAction::Quit,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => KeyAction::Quit,
         KeyCode::Char('O') => {
@@ -168,6 +177,20 @@ fn handle_dashboard_key(app: &mut App, key: KeyEvent) -> KeyAction {
 pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
     // Modal overlays take priority (close on Escape)
 
+    // Authentication notice
+    if app.auth_notice.is_some() {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                app.dismiss_auth_notice();
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return KeyAction::Quit;
+            }
+            _ => return KeyAction::None,
+        }
+    }
+
     // Agent menu modal
     if app.show_agent_menu {
         use crate::tui::widget_agent_menu::AgentAction;
@@ -215,8 +238,54 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         return KeyAction::Refresh;
     }
 
+    // Plugin manager modal
+    if app.show_plugins {
+        match key.code {
+            KeyCode::Esc
+            | KeyCode::Char('P')
+            | KeyCode::Char('Q')
+            | KeyCode::Char('q') => {
+                app.show_plugins = false;
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                let count = app.plugin_manager.as_ref().map_or(0, |pm| pm.count());
+                if count > 0 {
+                    app.plugin_selected = (app.plugin_selected + 1) % count;
+                }
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                let count = app.plugin_manager.as_ref().map_or(0, |pm| pm.count());
+                if count > 0 {
+                    if app.plugin_selected == 0 {
+                        app.plugin_selected = count - 1;
+                    } else {
+                        app.plugin_selected -= 1;
+                    }
+                }
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('u') => {
+                // Clear quarantine on the highlighted plugin, if any.
+                if let Some(pm) = app.plugin_manager.as_mut() {
+                    let infos = pm.plugin_info();
+                    let idx = app.plugin_selected.min(infos.len().saturating_sub(1));
+                    if let Some(meta) = infos.get(idx) {
+                        let name = meta.name.clone();
+                        if pm.unquarantine(&name) {
+                            log::info!("Cleared quarantine on plugin '{}'", name);
+                        }
+                    }
+                }
+                return KeyAction::Refresh;
+            }
+            _ => return KeyAction::None,
+        }
+    }
+
     match app.input_mode {
-        InputMode::Normal => handle_dashboard_key(app, key), // Was handle_normal_key, but that doesn't exist
+        InputMode::Normal => handle_normal_mode_key(app, key),
         InputMode::Search => handle_search_key(app, key),
         InputMode::Confirm => handle_confirm_key(app, key),
         InputMode::RemoteDropdown => handle_remote_dropdown_key(app, key),
@@ -233,6 +302,8 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         InputMode::Settings => handle_settings_key(app, key),
         InputMode::FuzzyPalette => handle_fuzzy_palette_key(app, key),
         InputMode::DiffComment => handle_diff_comment_key(app, key),
+        InputMode::ProjectWiki => handle_project_wiki_key(app, key),
+        InputMode::ProjectIssues => handle_project_issues_key(app, key),
         InputMode::Edit => {
             // Legacy - redirect to detail view
             if key.code == KeyCode::Esc {
@@ -633,7 +704,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 pub fn help_text(app: &App) -> &'static str {
     match app.input_mode {
         InputMode::Normal => match app.view_mode {
-            ViewMode::Dashboard => "Tab:list │ S:sync │ O:settings │ q:quit",
+            ViewMode::Dashboard => "Tab:list │ S:sync │ P:plugins │ O:settings │ q:quit",
             ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
             ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
             ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
@@ -659,5 +730,7 @@ pub fn help_text(app: &App) -> &'static str {
         InputMode::Settings => "t:theme │ O/Esc:close",
         InputMode::FuzzyPalette => "Type to search │ Enter:select │ Esc:close",
         InputMode::DiffComment => "Type comment │ Enter:save │ Esc:cancel",
+        InputMode::ProjectWiki => "h/l:page │ j/k:scroll │ g/G:top/bottom │ q/Esc:close",
+        InputMode::ProjectIssues => "j/k:nav │ Enter:open loaded issue │ q/Esc:close",
     }
 }

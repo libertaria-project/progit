@@ -14,10 +14,7 @@ use super::{HooksAction, IndexAction, PluginAction};
 pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
     use progit_plugin_sdk::prelude::{LuaPlugin, Plugin};
 
-    // Plugin directories
-    let home_plugins = dirs::home_dir()
-        .map(|h| h.join(".progit").join("plugins"))
-        .unwrap_or_else(|| PathBuf::from(".progit/plugins"));
+    // Plugin directory for legacy file-based fallback installs
     let local_plugins = PathBuf::from(".progit/plugins");
 
     match action {
@@ -83,21 +80,10 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
         }
 
         PluginAction::Remove { name } => {
-            let mut removed = false;
-
-            for dir in [&local_plugins, &home_plugins] {
-                let plugin_path = dir.join(format!("{}.lua", name));
-                if plugin_path.exists() {
-                    std::fs::remove_file(&plugin_path)?;
-                    println!("{} Removed plugin: {}", "✓".green(), name);
-                    removed = true;
-                    break;
-                }
-            }
-
-            if !removed {
-                return Err(anyhow!("Plugin '{}' not found", name));
-            }
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::remove(&project_root, &name)?;
         }
 
         PluginAction::Update { name } => {
@@ -131,6 +117,31 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
                 }
             }
         }
+
+        PluginAction::New { name, author } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::new_plugin(&project_root, &name, author.as_deref())?;
+        }
+        PluginAction::Verify { name } => {
+            crate::marketplace::cli::handle_plugin_verify(&name)?;
+        }
+        PluginAction::Run { command, args } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::run_command(&project_root, &command, &args)?;
+        }
+        PluginAction::External(tokens) => {
+            use crate::plugins::cli as plugin_cli;
+            let Some((command, args)) = tokens.split_first() else {
+                return Err(anyhow!("Usage: prog plugin <command> [args...]"));
+            };
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::run_command(&project_root, command, args)?;
+        }
     }
 
     Ok(())
@@ -138,6 +149,42 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
 
 /// Handle hooks CLI commands
 pub(crate) fn handle_hooks_command(action: HooksAction, repo_root: &Path) -> Result<()> {
+    // Try plugin system first for subcommands that plugins can handle
+    match &action {
+        HooksAction::Validate { hook_type, value } => {
+            // Plugin expects: ["validate", <hook_type>, <value>]
+            let mut args: Vec<String> = vec!["validate".to_string(), hook_type.clone()];
+            if let Some(v) = value {
+                args.push(v.clone());
+            }
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
+                return Ok(());
+            }
+        }
+        HooksAction::Status => {
+            // Plugin expects: ["status"]
+            let args = vec!["status".to_string()];
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
+                return Ok(());
+            }
+        }
+        HooksAction::Install => {
+            // Plugin expects: ["install"]
+            let args = vec!["install".to_string()];
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
+                return Ok(());
+            }
+        }
+        HooksAction::Uninstall => {
+            // Plugin expects: ["uninstall"]
+            let args = vec!["uninstall".to_string()];
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
+                return Ok(());
+            }
+        }
+    }
+
+    // Fall back to built-in hooks
     match action {
         HooksAction::Install => {
             println!("{} Installing ProGit hooks...", "🔧".blue());
@@ -191,6 +238,36 @@ pub(crate) fn handle_hooks_command(action: HooksAction, repo_root: &Path) -> Res
                 Err(e) => {
                     return Err(anyhow!("Failed to check hook status: {}", e));
                 }
+            }
+        }
+        HooksAction::Validate { hook_type, value } => {
+            if hook_type == "commit-msg" || hook_type == "commit" {
+                if let Some(msg) = value {
+                    let refs = hooks::parse_issue_references(&msg);
+                    println!();
+                    println!("{} Validating commit message...", "🔍".blue());
+                    println!();
+                    if refs.is_empty() {
+                        println!("  {} No issue references found", "ℹ️".dimmed());
+                    } else {
+                        println!("{} Found {} issue reference(s):", "📌".cyan(), refs.len());
+                        for r in &refs {
+                            let action_str = match r.action {
+                                hooks::IssueAction::Close => "Close".to_string(),
+                                hooks::IssueAction::Reference => "Reference".to_string(),
+                                hooks::IssueAction::Mention => "Mention".to_string(),
+                            };
+                            println!("  {} #{} ({})", action_str.green(), r.issue_id, action_str);
+                        }
+                    }
+                } else {
+                    println!("{} Usage: prog hooks validate commit-msg \"closes #123\"", "ℹ️".yellow());
+                }
+            } else if hook_type == "branch" {
+                println!("{} Branch validation - use git-hooks plugin for full validation", "ℹ️".cyan());
+            } else {
+                println!("{} Unknown hook type: {}", "⚠️".yellow(), hook_type);
+                println!("Valid types: commit-msg, branch");
             }
         }
     }

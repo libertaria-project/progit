@@ -1,10 +1,10 @@
 [package]
 name = "progit"
-version = "0.7.0-alpha"
+version = "0.8.2-beta"
 edition = "2021"
 authors = ["Markus Maiwald"]
 description = "⚡ Blazing-fast terminal issue tracker with Kanban, GitLab/Forgejo sync, and intelligent time tracking"
-license = "LCL-1.0"
+license-file = "LICENSE"
 repository = "https://git.sovereign-society.org/ProGit/progit"
 keywords = ["git", "issue-tracker", "tui", "kanban", "project-management"]
 categories = ["command-line-utilities", "development-tools"]
@@ -35,7 +35,10 @@ clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"], optional = true }
 axum = { version = "0.7", optional = true }
 askama = { version = "0.12", optional = true }
-git2 = { version = "0.20.3" }
+# default-features = false drops the https (openssl-sys) and ssh (libssh2-sys)
+# transports — progit uses git2 only for LOCAL repo ops; network goes via the
+# git CLI + reqwest(rustls). This is what makes musl cross-compile work.
+git2 = { version = "0.20.3", default-features = false }
 once_cell = "1.18"
 
 # Sync & Security
@@ -48,6 +51,10 @@ colored = "3.0.0"
 log = "0.4.29"
 tui-logger = { version = "0.17.4", features = ["crossterm"] }
 blake3 = "1.5"
+crystals-dilithium = "=2.0.0"
+
+# Marketplace (Hinge)
+rand = "0.8"
 
 # Plugin SDK (Apache 2.0 - separate license)
 progit-plugin-sdk = { path = "../progit-plugin-sdk" }
@@ -56,17 +63,50 @@ mlua = { version = "0.11.5", features = ["luajit", "vendored", "send"] }
 dirs = "6.0.0"
 pulldown-cmark = "0.13.0"
 
+# --- forge-backend feature ---
+# Optional deps for the GitBackend trait + LocalGitBackend (gix-based).
+# Enabled by `--features=forge-backend`. Default build does NOT pull these.
+async-trait = { version = "0.1", optional = true }
+gix = { version = "0.69", default-features = false, features = ["max-performance-safe"], optional = true }
+gix-pack = { version = "0.56", optional = true }
+gix-hash = { version = "0.15", optional = true }
+gix-features = { version = "0.39", features = ["progress"], optional = true }
+gix-object = { version = "0.46", optional = true }
+progit-forge-client = { path = "../progit-forge-client", optional = true }
+# sha1 + hex used by the local backend's pack helpers and test fixtures.
+# Both are tiny (< 100 KB combined) and avoid awkward indirection through
+# gix-features re-exports.
+sha1 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+flate2 = { version = "1.0", optional = true }
+
 [features]
 default = []
 keyring-secrets = ["dep:keyring"]  # OS keyring for token storage (adds ~1.7MB on Linux)
-web = ["tokio", "axum", "askama"]
+web = ["dep:tokio", "dep:axum", "dep:askama"]
+# Opt-in git data plane: defines the GitBackend trait + LocalGitBackend (gix)
+# + ForgedBackend (re-exported from progit-forge-client). Adds ~3MB to the
+# binary; default off so the minimal TUI stays under the 8MB doctrine target.
+forge-backend = [
+    "dep:async-trait",
+    "dep:tokio",
+    "dep:gix",
+    "dep:gix-pack",
+    "dep:gix-hash",
+    "dep:gix-features",
+    "dep:gix-object",
+    "dep:progit-forge-client",
+    "dep:sha1",
+    "dep:hex",
+    "dep:flate2",
+]
 
 [profile.release]
 opt-level = "z"        # Optimize for size (vs "3" for speed)
 lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
+# panic = "unwind"     # Allow panic unwind for plugin isolation
 overflow-checks = false
 
 [lib]
@@ -79,3 +119,10 @@ path = "src/main.rs"
 
 [dev-dependencies]
 tempfile = "3.23.0"
+sha2 = "0.10"
+# Daemon as a dev-dep so integration tests can spin up a real progit-forged
+# in-process. Only used by tests gated on `forge-backend`; release builds do
+# not pull this. Adds gix + sled + tonic to the test compilation only.
+progit-forged = { path = "../progit-forged" }
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = "0.12"

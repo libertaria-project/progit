@@ -1,0 +1,6 @@
+schema "progit.plugins" {
+    version 0
+    format "kdl"
+    owner "core"
+    status "declared"
+}
