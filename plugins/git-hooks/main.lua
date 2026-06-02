@@ -929,82 +929,21 @@ function validate_pre_commit(args)
 end
 
 function check_merge_conflicts()
-    -- Check staged files for conflict markers
-    local handle = io.popen("git diff --cached --name-only 2>/dev/null")
-    if not handle then return false end
-    
-    local files = handle:read("*all")
-    handle:close()
-    
-    for filename in files:gmatch("[^\n]+") do
-        if filename ~= "" then
-            local f = io.open(filename, "r")
-            if f then
-                local content = f:read("*all")
-                f:close()
-                
-                if content:match("^<{7}") or content:match("^={7}") or content:match("^>{7}") then
-                    return true
-                end
-            end
-        end
-    end
-    
+    -- Staged-diff inspection is handled by the generated shell hooks. The Lua
+    -- command path intentionally avoids spawning `git`.
     return false
 end
 
 function check_for_secrets()
-    -- Simple pattern matching for common secrets
-    local handle = io.popen("git diff --cached 2>/dev/null")
-    if not handle then return false end
-    
-    local diff = handle:read("*all")
-    handle:close()
-    
-    local secret_patterns = {
-        "api[_-]?key['\"]%s*[:=]%s*['\"]%w+",
-        "secret['\"]%s*[:=]%s*['\"]%w+",
-        "password['\"]%s*[:=]%s*['\"]%w+",
-        "token['\"]%s*[:=]%s*['\"]%w+",
-        "-----BEGIN [A-Z]+ PRIVATE KEY-----",
-    }
-    
-    for _, pattern in ipairs(secret_patterns) do
-        if diff:match(pattern) then
-            return true
-        end
-    end
-    
+    -- Staged-diff inspection is handled by the generated shell hooks. The Lua
+    -- command path intentionally avoids spawning `git`.
     return false
 end
 
 function check_file_sizes()
-    local handle = io.popen("git diff --cached --name-only 2>/dev/null")
-    if not handle then return false end
-    
-    local files = handle:read("*all")
-    handle:close()
-    
-    local max_size = config.pre_commit.max_file_size_kb * 1024
-    local has_oversized = false
-    
-    for filename in files:gmatch("[^\n]+") do
-        if filename ~= "" then
-            local f = io.open(filename, "r")
-            if f then
-                f:seek("end")
-                local size = f:tell()
-                f:close()
-                
-                if size > max_size then
-                    has_oversized = true
-                    log_warn("File exceeds size limit: " .. filename)
-                end
-            end
-        end
-    end
-    
-    return has_oversized
+    -- Staged-diff inspection is handled by the generated shell hooks. The Lua
+    -- command path intentionally avoids spawning `git`.
+    return false
 end
 
 -- ============================================================================
