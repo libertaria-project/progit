@@ -906,6 +906,16 @@ fn validate_issues(
         let entry = entry?;
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == "json") {
+            let file_type = entry.file_type().with_context(|| {
+                format!("Failed to inspect {}", rel_path(root, &path).display())
+            })?;
+            if !file_type.is_file() {
+                report.error(
+                    Some(rel_path(root, &path)),
+                    ".project/issues entries must be regular JSON files",
+                );
+                continue;
+            }
             issue_paths.push(path);
         }
     }

@@ -125,6 +125,15 @@ pub fn load_project_issues(root: &Path) -> Result<ProjectIssuesView> {
         let entry = entry?;
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == "json") {
+            let file_type = entry.file_type().with_context(|| {
+                format!("failed to inspect {}", rel_path(root, &path).display())
+            })?;
+            if !file_type.is_file() {
+                bail!(
+                    "{} must be a regular issue JSON file",
+                    rel_path(root, &path).display()
+                );
+            }
             issue_paths.push(path);
         }
     }
@@ -402,6 +411,26 @@ wiki {
         let err = load_project_issues(dir.path()).unwrap_err().to_string();
 
         assert!(err.contains("invalid issue JSON"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn load_issues_rejects_symlinked_issue_files() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempdir().unwrap();
+        init_project(dir.path());
+        let outside = dir.path().join("outside.json");
+        fs::write(
+            &outside,
+            serde_json::to_string(&Issue::new("Outside")).unwrap(),
+        )
+        .unwrap();
+        symlink(&outside, dir.path().join(".project/issues/link.json")).unwrap();
+
+        let err = load_project_issues(dir.path()).unwrap_err().to_string();
+
+        assert!(err.contains("regular issue JSON file"));
     }
 
     fn root_path(root: &Path, name: &str) -> PathBuf {

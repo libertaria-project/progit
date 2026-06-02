@@ -51,7 +51,7 @@ colored = "3.0.0"
 log = "0.4.29"
 tui-logger = { version = "0.17.4", features = ["crossterm"] }
 blake3 = "1.5"
-    crystals-dilithium = "2.0.0"
+crystals-dilithium = "=2.0.0"
 
 # Marketplace (Hinge)
 rand = "0.8"

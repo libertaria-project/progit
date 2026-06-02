@@ -3,6 +3,9 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: write
+
 # Runner note: this instance maps `ubuntu-latest` -> a custom `nexus/build-env`
 # image that is NOT present on every host. We target `node-20` (-> public
 # `node:20`, always pullable) and install the Rust/Zig toolchain at runtime, so
@@ -16,14 +19,33 @@ jobs:
       - name: Checkout sibling path-dep crates
         run: |
           set -euo pipefail
+          checkout_sibling() {
+            name="$1"
+            rev="$2"
+            repo_url="${GITHUB_SERVER_URL%/}/ProGit/${name}.git"
+            dest="${GITHUB_WORKSPACE}/../${name}"
+
+            rm -rf "$dest"
+            mkdir -p "$dest"
+            git -C "$dest" init -q
+            git -C "$dest" remote add origin "$repo_url"
+            git -C "$dest" fetch --depth 1 origin "$rev"
+            git -C "$dest" checkout --detach "$rev"
+
+            actual="$(git -C "$dest" rev-parse HEAD)"
+            if [ "$actual" != "$rev" ]; then
+              echo "FATAL: ${name} resolved to ${actual}, expected ${rev}" >&2
+              exit 1
+            fi
+          }
+
           # progit/Cargo.toml has path deps on these sibling repos: plugin-sdk is
           # compiled into prog; forge-client (optional) and forged (dev-dep) are
-          # only resolved. cargo reads ALL of them, so all must be on disk next
-          # to the repo or resolve fails.
-          for r in progit-plugin-sdk progit-forge-client progit-forged; do
-            dest="${GITHUB_WORKSPACE}/../$r"
-            [ -d "$dest/.git" ] || git clone --depth 1 "${GITHUB_SERVER_URL}/ProGit/$r.git" "$dest"
-          done
+          # only resolved. Pin every sibling checkout so release inputs are
+          # immutable and fail closed when a dependency moves unexpectedly.
+          checkout_sibling progit-plugin-sdk f656cdb89e093be55f5a8d4e73d54187368b0cbf
+          checkout_sibling progit-forge-client 75affe775915020c8cc879afc858102089e5fee3
+          checkout_sibling progit-forged 664a7e68d02f03bed9f887ebdae7bd3cceedef74
 
       - name: System build deps
         run: |
@@ -37,16 +59,28 @@ jobs:
         run: |
           set -eux
           ZIG_VERSION=0.13.0
-          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+          ZIG_SHA256=d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea
+          ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o "$ZIG_ARCHIVE"
+          printf '%s  %s\n' "$ZIG_SHA256" "$ZIG_ARCHIVE" | sha256sum -c -
           mkdir -p /opt/zig
-          tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1
+          tar -xJf "$ZIG_ARCHIVE" -C /opt/zig --strip-components=1
           echo "/opt/zig" >> "$GITHUB_PATH"
           /opt/zig/zig version
 
       - name: Install Rust + cargo-zigbuild
         run: |
           set -eux
-          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          RUSTUP_VERSION=1.28.2
+          RUSTUP_TARGET=x86_64-unknown-linux-gnu
+          RUSTUP_SHA256=20a06e644b0d9bd2fbdbfd52d42540bdde820ea7df86e92e533c073da0cdd43c
+          RUSTUP_INIT="/tmp/rustup-init"
+          curl --proto '=https' --tlsv1.2 -fsSL \
+            "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${RUSTUP_TARGET}/rustup-init" \
+            -o "$RUSTUP_INIT"
+          printf '%s  %s\n' "$RUSTUP_SHA256" "$RUSTUP_INIT" | sha256sum -c -
+          chmod 755 "$RUSTUP_INIT"
+          "$RUSTUP_INIT" -y --profile minimal --default-toolchain stable --no-modify-path
           . "$HOME/.cargo/env"
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           rustup target add \
@@ -54,39 +88,53 @@ jobs:
             x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu
           cargo install cargo-zigbuild --locked
 
-      - name: Provision signing key
+      - name: Build, sign, checksum
         run: |
-          set -eu
-          KEY="$RUNNER_TEMP/minisign.key"
-          PROBE="$RUNNER_TEMP/probe"
+          set -euo pipefail
+          umask 077
+          KEY_DIR="$RUNNER_TEMP/progit-signing"
+          KEY="$KEY_DIR/minisign.key"
+          PROBE="$KEY_DIR/probe"
+          cleanup() {
+            rm -f "$KEY" "$PROBE" "$PROBE.sig"
+            rmdir "$KEY_DIR" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          if [ -z "${MINISIGN_SECRET_KEY:-}" ]; then
+            echo "FATAL: MINISIGN_SECRET_KEY is empty" >&2
+            exit 1
+          fi
+
+          mkdir -p "$KEY_DIR"
+          chmod 700 "$KEY_DIR"
+          install -m 600 /dev/null "$KEY"
           echo probe > "$PROBE"
-          # Validate the key by TEST-SIGNING, not by comment text — the key's
-          # untrusted comment is customized, so grepping for "minisign" would
-          # wrongly reject a valid key. Try base64 (whitespace-stripped) first,
-          # then raw 2-line text.
+
+          # Validate by test-signing, not by untrusted comment text. Try base64
+          # (whitespace-stripped) first, then raw 2-line minisign secret text.
           printf '%s' "$MINISIGN_SECRET_KEY" | tr -d '[:space:]' | base64 -d > "$KEY" 2>/dev/null || true
+          chmod 600 "$KEY"
           if minisign -S -s "$KEY" -m "$PROBE" -x "$PROBE.sig" </dev/null >/dev/null 2>&1; then
             echo "provisioned signing key from base64 (validated by test-sign)"
           else
             printf '%s\n' "$MINISIGN_SECRET_KEY" > "$KEY"
+            chmod 600 "$KEY"
             minisign -S -s "$KEY" -m "$PROBE" -x "$PROBE.sig" </dev/null >/dev/null 2>&1 \
               || { echo "FATAL: MINISIGN_SECRET_KEY cannot sign as base64 or raw — check the stored value"; exit 1; }
             echo "provisioned signing key from raw text (validated by test-sign)"
           fi
-          chmod 600 "$KEY"
           rm -f "$PROBE" "$PROBE.sig"
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          export PROGIT_MINISIGN_KEY="$KEY"
+          bash scripts/build-release.sh "$VERSION"
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
 
-      - name: Build, sign, checksum
-        env:
-          PROGIT_MINISIGN_KEY: ${{ runner.temp }}/minisign.key
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          bash scripts/build-release.sh "$VERSION"
-
       - name: Publish Forgejo Release
-        uses: https://code.forgejo.org/actions/forgejo-release@v2
+        # Immutable pin for forgejo-release v2.12.1. Bump intentionally after review.
+        uses: https://code.forgejo.org/actions/forgejo-release@ccebdd6620fbfe82b38675283d7bb23de82c3c54
         with:
           direction: upload
           release-dir: dist

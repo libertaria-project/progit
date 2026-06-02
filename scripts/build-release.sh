@@ -2,10 +2,8 @@
 # build-release.sh — build, size-gate, sign, and checksum `prog`.
 #
 # The host-native target builds with plain `cargo build` so LuaJIT's DWARF
-# unwinder and libgit2 link against the system toolchain (musl-static + LuaJIT
-# via zig fails to resolve _Unwind_* symbols — a known cross-compile reef; see
-# follow-up). Other targets cross-compile via cargo-zigbuild and are BEST-EFFORT
-# — they must never sink the release. Net-new in Phase 1a.
+# unwinder and libgit2 link against the system toolchain. Explicit cross-targets
+# build through cargo-zigbuild and fail the release if they fail.
 set -euo pipefail
 
 VERSION="${1:?usage: build-release.sh <version> [target...]}"
@@ -26,10 +24,49 @@ fi
 
 DIST="$(pwd)/dist"
 MAX_BYTES=$((7 * 1024 * 1024))   # 7MB hard limit (Doctrine 1)
-SECRET_KEY="${PROGIT_MINISIGN_KEY:?set PROGIT_MINISIGN_KEY to the minisign secret key path}"
+SECRET_KEY_INPUT="${PROGIT_MINISIGN_KEY:?set PROGIT_MINISIGN_KEY to the minisign secret key path}"
+
+fail() {
+  echo "FATAL: $*" >&2
+  exit 1
+}
+
+resolve_file_path() {
+  local input="$1"
+  local dir base
+  dir="$(dirname "$input")"
+  base="$(basename "$input")"
+  [ -d "$dir" ] || fail "signing key directory does not exist: $dir"
+  printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$base"
+}
+
+validate_signing_key() {
+  local input="$1"
+  local resolved mode runner_temp_real
+
+  [ ! -L "$input" ] || fail "PROGIT_MINISIGN_KEY must not be a symlink"
+  [ -f "$input" ] || fail "PROGIT_MINISIGN_KEY must point to a regular file"
+
+  resolved="$(resolve_file_path "$input")"
+  if [ -n "${RUNNER_TEMP:-}" ]; then
+    runner_temp_real="$(cd "$RUNNER_TEMP" && pwd -P)"
+    case "$resolved" in
+      "$runner_temp_real"/*) ;;
+      *) fail "CI signing key must live under RUNNER_TEMP" ;;
+    esac
+  fi
+
+  mode="$(stat -c %a "$resolved" 2>/dev/null || stat -f %Lp "$resolved" 2>/dev/null || true)"
+  if [[ "$mode" =~ ^[0-7]+$ ]] && (( (8#$mode & 077) != 0 )); then
+    fail "signing key permissions must not allow group/other access: $mode"
+  fi
+
+  printf '%s\n' "$resolved"
+}
+
+SECRET_KEY="$(validate_signing_key "$SECRET_KEY_INPUT")"
 
 rm -rf "$DIST"; mkdir -p "$DIST"
-FAILED_OPTIONAL=()   # best-effort cross targets that failed to build
 
 for target in "${TARGETS[@]}"; do
   echo ">>> building $target"
@@ -41,11 +78,9 @@ for target in "${TARGETS[@]}"; do
     fi
     bindir="target/release"
   else
-    rustup target add "$target" >/dev/null 2>&1 || true
-    if ! cargo zigbuild --release --target "$target" --bin prog; then
-      echo "WARN: best-effort target $target failed — skipping"
-      FAILED_OPTIONAL+=("$target"); continue
-    fi
+    rustup target add "$target" >/dev/null 2>&1
+    cargo zigbuild --release --target "$target" --bin prog \
+      || fail "target $target failed to build"
     bindir="target/$target/release"
   fi
 
@@ -73,10 +108,6 @@ for target in "${TARGETS[@]}"; do
     -m "$archive" >/dev/null
   echo "    signed: ${archive}.minisig"
 done
-
-if [ ${#FAILED_OPTIONAL[@]} -gt 0 ]; then
-  echo ">>> NOTE: best-effort targets skipped (non-fatal): ${FAILED_OPTIONAL[*]}"
-fi
 
 # Checksum the archives ONLY — never the .minisig signatures, which would
 # break `sha256sum -c`. nullglob tolerates a target set without a .zip.

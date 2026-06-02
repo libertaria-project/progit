@@ -88,3 +88,4 @@ keys/*.key
 *.minisign.key
 # Release build output
 /dist/
+.sober/
