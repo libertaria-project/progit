@@ -50,7 +50,9 @@ impl ForgejoProvider {
     fn login_interactive(&self) -> Result<String> {
         println!("🔒 Authentication required for {}", self.config.url);
         let token = keyring::prompt_for_token(&self.config.url)?;
-        keyring::set_token(&self.config.url, &self.config.owner, &token)?;
+        if let Err(err) = keyring::set_token(&self.config.url, &self.config.owner, &token) {
+            log::warn!("Token will be used for this command only: {}", err);
+        }
         Ok(token)
     }
 

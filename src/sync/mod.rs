@@ -94,8 +94,9 @@ pub fn auth_required_error(
     };
 
     anyhow::anyhow!(
-        "Authentication required for {}. Set PROGIT_TOKEN or {} before starting the TUI, or run `prog sync` from a normal shell to authenticate. Credential lookup failed: {}",
+        "Authentication required for {}. Set PROGIT_TOKEN, {}, PROGIT_TOKEN_FILE, or {}_FILE before starting the TUI, or run `prog sync` from a normal shell to authenticate. Credential lookup failed: {}",
         url,
+        provider_env,
         provider_env,
         source
     )
