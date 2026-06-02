@@ -10,46 +10,6 @@ use crate::hooks;
 // Re-use the CLI enum types defined in main.rs (imported via super:: since main.rs is the crate root)
 use super::{HooksAction, IndexAction, PluginAction};
 
-/// Try to dispatch a hooks command to the plugin system first.
-/// Returns true if a plugin handled the command, false otherwise.
-fn try_plugin_hooks_command(command: &str, args: &[String]) -> bool {
-    let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let plugin_dir = project_root.join("plugins");
-
-    if !plugin_dir.exists() {
-        return false;
-    }
-
-    let mut manager = crate::plugins::PluginManager::new(&project_root);
-    
-    let context = progit_plugin_sdk::traits::PluginContext {
-        repo_path: project_root.to_string_lossy().to_string(),
-        user: None,
-        env: Default::default(),
-        config: Default::default(),
-    };
-    
-    if manager.load_all(&context).is_err() {
-        return false;
-    }
-
-    match manager.dispatch_command(command, args) {
-        Some(result) => {
-            if let Some(output) = result.output {
-                println!("{}", output);
-            }
-            if !result.success {
-                if let Some(error) = result.error {
-                    eprintln!("{} {}", "Error:".red(), error);
-                }
-                std::process::exit(1);
-            }
-            true
-        }
-        None => false,
-    }
-}
-
 /// Handle plugin CLI commands
 pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
     use progit_plugin_sdk::prelude::{LuaPlugin, Plugin};
@@ -167,6 +127,21 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
         PluginAction::Verify { name } => {
             crate::marketplace::cli::handle_plugin_verify(&name)?;
         }
+        PluginAction::Run { command, args } => {
+            use crate::plugins::cli as plugin_cli;
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::run_command(&project_root, &command, &args)?;
+        }
+        PluginAction::External(tokens) => {
+            use crate::plugins::cli as plugin_cli;
+            let Some((command, args)) = tokens.split_first() else {
+                return Err(anyhow!("Usage: prog plugin <command> [args...]"));
+            };
+            let project_root = std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
+            plugin_cli::run_command(&project_root, command, args)?;
+        }
     }
 
     Ok(())
@@ -182,28 +157,28 @@ pub(crate) fn handle_hooks_command(action: HooksAction, repo_root: &Path) -> Res
             if let Some(v) = value {
                 args.push(v.clone());
             }
-            if try_plugin_hooks_command("hooks", &args) {
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
                 return Ok(());
             }
         }
         HooksAction::Status => {
             // Plugin expects: ["status"]
             let args = vec!["status".to_string()];
-            if try_plugin_hooks_command("hooks", &args) {
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
                 return Ok(());
             }
         }
         HooksAction::Install => {
             // Plugin expects: ["install"]
             let args = vec!["install".to_string()];
-            if try_plugin_hooks_command("hooks", &args) {
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
                 return Ok(());
             }
         }
         HooksAction::Uninstall => {
             // Plugin expects: ["uninstall"]
             let args = vec!["uninstall".to_string()];
-            if try_plugin_hooks_command("hooks", &args) {
+            if crate::plugins::cli::try_run_command(repo_root, "hooks", &args)? {
                 return Ok(());
             }
         }

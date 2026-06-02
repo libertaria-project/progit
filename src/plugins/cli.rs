@@ -15,8 +15,9 @@ use anyhow::{Context, Result};
 use colored::*;
 use std::path::Path;
 
-use super::registry::{PluginRegistry, PluginSource};
 use super::lockfile::Lockfile;
+use super::manager::CommandResult;
+use super::registry::{PluginRegistry, PluginSource};
 use crate::storage::config;
 
 /// Helper to create a registry with config support
@@ -25,6 +26,84 @@ fn get_registry(project_root: &Path) -> Result<PluginRegistry> {
     let config = config::load_config(&config_path)?;
     let registry_url = config.plugins.and_then(|p| p.registry_url);
     PluginRegistry::new(project_root, registry_url)
+}
+
+fn load_command_manager(
+    project_root: &Path,
+    command: &str,
+) -> Result<crate::plugins::PluginManager> {
+    let mut manager = crate::plugins::PluginManager::new(project_root);
+    let context = progit_plugin_sdk::traits::PluginContext {
+        repo_path: project_root.to_string_lossy().to_string(),
+        user: None,
+        env: Default::default(),
+        config: Default::default(),
+    };
+
+    let plugin_dir = project_root.join("plugins");
+    manager.load_command_plugins_from_dir(&plugin_dir, &context, command);
+
+    let user_plugins = project_root.join(".progit").join("plugins");
+    if user_plugins.exists() {
+        manager.load_command_plugins_from_dir(&user_plugins, &context, command);
+    }
+
+    Ok(manager)
+}
+
+fn print_command_result(command: &str, result: CommandResult) -> Result<()> {
+    let CommandResult {
+        plugin,
+        success,
+        output,
+        error,
+        data: _,
+    } = result;
+
+    if let Some(output) = output {
+        println!("{output}");
+    }
+
+    if !success {
+        let error = error
+            .unwrap_or_else(|| format!("plugin command '{command}' failed"));
+        anyhow::bail!("{}: {}", plugin, error);
+    }
+
+    Ok(())
+}
+
+/// Try to run an installed plugin command.
+///
+/// Returns `Ok(false)` when no installed plugin owns the command. If a plugin
+/// owns the command and fails, this returns an error instead of falling back to
+/// a built-in implementation.
+pub fn try_run_command(project_root: &Path, command: &str, args: &[String]) -> Result<bool> {
+    let plugin_dir = project_root.join("plugins");
+    let user_plugin_dir = project_root.join(".progit").join("plugins");
+    if !plugin_dir.exists() && !user_plugin_dir.exists() {
+        return Ok(false);
+    }
+
+    let mut manager = load_command_manager(project_root, command)?;
+    let Some(result) = manager.dispatch_command(command, args) else {
+        return Ok(false);
+    };
+
+    print_command_result(command, result)?;
+    Ok(true)
+}
+
+/// Run an installed plugin command and fail if no plugin handles it.
+pub fn run_command(project_root: &Path, command: &str, args: &[String]) -> Result<()> {
+    if try_run_command(project_root, command, args)? {
+        return Ok(());
+    }
+
+    anyhow::bail!(
+        "No installed plugin handled command '{}'. Try: prog plugin list",
+        command
+    )
 }
 
 /// List installed plugins

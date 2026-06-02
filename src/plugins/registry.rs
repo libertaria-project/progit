@@ -279,6 +279,8 @@ impl PluginRegistry {
         }
 
         if self.index_path.exists() {
+            self.sync_cached_origin()?;
+
             // Pull updates
             let status = Command::new("git")
                 .args(["pull", "--ff-only"])
@@ -287,28 +289,58 @@ impl PluginRegistry {
                 .context("Failed to run git pull")?;
 
             if !status.success() {
-                // Reset and pull fresh
-                let _ = Command::new("git")
-                    .args(["reset", "--hard", "origin/main"])
-                    .current_dir(&self.index_path)
-                    .status();
+                std::fs::remove_dir_all(&self.index_path)
+                    .with_context(|| format!("Failed to remove stale plugin index {}", self.index_path.display()))?;
+                self.clone_index()?;
             }
         } else {
-            // Fresh clone
-            let status = Command::new("git")
-                .args([
-                    "clone",
-                    "--depth",
-                    "1",
-                    &self.registry_url,
-                    self.index_path.to_str().context("Non-UTF8 plugin index path")?,
-                ])
-                .status()
-                .context("Failed to clone plugin index")?;
+            self.clone_index()?;
+        }
 
-            if !status.success() {
-                anyhow::bail!("Failed to clone plugin registry from {}", self.registry_url);
-            }
+        Ok(())
+    }
+
+    fn clone_index(&self) -> Result<()> {
+        let status = Command::new("git")
+            .args([
+                "clone",
+                "--depth",
+                "1",
+                &self.registry_url,
+                self.index_path.to_str().context("Non-UTF8 plugin index path")?,
+            ])
+            .status()
+            .context("Failed to clone plugin index")?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to clone plugin registry from {}", self.registry_url);
+        }
+
+        Ok(())
+    }
+
+    fn sync_cached_origin(&self) -> Result<()> {
+        let output = Command::new("git")
+            .args(["remote", "get-url", "origin"])
+            .current_dir(&self.index_path)
+            .output()
+            .context("Failed to inspect plugin registry remote")?;
+        if !output.status.success() {
+            return Ok(());
+        }
+
+        let current = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if current == self.registry_url {
+            return Ok(());
+        }
+
+        let status = Command::new("git")
+            .args(["remote", "set-url", "origin", &self.registry_url])
+            .current_dir(&self.index_path)
+            .status()
+            .context("Failed to update plugin registry remote")?;
+        if !status.success() {
+            anyhow::bail!("Failed to update plugin registry remote to {}", self.registry_url);
         }
 
         Ok(())

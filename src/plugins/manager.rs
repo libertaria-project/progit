@@ -102,6 +102,59 @@ impl PluginManager {
         loaded
     }
 
+    /// Load only plugins that may handle a command namespace.
+    ///
+    /// If a plugin manifest declares `commands`, this filters by that list. If
+    /// it declares only the legacy `hooks = ["on_command"]`, the plugin is
+    /// loaded and can decide by returning `handled = false`.
+    pub fn load_command_plugins_from_dir(
+        &mut self,
+        dir: &Path,
+        context: &PluginContext,
+        command: &str,
+    ) -> usize {
+        if !dir.exists() {
+            return 0;
+        }
+
+        let mut loaded = 0;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return 0,
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let entry_point = if path.extension().and_then(|s| s.to_str()) == Some("lua") {
+                Some(path.clone())
+            } else if path.is_dir() {
+                let main_lua = path.join("main.lua");
+                let src_main_lua = path.join("src").join("main.lua");
+                if main_lua.exists() {
+                    Some(main_lua)
+                } else if src_main_lua.exists() {
+                    Some(src_main_lua)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let Some(lua_path) = entry_point else {
+                continue;
+            };
+            if !command_manifest_allows(&lua_path, command) {
+                continue;
+            }
+            if self.load_plugin(&lua_path, context).is_ok() {
+                loaded += 1;
+            }
+        }
+
+        loaded
+    }
+
     /// Load a single plugin.
     ///
     /// If the plugin ships a `.progit-plugin.json` manifest next to its
@@ -488,6 +541,14 @@ impl PluginManager {
 
             match result {
                 Ok(response) => {
+                    let handled = response
+                        .get("handled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true);
+                    if !handled {
+                        self.error_counts.remove(&name);
+                        continue;
+                    }
                     self.error_counts.remove(&name);
                     return Some(CommandResult {
                         plugin: name,
@@ -513,6 +574,57 @@ impl PluginManager {
 
 fn hook_label(hook: &PluginHook) -> String {
     format!("{:?}", hook)
+}
+
+fn command_manifest_allows(entry: &Path, command: &str) -> bool {
+    let candidates = [
+        entry.parent().map(|p| p.join(".progit-plugin.json")),
+        Some(entry.with_extension("progit-plugin.json")),
+    ];
+
+    for candidate in candidates.into_iter().flatten() {
+        if !candidate.exists() {
+            continue;
+        }
+
+        let Ok(raw) = std::fs::read_to_string(&candidate) else {
+            return true;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+            return true;
+        };
+
+        if let Some(commands) = value.get("commands").and_then(|v| v.as_array()) {
+            return commands
+                .iter()
+                .any(|item| command_entry_matches(item, command));
+        }
+
+        return value
+            .get("hooks")
+            .and_then(|v| v.as_array())
+            .map(|hooks| hooks.iter().any(|h| h.as_str() == Some("on_command")))
+            .unwrap_or(false);
+    }
+
+    true
+}
+
+fn command_entry_matches(item: &serde_json::Value, command: &str) -> bool {
+    if item.as_str() == Some(command) {
+        return true;
+    }
+
+    item.as_object().is_some_and(|object| {
+        object
+            .get("name")
+            .and_then(|v| v.as_str())
+            .is_some_and(|name| name == command)
+            || object
+                .get("alias")
+                .and_then(|v| v.as_str())
+                .is_some_and(|alias| alias == command)
+    })
 }
 
 /// Result of a plugin command execution
@@ -584,5 +696,84 @@ mod tests {
 
         assert_eq!(loaded, 1);
         assert_eq!(manager.loaded_plugins(), vec!["sober-raccoon"]);
+    }
+
+    #[test]
+    fn dispatch_command_skips_unhandled_responses() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("first.lua");
+        let second = dir.path().join("second.lua");
+        std::fs::write(
+            &first,
+            r#"
+plugin = {
+    name = "first",
+    version = "1",
+    author = "test",
+    hooks = { on_command = true },
+}
+
+function on_command(_data)
+    return { handled = false, success = false, error = "not mine" }
+end
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            &second,
+            r#"
+plugin = {
+    name = "second",
+    version = "1",
+    author = "test",
+    hooks = { on_command = true },
+}
+
+function on_command(data)
+    return {
+        handled = true,
+        success = true,
+        output = "handled " .. data.command,
+    }
+end
+"#,
+        )
+        .unwrap();
+
+        let context = PluginContext {
+            repo_path: dir.path().to_string_lossy().to_string(),
+            user: None,
+            env: Default::default(),
+            config: Default::default(),
+        };
+        let mut manager = PluginManager::new(dir.path());
+
+        manager.load_plugin(&first, &context).unwrap();
+        manager.load_plugin(&second, &context).unwrap();
+        let result = manager
+            .dispatch_command("sober", &[])
+            .expect("second plugin should handle command");
+
+        assert_eq!(result.plugin, "second");
+        assert_eq!(result.output.as_deref(), Some("handled sober"));
+    }
+
+    #[test]
+    fn command_loader_uses_manifest_command_names() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let context = PluginContext {
+            repo_path: repo.to_string_lossy().to_string(),
+            user: None,
+            env: Default::default(),
+            config: Default::default(),
+        };
+        let mut manager = PluginManager::new(repo);
+
+        let loaded = manager.load_command_plugins_from_dir(&repo.join("plugins"), &context, "hooks");
+        let plugins = manager.loaded_plugins();
+
+        assert!(loaded > 0);
+        assert!(plugins.iter().any(|name| *name == "git-hooks"));
+        assert!(!plugins.iter().any(|name| *name == "gitlab-ci"));
     }
 }

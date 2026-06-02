@@ -187,6 +187,17 @@ pub(crate) enum PluginAction {
         /// Plugin name to verify
         name: String,
     },
+    /// Run an installed plugin command
+    Run {
+        /// Plugin command namespace, e.g. sober
+        command: String,
+        /// Arguments passed through to the plugin
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Dispatch unknown `prog plugin <command>` forms to installed plugins
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 #[derive(Subcommand)]

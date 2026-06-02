@@ -7,7 +7,13 @@
   "plugin_type": "premium-governance",
   "runtime": "lua",
   "sdk_version": ">=0.3",
-  "hooks": [],
+  "hooks": [
+    "on_command"
+  ],
+  "commands": [
+    "sober",
+    "sober-raccoon"
+  ],
   "events": [
     "Custom:sober-raccoon",
     "Custom:sober-raccoon.query"
