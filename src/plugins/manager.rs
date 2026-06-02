@@ -712,13 +712,13 @@ mod tests {
 
         manager.load_from_dir(&plugin_dir, &context);
         let result = manager
-            .dispatch_command("sober", &["route".to_string(), "list".to_string()])
+            .dispatch_command("sober-raccoon", &["route".to_string(), "list".to_string()])
             .expect("sober-raccoon should handle route list");
 
         assert!(result.success);
         let output = result.output.expect("route list should return output");
         assert!(output.contains("Sober Raccoon routes"));
-        assert!(output.contains("preflight [--base REF]"));
+        assert!(output.contains("prog plugin sober <args...>"));
     }
 
     #[test]

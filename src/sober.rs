@@ -4,8 +4,8 @@
 //! Narrow host bridge to the Sober repository governance helper.
 //!
 //! ProGit intentionally does not give Lua plugins arbitrary process execution.
-//! This module is the first safe bridge: a small, reviewable allowlist of Sober
-//! commands that ProGit can expose through CLI/TUI/plugin surfaces.
+//! This bridge can expose structured Sober actions and a bounded argv
+//! pass-through, but it only ever executes the configured `sober` binary.
 
 use anyhow::{anyhow, Context, Result};
 use progit_plugin_sdk::lua::{SoberHost, SoberInvocation, SoberInvocationResult};
@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const SOBER_BIN: &str = "sober";
+const MAX_PLUGIN_CLI_ARGS: usize = 64;
+const MAX_PLUGIN_CLI_ARG_LEN: usize = 4096;
 
 /// Run one Sober command in `repo_root`, streaming output to the terminal.
 pub fn run(repo_root: &Path, args: &[String]) -> Result<bool> {
@@ -84,6 +86,7 @@ fn invoke_for_plugin(repo_root: &Path, invocation: SoberInvocation) -> SoberInvo
                 error: None,
             }
         }
+        Ok(PluginCommandPlan::Raw(args)) => run_raw(repo_root, &args),
         Err(error) => failed(error.to_string()),
     }
 }
@@ -91,17 +94,24 @@ fn invoke_for_plugin(repo_root: &Path, invocation: SoberInvocation) -> SoberInvo
 #[derive(Debug)]
 enum PluginCommandPlan {
     Single(Vec<String>),
+    Raw(Vec<String>),
     Aggregate {
         key: &'static str,
         commands: Vec<Vec<String>>,
     },
 }
 
-fn plugin_command_plan(repo_root: &Path, invocation: &SoberInvocation) -> Result<PluginCommandPlan> {
+fn plugin_command_plan(
+    repo_root: &Path,
+    invocation: &SoberInvocation,
+) -> Result<PluginCommandPlan> {
     let repo = repo_root.display().to_string();
     let options = &invocation.options;
 
     match invocation.action.as_str() {
+        "cli" => Ok(PluginCommandPlan::Raw(option_string_array(
+            options, "args",
+        )?)),
         "doctor" => {
             let mut args = vec!["doctor".to_string(), "--repo".to_string(), repo];
             if option_bool(options, "online", false) {
@@ -211,12 +221,34 @@ fn run_json(repo_root: &Path, args: &[String]) -> Result<Value, String> {
     if !output.status.success() {
         return Err(format_sober_failure(&output));
     }
-    serde_json::from_slice(&output.stdout).map_err(|e| {
-        format!(
-            "sober returned invalid JSON for `{}`: {e}",
-            args.join(" ")
-        )
-    })
+    serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("sober returned invalid JSON for `{}`: {e}", args.join(" ")))
+}
+
+fn run_raw(repo_root: &Path, args: &[String]) -> SoberInvocationResult {
+    match output(repo_root, args) {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            let ok = output.status.success();
+            SoberInvocationResult {
+                ok,
+                data: json!({
+                    "args": args,
+                    "code": output.status.code(),
+                    "status": output.status.to_string(),
+                    "stdout": stdout,
+                    "stderr": stderr,
+                }),
+                error: if ok {
+                    None
+                } else {
+                    Some(format_sober_failure(&output))
+                },
+            }
+        }
+        Err(error) => failed(error.to_string()),
+    }
 }
 
 fn format_sober_failure(output: &Output) -> String {
@@ -251,7 +283,49 @@ fn option_optional_str(options: &Value, name: &str) -> Result<Option<String>> {
 }
 
 fn option_bool(options: &Value, name: &str, default: bool) -> bool {
-    options.get(name).and_then(Value::as_bool).unwrap_or(default)
+    options
+        .get(name)
+        .and_then(Value::as_bool)
+        .unwrap_or(default)
+}
+
+fn option_string_array(options: &Value, name: &str) -> Result<Vec<String>> {
+    let Some(value) = options.get(name) else {
+        return Ok(Vec::new());
+    };
+    let Value::Array(values) = value else {
+        return Err(anyhow!("Sober option `{name}` must be an array of strings"));
+    };
+    if values.len() > MAX_PLUGIN_CLI_ARGS {
+        return Err(anyhow!(
+            "Sober option `{name}` accepts at most {MAX_PLUGIN_CLI_ARGS} args"
+        ));
+    }
+
+    values
+        .iter()
+        .map(|value| match value {
+            Value::String(arg) => {
+                validate_argv_token(arg)?;
+                Ok(arg.clone())
+            }
+            _ => Err(anyhow!("Sober option `{name}` must be an array of strings")),
+        })
+        .collect()
+}
+
+fn validate_argv_token(arg: &str) -> Result<()> {
+    if arg.len() > MAX_PLUGIN_CLI_ARG_LEN {
+        return Err(anyhow!(
+            "Sober CLI arg exceeds {MAX_PLUGIN_CLI_ARG_LEN} bytes"
+        ));
+    }
+    if arg.chars().any(char::is_control) {
+        return Err(anyhow!(
+            "Sober CLI args must not contain control characters"
+        ));
+    }
+    Ok(())
 }
 
 /// Convert a TUI `:sober ...` command into a safe `prog sober ...` process.
@@ -343,6 +417,46 @@ mod tests {
             .to_string();
 
         assert!(err.contains("unsupported Sober action"));
+    }
+
+    #[test]
+    fn plugin_cli_accepts_arbitrary_sober_args() {
+        let invocation = SoberInvocation {
+            action: "cli".to_string(),
+            options: json!({ "args": ["route", "list"] }),
+        };
+        let plan = plugin_command_plan(Path::new("/repo"), &invocation).unwrap();
+        let PluginCommandPlan::Raw(args) = plan else {
+            panic!("expected raw command")
+        };
+
+        assert_eq!(args, ["route", "list"]);
+    }
+
+    #[test]
+    fn plugin_cli_rejects_non_string_args() {
+        let invocation = SoberInvocation {
+            action: "cli".to_string(),
+            options: json!({ "args": ["route", 1] }),
+        };
+        let err = plugin_command_plan(Path::new("/repo"), &invocation)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("array of strings"));
+    }
+
+    #[test]
+    fn plugin_cli_rejects_control_characters() {
+        let invocation = SoberInvocation {
+            action: "cli".to_string(),
+            options: json!({ "args": ["route\nlist"] }),
+        };
+        let err = plugin_command_plan(Path::new("/repo"), &invocation)
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("control characters"));
     }
 
     #[test]

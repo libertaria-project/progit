@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "ProGit Team",
   "description": "Premium ProGit cockpit for Sober, a local-first repository governance assistant for agentic coding.",
-  "long_description": "Runs Sober doctor, preflight, hygiene, hook status, hook install, and review-preview flows through ProGit's narrow sober.run host capability. The plugin does not spawn shell commands from Lua and receives only the allowlisted Sober actions exposed by the ProGit host.",
+  "long_description": "Runs Sober CLI commands through ProGit's narrow sober.run host capability. The plugin does not spawn shell commands from Lua; the host validates argv and only executes the Sober binary.",
   "license": "LicenseRef-ProGit-Premium",
   "plugin_type": "ai",
   "runtime": "lua",
