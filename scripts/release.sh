@@ -108,6 +108,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo -e "  3. Tag v${VERSION} on ${RELEASE_BRANCH}"
     echo -e "  4. Push ${INTEGRATION_BRANCH}, ${RELEASE_BRANCH}, and tag"
     echo -e "  5. Return to ${INTEGRATION_BRANCH}"
+    echo -e "  6. Link target/release/prog to ~/bin/prog"
     exit 0
 fi
 
@@ -118,6 +119,7 @@ echo -e "${YELLOW}This will:${NC}"
 echo -e "  1. Merge ${INTEGRATION_BRANCH} → ${RELEASE_BRANCH}"
 echo -e "  2. Create tag v${VERSION} on ${RELEASE_BRANCH}"
 echo -e "  3. Push ${INTEGRATION_BRANCH}, ${RELEASE_BRANCH}, and tag"
+echo -e "  4. Link target/release/prog to ~/bin/prog"
 echo ""
 if ! confirm "Continue?"; then
     echo -e "${YELLOW}❌ Release cancelled${NC}"
@@ -156,6 +158,9 @@ git push origin "v${VERSION}"
 # Return to main
 echo -e "${BLUE}📝 Returning to ${INTEGRATION_BRANCH} branch...${NC}"
 git checkout "${INTEGRATION_BRANCH}"
+
+echo -e "${BLUE}🔗 Linking release binary to ~/bin/prog...${NC}"
+bash ./scripts/link-user-bin.sh target/release/prog
 
 echo ""
 echo -e "${GREEN}🎉 Release v${VERSION} completed successfully!${NC}"

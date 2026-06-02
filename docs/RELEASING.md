@@ -48,6 +48,8 @@ sovereign hosting ships as the separate `progit-forged` sidecar daemon.
    ```
    This merges `main` into `stable`, creates the annotated tag `v<version>`,
    and pushes branches and tag.
+   After a successful local release, `scripts/release.sh` links the verified
+   `target/release/prog` binary to `~/bin/prog`.
 3. The push of a `v*` tag triggers `.forgejo/workflows/release.yml`, which:
    - cross-compiles all targets with `cargo-zigbuild`,
    - size-gates the linux-musl binaries under 7MB,
@@ -63,6 +65,19 @@ PROGIT_MINISIGN_KEY=/path/to/release-minisign.key \
 
 With no targets given, the full matrix is built. Output lands in `dist/`
 (gitignored). Requires `cargo-zigbuild`, `zig`, and `minisign`.
+
+## Refreshing the local `prog`
+
+Local source builds and release runs must expose the current binary at
+`~/bin/prog`:
+
+```bash
+cargo build --release --bin prog
+./scripts/link-user-bin.sh target/release/prog
+```
+
+Avoid `/usr/local/bin/prog` for operator use. It is too easy for an old global
+binary to shadow the release you just built.
 
 ## Verifying a downloaded binary
 

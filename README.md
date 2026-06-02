@@ -36,7 +36,8 @@ No cloud. No database. No browser. Your issues are JSON. Your config is KDL. You
 curl -fsSL https://progit.sovereign-society.org/install.sh | sh
 ```
 
-Installs to `~/.local/bin` (or `/usr/local/bin` if writable). Verifies minisign signature when `minisign` is available.
+Installs the released binary as `~/bin/prog`. Verifies minisign signature when
+`minisign` is available.
 
 ### Homebrew (macOS/Linux)
 
@@ -58,8 +59,11 @@ yay -S progit-bin
 git clone https://git.sovereign-society.org/ProGit/progit
 cd progit
 cargo build --release
-sudo cp target/release/prog /usr/local/bin/
+./scripts/link-user-bin.sh target/release/prog
 ```
+
+The source-build path links the built binary to `~/bin/prog`. Do not rely on
+`/usr/local/bin/prog`; stale global binaries can hide the current release.
 
 ### Verify
 
