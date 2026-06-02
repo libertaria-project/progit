@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.8.2-beta] - 2026-06-02
+
+### Beta Promotion — Native Plugin Command Chain
+
+This beta turns installed plugins into first-class `prog plugin <command>`
+operators instead of leaving them as passive marketplace assets.
+
+### Added
+- **Native plugin command dispatch** through `prog plugin run <command> ...`
+  and `prog plugin <command> ...`, with manifest-aware loading so unrelated
+  plugins do not initialize or print noise.
+- **Sober Raccoon command ownership** for `prog plugin sober ...` and
+  `prog plugin sober-raccoon ...`, backed by the existing narrow
+  `sober.run(action, opts)` host capability.
+- **Marketplace command metadata** for Sober Raccoon so the plugin registry
+  advertises its command namespaces.
+
+### Fixed
+- Plugin command dispatch now respects `handled = false`, allowing another
+  installed plugin to handle the command namespace.
+- Cached plugin indexes now rewrite stale `origin` URLs before pulling,
+  avoiding dead registry remotes after marketplace migration.
+
 ## [0.8.1-beta] - 2026-06-02
 
 ### Beta Promotion — Auth, Release, and Plugin Marketplace
@@ -565,7 +588,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
 ProGit Core: **LCL-1.0** (file-level copyleft)
 Plugin SDK: **LSL-1.0** (file-level copyleft + patent grant)
 
-[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.1-beta...HEAD
+[unreleased]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.2-beta...HEAD
+[0.8.2-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.1-beta...v0.8.2-beta
 [0.8.1-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.8.0-beta...v0.8.1-beta
 [0.8.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-beta...v0.8.0-beta
 [0.7.0-beta]: https://git.sovereign-society.org/ProGit/progit/compare/v0.7.0-alpha...v0.7.0-beta
