@@ -723,7 +723,7 @@ pub(super) fn handle_mr_create_key(app: &mut App, key: KeyEvent) -> KeyAction {
 
                             // Show error in status bar (truncated if needed)
                             let error_msg = format!("❌ MR failed: {}", e);
-                            app.set_status(error_msg);
+                            app.set_remote_error_status(error_msg);
                             return KeyAction::Refresh;
                         }
                     }

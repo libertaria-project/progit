@@ -15,6 +15,7 @@ pub mod markdown;
 pub mod style;
 pub mod theme;
 pub mod widget_agent_menu;
+pub mod widget_auth_notice;
 pub mod widget_blame;
 pub mod widget_conflicts;
 pub mod widget_dashboard;
@@ -479,6 +480,11 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Agent menu modal (top layer)
     if app.show_agent_menu {
         widget_agent_menu::render(frame, app, app.agent_menu_selected);
+    }
+
+    // Authentication notice (top layer)
+    if app.auth_notice.is_some() {
+        widget_auth_notice::render(frame, app);
     }
 
     areas

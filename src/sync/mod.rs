@@ -14,6 +14,21 @@ use crate::storage::config::SyncConfig;
 use anyhow::Result;
 use std::path::Path;
 
+/// Controls whether a provider may prompt on stdin for missing credentials.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthMode {
+    /// Prompt on stdin when no token is available.
+    Interactive,
+    /// Never prompt on stdin. Used by the TUI while the terminal is in raw mode.
+    NonInteractive,
+}
+
+impl AuthMode {
+    fn allows_prompt(self) -> bool {
+        matches!(self, Self::Interactive)
+    }
+}
+
 /// Provider trait for remote issue trackers (Forgejo, GitLab, GitHub)
 pub trait SyncProvider {
     // Issue operations
@@ -66,10 +81,41 @@ pub trait SyncProvider {
     }
 }
 
+/// Return a user-facing error for credential lookups that must not prompt.
+pub fn auth_required_error(
+    provider: &str,
+    url: &str,
+    source: impl std::fmt::Display,
+) -> anyhow::Error {
+    let provider_env = match provider {
+        "forgejo" => "FORGEJO_TOKEN",
+        "gitlab" => "GITLAB_TOKEN",
+        _ => "PROGIT_TOKEN",
+    };
+
+    anyhow::anyhow!(
+        "Authentication required for {}. Set PROGIT_TOKEN or {} before starting the TUI, or run `prog sync` from a normal shell to authenticate. Credential lookup failed: {}",
+        url,
+        provider_env,
+        source
+    )
+}
+
+/// Return true when a provider error should be shown as an authentication notice.
+pub fn is_auth_required_message(message: &str) -> bool {
+    message.contains("Authentication required for ")
+}
+
+/// Create a sync provider with default interactive auth behavior.
 pub fn create_provider(config: SyncConfig) -> Box<dyn SyncProvider> {
+    create_provider_with_auth(config, AuthMode::Interactive)
+}
+
+/// Create a sync provider with explicit auth behavior.
+pub fn create_provider_with_auth(config: SyncConfig, auth_mode: AuthMode) -> Box<dyn SyncProvider> {
     match config.provider.as_str() {
-        "forgejo" => Box::new(forgejo::ForgejoProvider::new(config)),
-        "gitlab" => Box::new(gitlab::GitLabProvider::new(config)),
+        "forgejo" => Box::new(forgejo::ForgejoProvider::with_auth_mode(config, auth_mode)),
+        "gitlab" => Box::new(gitlab::GitLabProvider::with_auth_mode(config, auth_mode)),
         "local" => Box::new(local::LocalProvider::new(config)),
         _ => panic!("Unknown provider: {}", config.provider),
     }
@@ -181,6 +227,28 @@ pub fn merge_issues(
     }
 
     merged
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_required_error_is_detected_as_auth_notice() {
+        let err = auth_required_error("forgejo", "https://git.example.test", "missing token");
+        let message = err.to_string();
+
+        assert!(message.contains("Authentication required for https://git.example.test"));
+        assert!(message.contains("FORGEJO_TOKEN"));
+        assert!(is_auth_required_message(&message));
+        assert!(!is_auth_required_message("Failed to fetch issues"));
+    }
+
+    #[test]
+    fn auth_mode_prompt_policy_is_explicit() {
+        assert!(AuthMode::Interactive.allows_prompt());
+        assert!(!AuthMode::NonInteractive.allows_prompt());
+    }
 }
 
 /// Merge remote MRs into local MRs (timestamp-based)

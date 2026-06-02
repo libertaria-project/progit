@@ -62,7 +62,7 @@ pub(super) fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
         KeyCode::Char('r') => {
             app.set_status("Reloading MRs...");
             if let Err(e) = app.refresh_mrs() {
-                app.set_status(format!("Failed: {}", e));
+                app.set_remote_error_status(format!("Failed: {}", e));
             }
             KeyAction::Refresh
         }
@@ -88,7 +88,9 @@ pub(super) fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                                 // Reload MRs to reflect changes
                                 let _ = app.refresh_mrs();
                             }
-                            Err(e) => app.set_status(format!("❌ Failed to approve: {}", e)),
+                            Err(e) => {
+                                app.set_remote_error_status(format!("❌ Failed to approve: {}", e));
+                            }
                         }
                     } else {
                         app.set_status("No sync provider configured".to_string());
@@ -110,7 +112,9 @@ pub(super) fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                                 // Reload MRs to reflect changes
                                 let _ = app.refresh_mrs();
                             }
-                            Err(e) => app.set_status(format!("❌ Failed to merge: {}", e)),
+                            Err(e) => {
+                                app.set_remote_error_status(format!("❌ Failed to merge: {}", e));
+                            }
                         }
                     } else {
                         app.set_status("No sync provider configured".to_string());
@@ -135,7 +139,9 @@ pub(super) fn handle_mr_list_key(app: &mut App, key: KeyEvent) -> KeyAction {
                                 // Reload MRs to reflect changes
                                 let _ = app.refresh_mrs();
                             }
-                            Err(e) => app.set_status(format!("❌ Failed to reject: {}", e)),
+                            Err(e) => {
+                                app.set_remote_error_status(format!("❌ Failed to reject: {}", e));
+                            }
                         }
                     } else {
                         app.set_status("No sync provider configured".to_string());

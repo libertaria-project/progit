@@ -177,6 +177,20 @@ fn handle_dashboard_key(app: &mut App, key: KeyEvent) -> KeyAction {
 pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
     // Modal overlays take priority (close on Escape)
 
+    // Authentication notice
+    if app.auth_notice.is_some() {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                app.dismiss_auth_notice();
+                return KeyAction::Refresh;
+            }
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return KeyAction::Quit;
+            }
+            _ => return KeyAction::None,
+        }
+    }
+
     // Agent menu modal
     if app.show_agent_menu {
         use crate::tui::widget_agent_menu::AgentAction;

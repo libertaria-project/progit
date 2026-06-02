@@ -56,6 +56,12 @@ pub enum InputMode {
     ProjectIssues,       // Viewing repository-owned issue files
 }
 
+/// Dismissible authentication notice shown above the TUI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthNotice {
+    pub message: String,
+}
+
 /// Mouse drag state
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
@@ -108,6 +114,9 @@ pub struct App {
 
     /// Time when status message was set (for auto-clear)
     pub status_message_time: Option<std::time::Instant>,
+
+    /// Authentication notice raised by non-interactive sync providers
+    pub auth_notice: Option<AuthNotice>,
 
     /// Should quit
     pub should_quit: bool,
@@ -288,6 +297,7 @@ impl App {
             current_sprint: None,
             status_message: None,
             status_message_time: None,
+            auth_notice: None,
             should_quit: false,
             repo_info: None,
             drag_state: DragState::default(),
@@ -379,7 +389,7 @@ impl App {
                     Ok(())
                 }
                 Err(e) => {
-                    self.set_status(format!("Failed to load MRs: {}", e));
+                    self.set_remote_error_status(format!("Failed to load MRs: {}", e));
                     Err(e)
                 }
             }
@@ -586,6 +596,24 @@ impl App {
     pub fn set_status(&mut self, msg: impl Into<String>) {
         self.status_message = Some(msg.into());
         self.status_message_time = Some(std::time::Instant::now());
+    }
+
+    /// Set a status message, promoting auth errors to a dismissible notice.
+    pub fn set_remote_error_status(&mut self, msg: impl Into<String>) {
+        let msg = msg.into();
+        if crate::sync::is_auth_required_message(&msg) {
+            self.auth_notice = Some(AuthNotice {
+                message: msg.clone(),
+            });
+            self.set_status("Authentication required");
+        } else {
+            self.set_status(msg);
+        }
+    }
+
+    /// Dismiss the current authentication notice.
+    pub fn dismiss_auth_notice(&mut self) {
+        self.auth_notice = None;
     }
 
     /// Clear status message

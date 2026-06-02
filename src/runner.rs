@@ -87,7 +87,10 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
         if let Some(sync_config) = config.sync {
             app.sync_provider_name = Some(sync_config.provider.clone());
             app.sync_config = Some(sync_config.clone());
-            app.sync_provider = Some(crate::sync::create_provider(sync_config));
+            app.sync_provider = Some(crate::sync::create_provider_with_auth(
+                sync_config,
+                crate::sync::AuthMode::NonInteractive,
+            ));
         }
         // Apply saved theme
         if let Some(theme_name) = config.theme {
@@ -359,7 +362,7 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
                             .login()
                             .and_then(|_| provider.push(&mut app.issues))
                         {
-                            app.set_status(format!("Push failed: {}", e));
+                            app.set_remote_error_status(format!("Push failed: {}", e));
                         } else {
                             // Persist links after push
                             *engine.issues_mut() = app.issues.clone();
@@ -382,7 +385,12 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
                                         app.load_issues(merged.clone());
                                         *engine.issues_mut() = merged;
                                     }
-                                    Err(e) => app.set_status(format!("Issues pull failed: {}", e)),
+                                    Err(e) => {
+                                        app.set_remote_error_status(format!(
+                                            "Issues pull failed: {}",
+                                            e
+                                        ));
+                                    }
                                 }
 
                                 // 4. PULL MRS
@@ -399,7 +407,12 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
                                         *engine.mrs_mut() = merged;
                                         app.set_status("Sync Complete (Issues & MRs)!");
                                     }
-                                    Err(e) => app.set_status(format!("MR pull failed: {}", e)),
+                                    Err(e) => {
+                                        app.set_remote_error_status(format!(
+                                            "MR pull failed: {}",
+                                            e
+                                        ));
+                                    }
                                 }
 
                                 // Final Save

@@ -1,4 +1,4 @@
-use super::{keyring, SyncProvider};
+use super::{keyring, AuthMode, SyncProvider};
 use crate::issue::{Effort, Issue, Status};
 use crate::storage::config::SyncConfig;
 use anyhow::{anyhow, Context, Result};
@@ -11,27 +11,38 @@ use std::collections::HashMap;
 pub struct GitLabProvider {
     config: SyncConfig,
     client: Client,
+    auth_mode: AuthMode,
 }
 
 impl GitLabProvider {
     pub fn new(config: SyncConfig) -> Self {
+        Self::with_auth_mode(config, AuthMode::Interactive)
+    }
+
+    pub fn with_auth_mode(config: SyncConfig, auth_mode: AuthMode) -> Self {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .connect_timeout(std::time::Duration::from_secs(5))
             .build()
             .unwrap_or_else(|_| Client::new());
 
-        Self { config, client }
+        Self {
+            config,
+            client,
+            auth_mode,
+        }
     }
 
     fn get_token(&self) -> Result<String> {
-        // Try keyring first
-        if let Ok(token) = keyring::get_token(&self.config.url, &self.config.owner) {
-            return Ok(token);
+        match keyring::get_token(&self.config.url, &self.config.owner) {
+            Ok(token) => Ok(token),
+            Err(_) if self.auth_mode.allows_prompt() => self.login_interactive(),
+            Err(err) => Err(crate::sync::auth_required_error(
+                &self.config.provider,
+                &self.config.url,
+                err,
+            )),
         }
-
-        // If interactive, prompt
-        self.login_interactive()
     }
 
     fn login_interactive(&self) -> Result<String> {
