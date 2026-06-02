@@ -208,8 +208,13 @@ impl PluginManager {
                             c
                         );
                     }
-                    let mut opts = LuaPluginOptions::from_capabilities(&m.effective_capabilities());
+                    let caps = m.effective_capabilities();
+                    let repo_root = PathBuf::from(&context.repo_path);
+                    let mut opts = LuaPluginOptions::from_capabilities(&caps);
                     opts.repo_root = Some(PathBuf::from(&context.repo_path));
+                    if caps.sober {
+                        opts.sober = Some(crate::sober::host_capability(repo_root));
+                    }
                     return opts;
                 }
                 Err(e) => {
@@ -561,5 +566,23 @@ mod tests {
         // After clearing, failures restart from zero — old strikes don't carry.
         m.record_failure(name, "hook", "fresh");
         assert_eq!(m.quarantined_plugins().count(), 0);
+    }
+
+    #[test]
+    fn loads_sober_raccoon_premium_plugin() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let plugin_dir = repo.join("plugins").join("sober-raccoon");
+        let context = PluginContext {
+            repo_path: repo.to_string_lossy().to_string(),
+            user: None,
+            env: Default::default(),
+            config: Default::default(),
+        };
+        let mut manager = PluginManager::new(repo);
+
+        let loaded = manager.load_from_dir(&plugin_dir, &context);
+
+        assert_eq!(loaded, 1);
+        assert_eq!(manager.loaded_plugins(), vec!["sober-raccoon"]);
     }
 }
