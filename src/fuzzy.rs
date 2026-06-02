@@ -209,6 +209,21 @@ impl FuzzySearcher {
                 description: "Browse repository-owned issue files".to_string(),
                 action: "project_issues".to_string(),
             },
+            FuzzyItem::Command {
+                name: "Sober Doctor".to_string(),
+                description: "Run repository governance health checks".to_string(),
+                action: "sober_doctor".to_string(),
+            },
+            FuzzyItem::Command {
+                name: "Sober Preflight".to_string(),
+                description: "Run deterministic release-gate checks".to_string(),
+                action: "sober_preflight".to_string(),
+            },
+            FuzzyItem::Command {
+                name: "Sober Review Preview".to_string(),
+                description: "Preview a model review prompt without calling a model".to_string(),
+                action: "sober_review_preview".to_string(),
+            },
         ]
     }
 

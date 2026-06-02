@@ -24,6 +24,7 @@ mod remote;
 mod review;
 mod review_sync;
 mod runner;
+mod sober;
 mod storage;
 mod sync;
 mod tui;
@@ -99,6 +100,11 @@ enum Commands {
     Remote {
         #[command(subcommand)]
         action: RemoteAction,
+    },
+    /// Run Sober repository-governance checks from ProGit
+    Sober {
+        #[command(subcommand)]
+        action: SoberAction,
     },
     /// Internal: Interactive rebase editor (triggered by git)
     #[command(hide = true)]
@@ -253,6 +259,107 @@ enum RemoteAction {
         #[arg(long)]
         skip_push: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum SoberAction {
+    /// Run `sober doctor`
+    Doctor {
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+        /// Run online forge checks when token/config allows it
+        #[arg(long)]
+        online: bool,
+    },
+    /// Run deterministic `sober preflight`
+    Preflight {
+        /// Base ref to diff against
+        #[arg(long, default_value = "HEAD")]
+        base: String,
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run `sober hygiene check`
+    Hygiene {
+        /// Hygiene profile
+        #[arg(long, default_value = "standard")]
+        profile: String,
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Preview a Sober review prompt without calling a model
+    ReviewPreview {
+        /// Base ref to diff against
+        #[arg(long, default_value = "HEAD")]
+        base: String,
+        /// Provider override, e.g. kimi-coding
+        #[arg(long)]
+        provider: Option<String>,
+        /// Model override, e.g. kimi-k2.6
+        #[arg(long)]
+        model: Option<String>,
+        /// Reviewer profile
+        #[arg(long, default_value = "security")]
+        reviewer: String,
+        /// Review objective
+        #[arg(long, default_value = "security")]
+        objective: String,
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Manage Sober git hooks
+    Hooks {
+        #[command(subcommand)]
+        action: SoberHooksAction,
+    },
+    /// Refresh the Sober index
+    Index {
+        /// Index all tracked files and recent commits
+        #[arg(long, conflicts_with = "changed")]
+        all: bool,
+        /// Index changed files and recent commits
+        #[arg(long, conflicts_with = "all")]
+        changed: bool,
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run `sober forge doctor`
+    ForgeDoctor {
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum SoberHooksAction {
+    /// Show Sober hook status
+    Status {
+        /// Optional hook name: pre-commit or pre-push
+        hook: Option<SoberHook>,
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Install Sober managed hooks; with no hook, installs pre-commit and pre-push
+    Install {
+        /// Optional hook name: pre-commit or pre-push
+        hook: Option<SoberHook>,
+        /// Print machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum SoberHook {
+    PreCommit,
+    PrePush,
 }
 
 #[derive(Subcommand)]
@@ -553,6 +660,186 @@ fn run_remote_doctor(project_root: &std::path::Path, skip_push: bool) -> Result<
     Ok(report.is_ok())
 }
 
+fn run_sober_action(project_root: &std::path::Path, action: SoberAction) -> Result<bool> {
+    let repo = project_root.display().to_string();
+    match action {
+        SoberAction::Doctor { json, online } => {
+            let mut args = vec!["doctor".to_string(), "--repo".to_string(), repo];
+            if json {
+                args.push("--json".to_string());
+            }
+            if online {
+                args.push("--online".to_string());
+            }
+            sober::run(project_root, &args)
+        }
+        SoberAction::Preflight { base, json } => {
+            let mut args = vec![
+                "preflight".to_string(),
+                "--repo".to_string(),
+                repo,
+                "--base".to_string(),
+                base,
+            ];
+            if json {
+                args.push("--json".to_string());
+            }
+            sober::run(project_root, &args)
+        }
+        SoberAction::Hygiene { profile, json } => {
+            let mut args = vec![
+                "hygiene".to_string(),
+                "check".to_string(),
+                "--repo".to_string(),
+                repo,
+                "--profile".to_string(),
+                profile,
+            ];
+            if json {
+                args.push("--json".to_string());
+            }
+            sober::run(project_root, &args)
+        }
+        SoberAction::ReviewPreview {
+            base,
+            provider,
+            model,
+            reviewer,
+            objective,
+            json,
+        } => {
+            let mut args = vec![
+                "review".to_string(),
+                "--repo".to_string(),
+                repo,
+                "--base".to_string(),
+                base,
+                "--reviewer".to_string(),
+                reviewer,
+                "--objective".to_string(),
+                objective,
+                "--prompt-preview".to_string(),
+            ];
+            if let Some(provider) = provider {
+                args.extend(["--provider".to_string(), provider]);
+            }
+            if let Some(model) = model {
+                args.extend(["--model".to_string(), model]);
+            }
+            if json {
+                args.push("--json".to_string());
+            }
+            sober::run(project_root, &args)
+        }
+        SoberAction::Hooks { action } => match action {
+            SoberHooksAction::Status { hook, json } => run_sober_hook_action(
+                project_root,
+                "status",
+                hook,
+                json,
+            ),
+            SoberHooksAction::Install { hook, json } => {
+                run_sober_hook_action(project_root, "install", hook, json)
+            }
+        },
+        SoberAction::Index { all, changed, json } => {
+            let mut args = vec!["index".to_string(), "--repo".to_string(), repo];
+            if changed {
+                args.push("--changed".to_string());
+            } else if all {
+                args.push("--all".to_string());
+            } else {
+                args.push("--changed".to_string());
+            }
+            if json {
+                args.push("--json".to_string());
+            }
+            sober::run(project_root, &args)
+        }
+        SoberAction::ForgeDoctor { json } => {
+            let mut args = vec![
+                "forge".to_string(),
+                "doctor".to_string(),
+                "--repo".to_string(),
+                repo,
+            ];
+            if json {
+                args.push("--json".to_string());
+            }
+            sober::run(project_root, &args)
+        }
+    }
+}
+
+fn run_sober_hook_action(
+    project_root: &std::path::Path,
+    method: &str,
+    hook: Option<SoberHook>,
+    json: bool,
+) -> Result<bool> {
+    if json && hook.is_none() {
+        return run_sober_all_hooks_json(project_root, method);
+    }
+
+    let hooks = match hook {
+        Some(hook) => vec![hook],
+        None => vec![SoberHook::PreCommit, SoberHook::PrePush],
+    };
+
+    let commands = hooks
+        .into_iter()
+        .map(|hook| {
+            let mut args = vec![
+                "hooks".to_string(),
+                method.to_string(),
+                sober_hook_name(hook).to_string(),
+            ];
+            if json {
+                args.push("--json".to_string());
+            }
+            args
+        })
+        .collect::<Vec<_>>();
+
+    sober::run_many(project_root, &commands)
+}
+
+fn run_sober_all_hooks_json(project_root: &std::path::Path, method: &str) -> Result<bool> {
+    let mut hooks = Vec::new();
+
+    for hook in [SoberHook::PreCommit, SoberHook::PrePush] {
+        let args = vec![
+            "hooks".to_string(),
+            method.to_string(),
+            sober_hook_name(hook).to_string(),
+            "--json".to_string(),
+        ];
+        let output = sober::output(project_root, &args)?;
+        if !output.status.success() {
+            use std::io::Write;
+
+            let mut stderr = std::io::stderr();
+            stderr.write_all(&output.stdout)?;
+            stderr.write_all(&output.stderr)?;
+            return Ok(false);
+        }
+
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout)
+            .with_context(|| format!("sober hooks {method} returned invalid JSON"))?;
+        hooks.push(value);
+    }
+
+    println!("{}", serde_json::json!({ "ok": true, "hooks": hooks }));
+    Ok(true)
+}
+
+fn sober_hook_name(hook: SoberHook) -> &'static str {
+    match hook {
+        SoberHook::PreCommit => "pre-commit",
+        SoberHook::PrePush => "pre-push",
+    }
+}
+
 fn validation_prefix(state: remote::ProbeState) -> colored::ColoredString {
     match state {
         remote::ProbeState::Pass => "OK".green().bold(),
@@ -742,6 +1029,22 @@ fn main() -> Result<()> {
             {
                 let project_root = workspace::find_project_root()?;
                 if !run_remote_doctor(&project_root, skip_push)? {
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    // Sober is an external repository-governance helper and should inspect the
+    // current repo as-is; do not auto-initialize ProGit metadata before it runs.
+    {
+        let argv: Vec<String> = std::env::args().collect();
+        if argv.get(1).map(String::as_str) == Some("sober") {
+            let cli = Cli::parse();
+            if let Some(Commands::Sober { action }) = cli.command {
+                let project_root = workspace::find_project_root()?;
+                if !run_sober_action(&project_root, action)? {
                     std::process::exit(1);
                 }
                 return Ok(());
@@ -1178,6 +1481,11 @@ fn main() -> Result<()> {
                 }
             }
         },
+        Some(Commands::Sober { action }) => {
+            if !run_sober_action(&project_root, action)? {
+                std::process::exit(1);
+            }
+        }
         Some(Commands::Hooks { action }) => {
             cli::handle_hooks_command(action, &project_root)?;
         }

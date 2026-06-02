@@ -514,6 +514,26 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
                                 app.open_project_issues();
                                 return KeyAction::Refresh;
                             }
+                            "sober_doctor" => {
+                                app.input_mode = InputMode::Command;
+                                app.command_input = "sober doctor".to_string();
+                                app.set_status("Press Enter to run Sober doctor".to_string());
+                                return KeyAction::Refresh;
+                            }
+                            "sober_preflight" => {
+                                app.input_mode = InputMode::Command;
+                                app.command_input = "sober preflight --base HEAD".to_string();
+                                app.set_status("Press Enter to run Sober preflight".to_string());
+                                return KeyAction::Refresh;
+                            }
+                            "sober_review_preview" => {
+                                app.input_mode = InputMode::Command;
+                                app.command_input = "sober review-preview --base HEAD --provider kimi-coding --model kimi-k2.6".to_string();
+                                app.set_status(
+                                    "Press Enter to preview Sober review prompt".to_string(),
+                                );
+                                return KeyAction::Refresh;
+                            }
                             _ => {}
                         }
                     }
