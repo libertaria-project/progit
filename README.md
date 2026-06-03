@@ -1,43 +1,44 @@
 # ProGit
 
-**A terminal-native project tracker. 6.5 MB binary. Your data, in your repo.**
+**Terminal-native project management for git repositories**  
+Data-first workflow, local-first by default.
 
 [![License: LCL-1.0](https://img.shields.io/badge/License-LCL--1.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.8.2--beta-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org)
 
-> *"I replaced GitLab with a 6.5 MB binary."*
-
 ---
 
 ## What is ProGit?
 
-ProGit is a **terminal-native project tracker** — issues, kanban boards, merge requests, code review, conflict resolution, and AI-assisted workflows — all inside a single `prog` binary that starts in under 100ms and stores everything as plain files in your repository.
+ProGit is a terminal-first platform for:
 
-No cloud. No database. No browser. Your issues are JSON. Your config is KDL. Your data never leaves your machine unless you want it to.
+- local issue tracking stored as JSON in `.project/issues/*.json`
+- Kanban board and sprint planning
+- merge request review workflows and code-level comments
+- forge sync (Forgejo/GitLab) on demand
+- virtual branches and interactive rebase
+- local-first AI actions (Ollama)
+- plugin runtime with a marketplace and premium plugins
+- release-gate quality checks via Sober integration
 
-**The pitch:** Issues in your repo, not in someone else's database. Fast enough that you never open the browser. Small enough to `curl | sh` in 10 seconds.
+No cloud DB. No hidden state. Your data belongs in your repo and git history.
 
----
-
-## Screenshots
-
-| List View | Kanban View | Detail View |
-|-----------|-------------|-------------|
-| ![List View](List-View.webp) | ![Kanban View](Kanban-View.webp) | ![Detail View](Detail-View.webp) |
+Typical launch path: default to terminal UI (`prog`) and use CLI subcommands for sync, plugins, and admin tasks.
 
 ---
 
 ## Install
 
-### One-line installer (Linux/macOS)
+### Recommended installer (Linux/macOS)
 
 ```bash
 curl -fsSL https://progit.sovereign-society.org/install.sh | sh
 ```
 
-Installs the released binary as `~/bin/prog`. Verifies minisign signature when
-`minisign` is available.
+This installs a released binary and verifies minisign when available.
+On most systems it lands in `~/.local/bin` or `~/bin`; if needed, confirm
+that one of those paths is on your `PATH`.
 
 ### Homebrew (macOS/Linux)
 
@@ -62,247 +63,94 @@ cargo build --release
 ./scripts/link-user-bin.sh target/release/prog
 ```
 
-The source-build path links the built binary to `~/bin/prog`. Do not rely on
-`/usr/local/bin/prog`; stale global binaries can hide the current release.
+`./scripts/link-user-bin.sh` creates `~/bin/prog`, which avoids stale `/usr/local/bin` binaries shadowing your current release.
 
-### Verify
+Verify:
 
 ```bash
 prog --version
-prog --help
 ```
 
 ---
 
-## Quick Start
+## Quick start
 
 ```bash
-cd your-project/
-prog init      # creates .project/ with config and issue storage
-prog           # launches the TUI
+cd your-project/      # must be a git repo
+prog init             # creates .project/ and .project/issues/
+prog                  # launches the TUI
 ```
 
-**Keyboard-first workflow:**
-- `Tab` — switch views (Issues → Kanban → MRs → Dashboard)
-- `j/k` — navigate
-- `Enter` — open detail
+Inside the TUI:
+
+- `Tab` — switch modes (`Issues`, `Kanban`, `MRs`, `Dashboard`)
+- `j/k` — move selection
 - `n` — new issue
-- `Space` — toggle status
-- `Ctrl+P` — fuzzy palette (jump to any issue, file, or commit)
+- `Ctrl+P` — fuzzy palette (`issues`, `files`, `commits`, `commands`)
 - `?` — help
 - `q` — quit
 
 ---
 
-## Features
+## Useful CLI
 
-### Issue Tracking
-
-Issues stored as JSON in `.project/issues/`. Create, edit, assign, label, track time — all from the terminal. Full offline support. Sync bidirectionally with Forgejo and GitLab when ready.
-
-### Kanban Board
-
-Visual card-based workflow. Drag issues between columns with keyboard shortcuts. Color-coded priorities, assignees, and labels. Faster than any web kanban because there's zero render latency.
-
-### Merge Requests & Code Review
-
-Browse open MRs, read diffs, leave line-level comments — all inside the TUI. CI/CD pipeline status shown inline (✓ passed, ✗ failed, ● running).
-
-### Fuzzy Command Palette (`Ctrl+P`)
-
-Jump to any issue, file, commit, or action in under 200ms. The one feature that makes going back to the browser feel like using dial-up.
-
-### Interactive Rebase
-
-Visual, keyboard-driven rebase. Pick, squash, reorder, edit — in under 5 seconds for complex rebases. No `GIT_SEQUENCE_EDITOR` hacks.
-
-### AI Agent (Ollama)
-
-Seven built-in actions powered by local Ollama:
-
-| Action | What it does |
-|--------|-------------|
-| Explain Changes | Code review assistant |
-| Generate Tests | Unit test scaffolding |
-| Refactor Code | Structure improvements |
-| Add Documentation | Docstring generation |
-| Find Bugs | Static analysis |
-| Optimize Performance | Algorithm suggestions |
-| Generate Commit Message | Conventional Commits |
-
-Runs entirely local. No API keys, no cloud, no data leaving your machine.
-
-### Plugin System (LuaJIT)
-
-Extend ProGit with Lua plugins. The plugin SDK is Apache-2.0 licensed and runtime-loaded — the TUI never depends on plugin internals.
-
-```lua
--- my-plugin.lua
-local plugin = {
-    metadata = { name = "my-plugin", version = "1.0.0" }
-}
-function plugin:on_event(event)
-    if event.type == "IssueCreated" then
-        print("New issue: " .. event.data.issue_id)
-    end
-end
-return plugin
+```bash
+prog --help
+prog sync push            # push local issues to configured forge
+prog sync pull            # pull issues from configured forge
+prog remote doctor        # pre-flight host checks
+prog plugin search <q>    # search marketplace
+prog plugin install <name>
+prog plugin update
 ```
 
-Install plugins: `prog plugin install <name>`
+Plugins are first-class command namespaces:
 
-### Forge Sync
-
-Bidirectional sync with Forgejo and GitLab. Issues, labels, milestones — kept in sync on your schedule. GitHub sync coming in a future release.
-
-### Themes
-
-Cyberpunk, Nord, Dracula, Solarized, and custom themes. Vim-style modal keybindings throughout.
+```bash
+prog plugin sober route list
+prog plugin sober-raccoon route list
+```
 
 ---
 
-## Architecture
+## What’s new in 0.8.x
 
-```
-┌─────────────────────────────────────┐
-│  TUI Core (LCL-1.0)                │  ← You interact here
-│  6.5 MB binary, <100ms cold start   │
-└─────────────────────────────────────┘
-           ↓ JSON Events
-┌─────────────────────────────────────┐
-│  Plugin SDK (LSL-1.0)               │  ← Extend here
-│  LuaJIT runtime, swappable engine   │
-└─────────────────────────────────────┘
-           ↓ File System
-┌─────────────────────────────────────┐
-│  Data Layer                         │
-│  Issues: .project/issues/*.json     │
-│  Config: .project/config.kdl        │
-│  State: .progit/ (gitignored)       │
-└─────────────────────────────────────┘
-```
+- Plugin commands are now command-chain-native via manifest `contributions`.
+- Sober gates are callable from ProGit for deterministic, safer release checks.
+- Signed release artifacts and slimmer binary release handling keep the default binary under the 7 MB doctrine budget.
+- Source builds are linked to `~/bin/prog` by default.
 
-The default binary is a **client** — it syncs to GitHub/GitLab/Forgejo over HTTP. The sovereign git data plane (full hosting, `gix`-backed) is an opt-in feature flag. The complete host daemon (`progit-forged`) is a separate sidecar. Most users connect to existing forges; the few who self-host run the sidecar.
-
----
-
-## Comparison
-
-### vs Jira
-
-| | ProGit | Jira |
-|---|--------|------|
-| Binary / Install | **6.5 MB** | ~500 MB (Java + browser) |
-| Cold Start | **<100ms** | 2–5s page load |
-| Offline | **Full CRUD** | No |
-| Data Location | **Your repo** | Cloud |
-| Price | **Free** | $7.75+/user/mo |
-
-### vs GitHub Issues
-
-| | ProGit | GitHub Issues |
-|---|--------|---------------|
-| Kanban | **Built-in** | Projects (web only) |
-| Offline | **Full** | No |
-| TUI | **Full** | Limited (gh CLI) |
-| Data Ownership | **Your files** | GitHub's database |
-| AI (local) | **Ollama built-in** | Copilot (cloud) |
-
-### vs GitButler
-
-| | ProGit | GitButler |
-|---|--------|-----------|
-| Binary Size | **6.5 MB** | ~200 MB (Electron) |
-| Cold Start | **<100ms** | ~2s |
-| Plugin System | **Lua/WASM** | No |
-| Issue Tracking | **Built-in** | No |
-| License | **LCL-1.0 (open)** | Proprietary |
-
-### vs lazygit / GitUI
-
-| | ProGit | lazygit / GitUI |
-|---|--------|-----------------|
-| Issue Tracking | **Built-in** | No |
-| Kanban | **Yes** | No |
-| AI Agent | **Ollama** | No |
-| Plugin System | **Lua/WASM** | No |
-| Git operations | ✅ | ✅ (their focus) |
-
----
-
-## License
-
-| Component | License | Why |
-|-----------|---------|-----|
-| **Core TUI** | LCL-1.0 | File-level copyleft — modifications stay open, your code stays yours |
-| **Plugin SDK** | LSL-1.0 | File-level copyleft + patent grant — corporate-friendly |
-| **Your Data** | Yours | JSON in your repo. You own it. Always. |
+For release notes and history, read [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
 ## Documentation
 
-- [Contributing](CONTRIBUTING.md) — how to contribute, branch strategy, code style
-- [Changelog](CHANGELOG.md) — version history
-- [Comparison](COMPARISON.md) — detailed feature comparison
-- [Plugin SDK](docs/PLUGIN_SDK.md) — write Lua plugins
+- [Website](https://progit.dev)
+- [Docs](https://docs.progit.dev)
+- [SDK](https://sdk.progit.dev)
+- [Plugins](https://plugins.progit.dev)
+- [Plugin SDK Guide](docs/PLUGIN_SDK.md)
+- [Contributing](CONTRIBUTING.md)
 
 ---
 
 ## Contributing
 
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+Contributions are welcome. Use normal Git workflow and open MRs against the `main` branch.
 
-**Branch strategy:**
-
-```
-forge  →  main  →  stable
- (dev)    (integration)  (releases)
-```
-
-Branch off `forge`, open MRs targeting `forge`.
-
-**Quick links:**
 - [Issue Tracker](https://git.sovereign-society.org/ProGit/progit/issues)
-- [Source](https://git.sovereign-society.org/ProGit/progit)
+- [Source Repository](https://git.sovereign-society.org/ProGit/progit)
 
 ---
 
-## Roadmap
+## License
 
-### v0.8.2-beta (Current)
-- [x] Kanban board, issues, merge requests
-- [x] Code review mode (line-level comments)
-- [x] CI/CD integration (GitLab, Forgejo)
-- [x] Ollama AI agent (7 actions)
-- [x] Fuzzy command palette (`Ctrl+P`)
-- [x] Interactive rebase
-- [x] Plugin SDK + LuaJIT runtime
-- [x] Plugin registry (`prog plugin install/remove/update`)
-- [x] Forge sync (bidirectional, Forgejo + GitLab)
-- [x] Sovereign data plane (opt-in feature flag)
-- [x] 6.5 MB binary, <100ms cold start
-- [x] Signed release pipeline (minisign)
-
-### v1.0.0 (Next)
-- [ ] Cross-platform builds (macOS, aarch64, Windows)
-- [ ] GitHub sync
-- [ ] First-run onboarding experience
-- [ ] Plugin marketplace
-- [ ] WASM plugin runtime (optional)
-
----
-
-## Credits
-
-ProGit stands on the shoulders of giants:
-- **Ratatui** — terminal UI framework
-- **LuaJIT** — lightning-fast plugin runtime
-- **GitButler** — virtual branches inspiration
-- **lazygit / GitUI** — TUI git excellence
+- **Core TUI:** [LCL-1.0](legal/LICENSE_COMMONWEALTH.md)
+- **Plugin SDK / SDK-facing APIs:** [LSL-1.0](legal/LICENSE_SOVEREIGN.md)
+- **Documentation:** [LUL-1.0](legal/LICENSE_UNBOUND.md)
+- **Proprietary enterprise support:** [LVL-1.0](legal/LICENSE_VENTURE.md)
 
 ---
 
 **Made by [Sovereign Society](https://sovereign-society.org)**
-
-[Source](https://git.sovereign-society.org/ProGit/progit) · [Issues](https://git.sovereign-society.org/ProGit/progit/issues) · [Website](https://progit.sovereign-society.org)
