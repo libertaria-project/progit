@@ -252,3 +252,41 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
         _ => CommandAction::Error(format!("Unknown command: {}", parts[0])),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{execute, CommandAction};
+    use crate::tui::app::App;
+
+    #[test]
+    fn plugin_command_parsing_requires_namespace() {
+        let mut app = App::new();
+        let action = execute(&mut app, "plugin");
+
+        assert!(matches!(
+            action,
+            CommandAction::Error(msg) if msg == "Usage: :plugin <command> [args...]"
+        ));
+    }
+
+    #[test]
+    fn plugin_command_parsing_routes_to_plugin_namespace() {
+        let mut app = App::new();
+        let action = execute(&mut app, "plugin sober preflight --base HEAD");
+
+        match action {
+            CommandAction::RunPluginCommand { command, args } => {
+                assert_eq!(command, "sober");
+                assert_eq!(
+                    args,
+                    vec![
+                        "preflight".to_string(),
+                        "--base".to_string(),
+                        "HEAD".to_string()
+                    ]
+                );
+            }
+            other => panic!("Expected RunPluginCommand, got: {other:?}"),
+        }
+    }
+}
