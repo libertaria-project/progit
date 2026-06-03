@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hardwiring. The premium cockpit remains available as
   `prog plugin sober-raccoon ...`.
 
+## [0.8.4-beta] - 2026-06-03
+
+### Fixed
+- Release pipeline compatibility: updated release-time sibling pinning for
+  `progit-plugin-sdk` to a commit that exposes the `sober` host-capability
+  surface expected by ProGit.
+- Re-published a corrected tagged release from the same feature set to recover the
+  0.8.x release channel after earlier tagged runs failed in CI.
+
+### Changed
+- `progit` version bump to `0.8.4-beta` for the corrected release cut.
+
 ## [0.8.2-beta] - 2026-06-02
 
 ### Beta Promotion — Native Plugin Command Chain

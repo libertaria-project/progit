@@ -4,7 +4,7 @@
 Data-first workflow, local-first by default.
 
 [![License: LCL-1.0](https://img.shields.io/badge/License-LCL--1.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.2--beta-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.4--beta-green.svg)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org)
 
 ---

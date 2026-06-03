@@ -43,7 +43,7 @@ jobs:
           # compiled into prog; forge-client (optional) and forged (dev-dep) are
           # only resolved. Pin every sibling checkout so release inputs are
           # immutable and fail closed when a dependency moves unexpectedly.
-          checkout_sibling progit-plugin-sdk af0ece9559da40d02e9e5c5165e8e8a3db7f5f2b
+          checkout_sibling progit-plugin-sdk 2b1eea3b7b2ddff6b5cf0d363c07d491c90317c8
           checkout_sibling progit-forge-client 75affe775915020c8cc879afc858102089e5fee3
           checkout_sibling progit-forged 664a7e68d02f03bed9f887ebdae7bd3cceedef74
 
