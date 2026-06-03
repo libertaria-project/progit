@@ -115,7 +115,21 @@ update_aur_package() {
         fi
     fi
 
-    cp "$REPO_ROOT/aur/PKGBUILD" "$AUR_REPO_DIR/PKGBUILD"
+    local aur_template
+    if [[ -f "$REPO_ROOT/aur/PKGBUILD" ]]; then
+        aur_template="$REPO_ROOT/aur/PKGBUILD"
+    elif [[ -f "$REPO_ROOT/../aur/PKGBUILD" ]]; then
+        aur_template="$REPO_ROOT/../aur/PKGBUILD"
+    else
+        echo -e "${RED}❌ Missing PKGBUILD source; expected it in progit/aur or ../aur.${NC}"
+        if is_true "$AUR_UPDATE_STRICT"; then
+            return 1
+        fi
+        echo -e "${YELLOW}⚠️  Continuing without AUR publish.${NC}"
+        return 0
+    fi
+
+    cp "$aur_template" "$AUR_REPO_DIR/PKGBUILD"
     sed -i "s/^pkgver=.*/pkgver=${pkgver_aur}/" "$AUR_REPO_DIR/PKGBUILD"
     makepkg --printsrcinfo -p "$AUR_REPO_DIR/PKGBUILD" > "$AUR_REPO_DIR/.SRCINFO"
 
