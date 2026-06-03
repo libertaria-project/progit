@@ -10,6 +10,11 @@ keywords = ["git", "issue-tracker", "tui", "kanban", "project-management"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 
+# cargo-binstall metadata — pull prebuilt binaries from Forgejo releases
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/prog-v{ version }-{ target }.tar.gz"
+bin-dir = "prog"
+
 [dependencies]
 # TUI
 ratatui = "0.29"
