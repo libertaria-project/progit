@@ -18,6 +18,12 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let colors = app.theme.colors();
     let engine = &app.theme_engine;
 
+    // Empty-state teaching: if there are zero issues, show help instead of a blank table
+    if app.issues.is_empty() {
+        crate::tui::widget_empty_state::render_issues_empty(frame, area, &colors);
+        return;
+    }
+
     // Table header
     let header_style = engine.get("issues.header", colors.header());
     let header_cells = ["ID", "Title", "Status", "Effort", "Repo", "Tags"]

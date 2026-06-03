@@ -12,6 +12,12 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let colors = app.theme.colors();
     let engine = &app.theme_engine;
 
+    // Empty-state teaching: if there are zero MRs, show help instead of a blank table
+    if app.mr_list.is_empty() {
+        crate::tui::widget_empty_state::render_mr_list_empty(frame, area, &colors);
+        return;
+    }
+
     // Header
     let header_style = engine.get("list.header", colors.header().add_modifier(Modifier::BOLD));
     let header_cells = ["ID", "State", "CI", "Title", "Author", "Branches"]

@@ -219,9 +219,20 @@ fn render_column(
         .border_type(BorderType::Rounded)
         .border_style(border_style);
 
-    let list = List::new(items).block(block);
-
-    frame.render_widget(list, chunks[1]);
+    if issues.is_empty() {
+        // Empty column: render block then teaching text inside
+        frame.render_widget(block, chunks[1]);
+        let inner = chunks[1].inner(ratatui::layout::Margin {
+            horizontal: 1,
+            vertical: 1,
+        });
+        crate::tui::widget_empty_state::render_kanban_column_empty(
+            frame, inner, colors, title,
+        );
+    } else {
+        let list = List::new(items).block(block);
+        frame.render_widget(list, chunks[1]);
+    }
 
     // Bottom + button (for quick add at bottom of column)
     let bottom_btn = Paragraph::new(Line::from(vec![Span::styled(

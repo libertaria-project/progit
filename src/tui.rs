@@ -22,6 +22,7 @@ pub mod widget_conflicts;
 pub mod widget_dashboard;
 mod widget_debug;
 pub mod widget_detail;
+mod widget_empty_state;
 mod widget_fuzzy_palette;
 pub mod widget_issues;
 pub mod widget_kanban;
