@@ -87,6 +87,7 @@ Inside the TUI:
 - `j/k` — move selection
 - `n` — new issue
 - `Ctrl+P` — fuzzy palette (`issues`, `files`, `commits`, `commands`)
+- `:` — command palette (`:theme`, `:rebase`, `:diff`, `:plugin …`)
 - `?` — help
 - `q` — quit
 

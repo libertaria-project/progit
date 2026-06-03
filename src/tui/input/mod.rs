@@ -722,14 +722,14 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent, ui_areas: &UIAreas) -> Key
 pub fn help_text(app: &App) -> &'static str {
     match app.input_mode {
         InputMode::Normal => match app.view_mode {
-            ViewMode::Dashboard => "Tab:list │ S:sync │ P:plugins │ O:settings │ q:quit",
-            ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ q:quit",
-            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ q:quit",
-            ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ q:close",
-            ViewMode::MRList => "j/k:nav │ Enter:diff │ a:approve(LGTM) │ m:accept+merge │ x:reject │ r:reload │ S:sync │ ?:help │ q:back",
-            ViewMode::Blame => "j/k:scroll │ m:toggle mode │ q:back",
-            ViewMode::Lanes => "h/l:lanes │ j/k:hunks │ n:new │ Space:stage │ m:move │ q:back",
-            ViewMode::Review => "j/k:navigate │ c:comment │ q:back",
+            ViewMode::Dashboard => "Tab:list │ S:sync │ P:plugins │ O:settings │ :command │ q:quit",
+            ViewMode::List => "j/k:nav │ Space:status │ n:new │ M:MR │ S:sync │ d:del │ f:filter │ Tab:kanban │ /:search │ :command │ q:quit",
+            ViewMode::Kanban => "hjkl:nav │ Enter:details │ H/L:move │ n:new │ M:MR │ S:sync │ f:filter │ Space:status │ Tab:list │ :command │ q:quit",
+            ViewMode::Diff => "j/k:scroll │ J/K:files │ Space:collapse │ :command │ q:close",
+            ViewMode::MRList => "j/k:nav │ Enter:diff │ a:approve(LGTM) │ m:accept+merge │ x:reject │ r:reload │ S:sync │ :command │ ?:help │ q:back",
+            ViewMode::Blame => "j/k:scroll │ m:toggle mode │ :command │ q:back",
+            ViewMode::Lanes => "h/l:lanes │ j/k:hunks │ n:new │ Space:stage │ m:move │ :command │ q:back",
+            ViewMode::Review => "j/k:navigate │ c:comment │ :command │ q:back",
         },
         InputMode::Search => "Type to search │ Enter:confirm │ Esc:cancel",
         InputMode::Confirm => "y:yes │ n:no │ Esc:cancel",
