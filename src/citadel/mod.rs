@@ -20,6 +20,8 @@
 //!
 //! All subprocess execution is **non-blocking** to prevent TUI freeze.
 
+pub mod shim;
+
 use anyhow::{Context, Result};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
