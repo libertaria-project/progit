@@ -13,6 +13,7 @@ mod diff;
 mod fuzzy;
 mod git;
 mod hooks;
+mod init_wizard;
 mod issue;
 mod marketplace;
 mod mr;
@@ -56,6 +57,18 @@ enum Commands {
     Sync {
         #[command(subcommand)]
         action: Option<SyncAction>,
+    },
+    /// Initialize ProGit in the current repository (interactive wizard)
+    Init {
+        /// Seed demo data (issues + kanban + mock MR)
+        #[arg(short, long)]
+        demo: bool,
+        /// Install git hooks
+        #[arg(long)]
+        hooks: bool,
+        /// Skip all prompts (non-interactive / CI mode)
+        #[arg(short, long)]
+        yes: bool,
     },
     /// Emergency cleanup of duplicate issues
     Clean,
@@ -1068,6 +1081,20 @@ fn main() -> Result<()> {
         }
     }
 
+    // Parse CLI early so commands that control their own lifecycle (init, sober)
+    // can bypass auto-initialization.
+    let cli = Cli::parse();
+
+    // Init wizard controls its own workspace setup; bypass auto-init entirely.
+    if let Some(Commands::Init { demo, hooks, yes }) = &cli.command {
+        let project_root = workspace::find_project_root()?;
+        init_wizard::run_wizard(
+            &project_root,
+            init_wizard::InitOptions { demo: *demo, hooks: *hooks, yes: *yes },
+        )?;
+        return Ok(());
+    }
+
     // 1. Detect Root
     let project_root = workspace::find_project_root()?;
 
@@ -1092,8 +1119,6 @@ fn main() -> Result<()> {
 
     // 3. Auto-Initialization (Ensure .project and .progit exist)
     workspace::initialize_workspace(&project_root)?;
-
-    let cli = Cli::parse();
 
     match cli.command {
         Some(Commands::Sync { action }) => {
@@ -1515,6 +1540,9 @@ fn main() -> Result<()> {
             dest,
         }) => {
             handle_clone(&endpoint, &repo, &dest)?;
+        }
+        Some(Commands::Init { .. }) => {
+            unreachable!("init is handled before auto-initialization")
         }
         None => {
             // No command - run TUI

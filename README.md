@@ -33,7 +33,7 @@ Typical launch path: default to terminal UI (`prog`) and use CLI subcommands for
 ### Recommended installer (Linux/macOS)
 
 ```bash
-curl -fsSL https://progit.sovereign-society.org/install.sh | sh
+curl -fsSL https://progit.dev/install.sh | sh
 ```
 
 This installs a released binary and verifies minisign when available.
