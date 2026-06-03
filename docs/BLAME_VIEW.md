@@ -138,7 +138,7 @@ New team members can use Blame View to:
 A: Ensure you're running ProGit from within a Git repository and the file exists in the current branch.
 
 **Q: Date formatting looks wrong**  
-A: Blame View uses UTC timestamps from Git. Local time zone conversion coming soon.
+A: Blame View uses UTC timestamps from Git. Local time zone conversion is on the roadmap.
 
 **Q: Can I blame files not tracked by Git?**  
 A: No, only files tracked by Git can be blamed.

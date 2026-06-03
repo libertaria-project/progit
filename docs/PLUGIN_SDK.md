@@ -308,11 +308,11 @@ Share your plugins with the community:
 1. Create GitHub repo
 2. Add `progit-plugin` topic
 3. Tag releases with semantic versioning
-4. Submit to ProGit Plugin Registry (coming soon)
+4. Submit to ProGit Plugin Registry (https://progit-marketplace.pages.dev)
 
 ## Advanced Features
 
-### HTTP Requests (coming soon)
+### HTTP Requests
 
 ```lua
 local http = require("progit.http")
@@ -323,7 +323,7 @@ if response.status == 200 then
 end
 ```
 
-### Database Access (coming soon)
+### Database Access (sandboxed JSON storage)
 
 ```lua
 local db = require("progit.db")

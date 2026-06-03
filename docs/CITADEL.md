@@ -13,7 +13,7 @@ ProGit transforms into an **Infrastructure Cockpit** when `CITADEL.kdl` is detec
 │                      ProGit TUI                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
 │  │ Command Mode │  │  Log Viewer  │  │  Git Status  │     │
-│  │   :pano      │  │   (Modal)    │  │   🔱 Icon    │     │
+│  │   :citadel      │  │   (Modal)    │  │   🔱 Icon    │     │
 │  └──────┬───────┘  └──────▲───────┘  └──────────────┘     │
 │         │                 │                               │
 └─────────┼─────────────────┼───────────────────────────────┘
@@ -82,7 +82,7 @@ prog  # Initializes .project/ and .progit/
 
 All citadel commands are accessed via the command palette (`:` key).
 
-### `:pano validate`
+### `:citadel validate`
 
 **Purpose:** Validate `CITADEL.kdl` against policy constraints.
 
@@ -94,21 +94,21 @@ All citadel commands are accessed via the command palette (`:` key).
 
 **Example:**
 ```
-:pano validate
+:citadel validate
 → 🔱 Validation started...
 → ✓ Configuration valid
 ```
 
 **On Failure:**
 ```
-:pano validate
+:citadel validate
 → 🔱 Validation started...
 → ✗ POLICY VIOLATION: Network 'prod' exceeds max_instances (10 > 5)
 ```
 
 ---
 
-### `:pano plan [env]`
+### `:citadel plan [env]`
 
 **Purpose:** Generate infrastructure plan for specified environment.
 
@@ -124,7 +124,7 @@ All citadel commands are accessed via the command palette (`:` key).
 
 **Example:**
 ```
-:pano plan devnet
+:citadel plan devnet
 → 🔱 Plan started... Log viewer opened.
 
 ┌─────────────────────────────────────────────────────────┐
@@ -145,7 +145,7 @@ All citadel commands are accessed via the command palette (`:` key).
 
 ---
 
-### `:pano status`
+### `:citadel status`
 
 **Purpose:** Check current citadel operation status.
 
@@ -155,20 +155,20 @@ All citadel commands are accessed via the command palette (`:` key).
 
 **Example:**
 ```
-:pano status
+:citadel status
 → 🔱 Planning devnet...  (if running)
 → 🔱 Citadel: Idle    (if idle)
 ```
 
 ---
 
-### `:pano apply` (Disabled)
+### `:citadel apply` (Disabled)
 
 **Purpose:** Apply infrastructure changes.
 
 **Current Behavior:**
 ```
-:pano apply devnet
+:citadel apply devnet
 → ⚠️ Apply disabled in command mode for safety. Use dedicated Ops interface.
 ```
 
@@ -201,7 +201,7 @@ app.citadel_binary_path = Some("/opt/pano-forge/bin/citadel".to_string());
 ### Validation Flow
 
 ```
-User: :pano validate
+User: :citadel validate
   ↓
 Command Handler
   ↓ (dispatch)
@@ -221,7 +221,7 @@ Status Bar Update
 ### Plan Flow (with Modal)
 
 ```
-User: :pano plan devnet
+User: :citadel plan devnet
   ↓
 Command Handler
   ↓ (set state)
@@ -260,7 +260,7 @@ Infrastructure operations can take 10-60 seconds:
 
 **Without non-blocking execution:**
 ```
-User presses :pano plan
+User presses :citadel plan
 → TUI freezes for 30 seconds
 → No keyboard input registered
 → User thinks app crashed
@@ -269,7 +269,7 @@ User presses :pano plan
 
 **With non-blocking execution:**
 ```
-User presses :pano plan
+User presses :citadel plan
 → "🔱 Plan started..." appears immediately
 → TUI remains responsive
 → User can navigate, view issues, etc.
@@ -356,10 +356,10 @@ cd /path/to/citadel/repo
 prog
 
 # In TUI:
-:pano validate
+:citadel validate
 # → Should show "✓ Configuration valid"
 
-:pano plan devnet
+:citadel plan devnet
 # → Modal opens with streaming output
 # → Press Esc to close
 ```
@@ -395,7 +395,7 @@ prog
 
 ## Troubleshooting
 
-### "Unknown command: pano"
+### "Unknown command: citadel"
 
 **Cause:** Binary not rebuilt after code changes.
 
@@ -436,11 +436,11 @@ cd /path/to/repo/with/CITADEL.kdl
 prog
 ```
 
-### Modal doesn't open for `:pano plan`
+### Modal doesn't open for `:citadel plan`
 
 **Cause:** `app.show_citadel_log` not being set.
 
-**Fix:** Rebuild binary (see "Unknown command: pano" above).
+**Fix:** Rebuild binary (see "Unknown command: citadel" above).
 
 ---
 

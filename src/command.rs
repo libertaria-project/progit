@@ -93,7 +93,7 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                 Err(e) => CommandAction::Error(format!("Failed to load diff: {}", e)),
             }
         }
-        "pano" => {
+        "citadel" => {
             // Check if we're in a Citadel repo
             if !app.is_citadel_repo {
                 return CommandAction::Error(
@@ -110,7 +110,7 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
 
             if parts.len() < 2 {
                 return CommandAction::Error(
-                    "Usage: :pano <validate|plan|apply> [env]".to_string(),
+                    "Usage: :citadel <validate|plan|apply> [env]".to_string(),
                 );
             }
 
@@ -179,7 +179,7 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                     }
                 }
                 _ => CommandAction::Error(format!(
-                    "Unknown pano command: {}. Use validate|plan|status",
+                    "Unknown citadel command: {}. Use validate|plan|status",
                     parts[1]
                 )),
             }
