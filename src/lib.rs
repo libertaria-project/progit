@@ -11,7 +11,7 @@ pub mod hooks;
 pub mod issue;
 pub mod marketplace;
 pub mod mr;
-pub mod panopticum;
+pub mod citadel;
 pub mod plugins;
 pub mod project_contract;
 pub mod project_view;

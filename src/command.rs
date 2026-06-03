@@ -94,17 +94,17 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
             }
         }
         "pano" => {
-            // Check if we're in a Panopticum repo
-            if !app.is_panopticum_repo {
+            // Check if we're in a Citadel repo
+            if !app.is_citadel_repo {
                 return CommandAction::Error(
-                    "Not a Panopticum repo (no PANOPTICUM.kdl found)".to_string(),
+                    "Not a Citadel repo (no CITADEL.kdl found)".to_string(),
                 );
             }
 
-            // Check if panoctl is available
-            if !crate::panopticum::is_panoctl_available(app.panoctl_binary_path.as_deref()) {
+            // Check if citadel is available
+            if !crate::citadel::is_citadel_available(app.citadel_binary_path.as_deref()) {
                 return CommandAction::Error(
-                    "panoctl binary not found in PATH. Install panoctl first.".to_string(),
+                    "citadel binary not found in PATH. Install citadel first.".to_string(),
                 );
             }
 
@@ -115,26 +115,26 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
             }
 
             // Get or create event channel
-            if app.pano_event_tx.is_none() {
-                let (tx, rx) = crate::panopticum::create_event_channel();
-                app.pano_event_tx = Some(tx);
-                app.pano_event_rx = Some(rx);
+            if app.citadel_event_tx.is_none() {
+                let (tx, rx) = crate::citadel::create_event_channel();
+                app.citadel_event_tx = Some(tx);
+                app.citadel_event_rx = Some(rx);
             }
 
             // SAFETY: set in the is_none block immediately above
-            let sender = app.pano_event_tx.clone().unwrap();
+            let sender = app.citadel_event_tx.clone().unwrap();
             let repo_path = app.repo_path.clone();
-            let binary_path = app.panoctl_binary_path.clone();
+            let binary_path = app.citadel_binary_path.clone();
 
             match parts[1] {
                 "validate" => {
                     // Clear previous output
-                    app.pano_output.clear();
-                    app.pano_status =
-                        crate::panopticum::PanoStatus::Running("Validating...".into());
+                    app.citadel_output.clear();
+                    app.citadel_status =
+                        crate::citadel::CitadelStatus::Running("Validating...".into());
 
                     // Dispatch async job
-                    crate::panopticum::spawn_validate(repo_path, binary_path, sender);
+                    crate::citadel::spawn_validate(repo_path, binary_path, sender);
 
                     CommandAction::Status("🔱 Validation started...".to_string())
                 }
@@ -142,13 +142,13 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                     let env = parts.get(2).unwrap_or(&"devnet").to_string();
 
                     // Clear previous output and open log viewer
-                    app.pano_output.clear();
-                    app.show_pano_log = true; // Auto-open modal
-                    app.pano_status =
-                        crate::panopticum::PanoStatus::Running(format!("Planning {}...", env));
+                    app.citadel_output.clear();
+                    app.show_citadel_log = true; // Auto-open modal
+                    app.citadel_status =
+                        crate::citadel::CitadelStatus::Running(format!("Planning {}...", env));
 
                     // Dispatch async job
-                    crate::panopticum::spawn_plan(repo_path, env, binary_path, sender);
+                    crate::citadel::spawn_plan(repo_path, env, binary_path, sender);
 
                     CommandAction::Status("🔱 Plan started... Log viewer opened.".to_string())
                 }
@@ -159,21 +159,21 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                     )
                 }
                 "status" => {
-                    // Show current panopticum status
-                    match &app.pano_status {
-                        crate::panopticum::PanoStatus::Idle => {
-                            CommandAction::Status("🔱 Panopticum: Idle".to_string())
+                    // Show current citadel status
+                    match &app.citadel_status {
+                        crate::citadel::CitadelStatus::Idle => {
+                            CommandAction::Status("🔱 Citadel: Idle".to_string())
                         }
-                        crate::panopticum::PanoStatus::Running(msg) => {
+                        crate::citadel::CitadelStatus::Running(msg) => {
                             CommandAction::Status(format!("🔱 {}", msg))
                         }
-                        crate::panopticum::PanoStatus::Success(msg) => {
+                        crate::citadel::CitadelStatus::Success(msg) => {
                             CommandAction::Status(format!("✓ {}", msg))
                         }
-                        crate::panopticum::PanoStatus::Error(msg) => {
+                        crate::citadel::CitadelStatus::Error(msg) => {
                             CommandAction::Error(format!("✗ {}", msg))
                         }
-                        crate::panopticum::PanoStatus::OutputLine(line) => {
+                        crate::citadel::CitadelStatus::OutputLine(line) => {
                             CommandAction::Status(line.clone())
                         }
                     }

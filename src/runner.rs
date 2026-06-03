@@ -168,20 +168,20 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
             .scan_cross_repo_issues(base_dir, current_repo_name);
     }
 
-    // ─── Panopticum Integration ───────────────────────────────────────────────
+    // ─── Citadel Integration ───────────────────────────────────────────────
     app.repo_path = project_root.clone();
-    app.is_panopticum_repo = crate::panopticum::is_panopticum_repo(&project_root);
+    app.is_citadel_repo = crate::citadel::is_citadel_repo(&project_root);
 
-    if app.is_panopticum_repo {
-        log::info!("🔱 Panopticum mode activated");
-        // Check if panoctl is available (lazy check - don't fail if missing)
-        if !crate::panopticum::is_panoctl_available(None) {
-            log::warn!("⚠️ panoctl binary not found in PATH");
+    if app.is_citadel_repo {
+        log::info!("🔱 Citadel mode activated");
+        // Check if citadel is available (lazy check - don't fail if missing)
+        if !crate::citadel::is_citadel_available(None) {
+            log::warn!("⚠️ citadel binary not found in PATH");
         }
         // Create event channel for async operations
-        let (tx, rx) = crate::panopticum::create_event_channel();
-        app.pano_event_tx = Some(tx);
-        app.pano_event_rx = Some(rx);
+        let (tx, rx) = crate::citadel::create_event_channel();
+        app.citadel_event_tx = Some(tx);
+        app.citadel_event_rx = Some(rx);
     }
 
     // Track UI areas for mouse events
@@ -193,57 +193,57 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
     app.agent_event_rx = Some(rx);
 
     loop {
-        // ─── Panopticum Event Polling ─────────────────────────────────────────
-        // Check for async panopticum results before rendering
-        if let Some(rx) = app.pano_event_rx.take() {
+        // ─── Citadel Event Polling ─────────────────────────────────────────
+        // Check for async citadel results before rendering
+        if let Some(rx) = app.citadel_event_rx.take() {
             while let Ok(event) = rx.try_recv() {
                 match event {
-                    crate::panopticum::PanoEvent::Status(status) => {
+                    crate::citadel::CitadelEvent::Status(status) => {
                         match &status {
-                            crate::panopticum::PanoStatus::OutputLine(line) => {
-                                app.pano_output.push(line.clone());
+                            crate::citadel::CitadelStatus::OutputLine(line) => {
+                                app.citadel_output.push(line.clone());
                                 // Show last line in status bar
-                                if let Some(last) = app.pano_output.last() {
+                                if let Some(last) = app.citadel_output.last() {
                                     app.set_status(last.clone());
                                 }
                             }
-                            _ => app.pano_status = status,
+                            _ => app.citadel_status = status,
                         }
                     }
-                    crate::panopticum::PanoEvent::ValidationComplete { success, message } => {
+                    crate::citadel::CitadelEvent::ValidationComplete { success, message } => {
                         if success {
-                            app.pano_status =
-                                crate::panopticum::PanoStatus::Success(message.clone());
+                            app.citadel_status =
+                                crate::citadel::CitadelStatus::Success(message.clone());
                             app.set_status(format!("✓ {}", message));
                         } else {
-                            app.pano_status = crate::panopticum::PanoStatus::Error(message.clone());
+                            app.citadel_status = crate::citadel::CitadelStatus::Error(message.clone());
                             app.set_status(format!("✗ {}", message));
                         }
                     }
-                    crate::panopticum::PanoEvent::PlanComplete { success, output } => {
+                    crate::citadel::CitadelEvent::PlanComplete { success, output } => {
                         if success {
-                            app.pano_status =
-                                crate::panopticum::PanoStatus::Success("Plan complete".into());
+                            app.citadel_status =
+                                crate::citadel::CitadelStatus::Success("Plan complete".into());
                             app.set_status("✓ Plan completed successfully");
                         } else {
-                            app.pano_status = crate::panopticum::PanoStatus::Error(output.clone());
+                            app.citadel_status = crate::citadel::CitadelStatus::Error(output.clone());
                             app.set_status(format!("✗ Plan failed"));
                         }
                     }
-                    crate::panopticum::PanoEvent::ApplyComplete { success, output } => {
+                    crate::citadel::CitadelEvent::ApplyComplete { success, output } => {
                         if success {
-                            app.pano_status =
-                                crate::panopticum::PanoStatus::Success("Apply complete".into());
+                            app.citadel_status =
+                                crate::citadel::CitadelStatus::Success("Apply complete".into());
                             app.set_status("✓ Apply completed successfully");
                         } else {
-                            app.pano_status = crate::panopticum::PanoStatus::Error(output.clone());
+                            app.citadel_status = crate::citadel::CitadelStatus::Error(output.clone());
                             app.set_status(format!("✗ Apply failed"));
                         }
                     }
                 }
             }
             // Put receiver back
-            app.pano_event_rx = Some(rx);
+            app.citadel_event_rx = Some(rx);
         }
 
         // ─── Agent Event Polling ──────────────────────────────────────────────

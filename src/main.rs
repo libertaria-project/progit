@@ -17,7 +17,7 @@ mod init_wizard;
 mod issue;
 mod marketplace;
 mod mr;
-mod panopticum;
+mod citadel;
 mod plugins;
 mod project_contract;
 mod project_view;
@@ -1101,15 +1101,15 @@ fn main() -> Result<()> {
     // Check if we should initialize
     let project_dir = project_root.join(storage::paths::PROJECT_DIR);
     if !project_dir.exists() {
-        // If no .project exists, we require either a git repository OR a PANOPTICUM.kdl
+        // If no .project exists, we require either a git repository OR a CITADEL.kdl
         let has_git = crate::git::detect_repo(&project_root)?.is_some();
-        let has_panopticum = project_root.join("PANOPTICUM.kdl").exists();
+        let has_citadel = project_root.join("CITADEL.kdl").exists();
 
-        if !has_git && !has_panopticum {
-            println!("{} No git repository or PANOPTICUM.kdl found.", "❌".red());
+        if !has_git && !has_citadel {
+            println!("{} No git repository or CITADEL.kdl found.", "❌".red());
             println!("   ProGit requires either:");
             println!("   - A git repository (run 'git init'), or");
-            println!("   - A PANOPTICUM.kdl file (infrastructure repo)");
+            println!("   - A CITADEL.kdl file (infrastructure repo)");
             return Ok(());
         }
     }

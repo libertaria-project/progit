@@ -10,13 +10,13 @@ use crate::storage;
 pub(crate) fn find_project_root() -> Result<PathBuf> {
     let current = std::env::current_dir()?;
 
-    // Walk up looking for .git (repo root), .project (existing setup), or PANOPTICUM.kdl (infra repo)
+    // Walk up looking for .git (repo root), .project (existing setup), or CITADEL.kdl (infra repo)
     let mut path = current.as_path();
     loop {
         if path.join(".git").exists()
             || path.join(storage::paths::PROJECT_DIR).exists()
             || path.join(".projects").exists()
-            || path.join("PANOPTICUM.kdl").exists()
+            || path.join("CITADEL.kdl").exists()
         {
             return Ok(path.to_path_buf());
         }

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LCL-1.0
 // Copyright (c) 2025 Markus Maiwald
 
-//! Panopticum Log Viewer Widget
+//! Citadel Log Viewer Widget
 //!
-//! Modal overlay for displaying panoctl command output (plan, validate, apply).
+//! Modal overlay for displaying citadel command output (plan, validate, apply).
 
 use crate::tui::app::App;
 use ratatui::{
@@ -14,7 +14,7 @@ use ratatui::{
     Frame,
 };
 
-/// Render the panopticum log viewer as a centered modal overlay
+/// Render the citadel log viewer as a centered modal overlay
 pub fn render(frame: &mut Frame, app: &App) {
     let colors = app.theme.colors();
     let engine = &app.theme_engine;
@@ -26,28 +26,28 @@ pub fn render(frame: &mut Frame, app: &App) {
     frame.render_widget(Clear, area);
 
     // Determine border color based on status
-    let border_style = match &app.pano_status {
-        crate::panopticum::PanoStatus::Running(_) => {
+    let border_style = match &app.citadel_status {
+        crate::citadel::CitadelStatus::Running(_) => {
             engine.get("pano.border.running", colors.accent())
         }
-        crate::panopticum::PanoStatus::Success(_) => {
+        crate::citadel::CitadelStatus::Success(_) => {
             engine.get("pano.border.success", colors.success())
         }
-        crate::panopticum::PanoStatus::Error(_) => engine.get("pano.border.error", colors.error()),
+        crate::citadel::CitadelStatus::Error(_) => engine.get("pano.border.error", colors.error()),
         _ => engine.get("pano.border", colors.dim()),
     };
 
     // Build title based on status
-    let title = match &app.pano_status {
-        crate::panopticum::PanoStatus::Running(msg) => format!(" 🔱 {} ", msg),
-        crate::panopticum::PanoStatus::Success(_) => " ✓ Panopticum Output ".to_string(),
-        crate::panopticum::PanoStatus::Error(_) => " ✗ Panopticum Output ".to_string(),
-        _ => " 🔱 Panopticum Output ".to_string(),
+    let title = match &app.citadel_status {
+        crate::citadel::CitadelStatus::Running(msg) => format!(" 🔱 {} ", msg),
+        crate::citadel::CitadelStatus::Success(_) => " ✓ Citadel Output ".to_string(),
+        crate::citadel::CitadelStatus::Error(_) => " ✗ Citadel Output ".to_string(),
+        _ => " 🔱 Citadel Output ".to_string(),
     };
 
     // Render block with scrollable content
     let output_lines: Vec<Line> = app
-        .pano_output
+        .citadel_output
         .iter()
         .map(|line| {
             // Color-code based on content

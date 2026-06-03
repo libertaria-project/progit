@@ -1,8 +1,8 @@
-# Panopticum Integration
+# Citadel Integration
 
 **Status:** Infrastructure Complete | Binary Pending
 
-ProGit transforms into an **Infrastructure Cockpit** when `PANOPTICUM.kdl` is detected, providing native integration with the `panoctl` infrastructure compiler.
+ProGit transforms into an **Infrastructure Cockpit** when `CITADEL.kdl` is detected, providing native integration with the `citadel` infrastructure compiler.
 
 ---
 
@@ -20,7 +20,7 @@ ProGit transforms into an **Infrastructure Cockpit** when `PANOPTICUM.kdl` is de
           │                 │
           ▼                 │
 ┌────────────────────────────────────────────────────────────┐
-│              Panopticum Module (Rust)                      │
+│              Citadel Module (Rust)                      │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  spawn_validate() → Background Thread                │  │
 │  │  spawn_plan()     → Background Thread                │  │
@@ -29,13 +29,13 @@ ProGit transforms into an **Infrastructure Cockpit** when `PANOPTICUM.kdl` is de
 │                       │ mpsc::channel                      │
 │                       ▼                                    │
 │  ┌──────────────────────────────────────────────────────┐  │
-│  │  PanoEvent → PanoStatus → App State                  │  │
+│  │  CitadelEvent → CitadelStatus → App State                  │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────┬──────────────────────────────────────┘
                       │
                       ▼
               ┌───────────────┐
-              │ panoctl binary│
+              │ citadel binary│
               │  (subprocess) │
               └───────────────┘
 ```
@@ -46,11 +46,11 @@ ProGit transforms into an **Infrastructure Cockpit** when `PANOPTICUM.kdl` is de
 
 ### Automatic Detection
 
-ProGit detects Panopticum repos via:
-1. **Root Discovery:** Walks up from `pwd` looking for `PANOPTICUM.kdl`
-2. **Activation:** Sets `app.is_panopticum_repo = true`
+ProGit detects Citadel repos via:
+1. **Root Discovery:** Walks up from `pwd` looking for `CITADEL.kdl`
+2. **Activation:** Sets `app.is_citadel_repo = true`
 3. **Visual Indicator:** Shows `🔱` icon in git status bar
-4. **Binary Check:** Validates `panoctl` is in `PATH` (lazy check, non-fatal)
+4. **Binary Check:** Validates `citadel` is in `PATH` (lazy check, non-fatal)
 
 ### Initialization Without Git
 
@@ -62,32 +62,32 @@ cd /my/project
 git init
 prog
 
-# New: PANOPTICUM.kdl is sufficient
+# New: CITADEL.kdl is sufficient
 cd /my/infra
-touch PANOPTICUM.kdl
+touch CITADEL.kdl
 prog  # Initializes .project/ and .progit/
 ```
 
 **Error Message (if neither exists):**
 ```
-❌ No git repository or PANOPTICUM.kdl found.
+❌ No git repository or CITADEL.kdl found.
    ProGit requires either:
    - A git repository (run 'git init'), or
-   - A PANOPTICUM.kdl file (infrastructure repo)
+   - A CITADEL.kdl file (infrastructure repo)
 ```
 
 ---
 
 ## Commands
 
-All panopticum commands are accessed via the command palette (`:` key).
+All citadel commands are accessed via the command palette (`:` key).
 
 ### `:pano validate`
 
-**Purpose:** Validate `PANOPTICUM.kdl` against policy constraints.
+**Purpose:** Validate `CITADEL.kdl` against policy constraints.
 
 **Behavior:**
-- Spawns `panoctl validate PANOPTICUM.kdl` in background thread
+- Spawns `citadel validate CITADEL.kdl` in background thread
 - Non-blocking (TUI remains responsive)
 - Shows status in status bar
 - Displays policy violations if validation fails
@@ -113,7 +113,7 @@ All panopticum commands are accessed via the command palette (`:` key).
 **Purpose:** Generate infrastructure plan for specified environment.
 
 **Behavior:**
-- Spawns `panoctl plan --env <env>` in background thread
+- Spawns `citadel plan --env <env>` in background thread
 - **Auto-opens modal log viewer** with streaming output
 - Color-coded output:
   - **Green:** Additions (`+`)
@@ -147,17 +147,17 @@ All panopticum commands are accessed via the command palette (`:` key).
 
 ### `:pano status`
 
-**Purpose:** Check current panopticum operation status.
+**Purpose:** Check current citadel operation status.
 
 **Behavior:**
-- Shows current `PanoStatus` (Idle, Running, Success, Error)
+- Shows current `CitadelStatus` (Idle, Running, Success, Error)
 - Useful for checking background operation progress
 
 **Example:**
 ```
 :pano status
 → 🔱 Planning devnet...  (if running)
-→ 🔱 Panopticum: Idle    (if idle)
+→ 🔱 Citadel: Idle    (if idle)
 ```
 
 ---
@@ -180,18 +180,18 @@ All panopticum commands are accessed via the command palette (`:` key).
 
 ### Custom Binary Path
 
-By default, ProGit looks for `panoctl` in `PATH`. To specify a custom path:
+By default, ProGit looks for `citadel` in `PATH`. To specify a custom path:
 
 **`.project/config.kdl`:**
 ```kdl
-panopticum {
-    binary-path "/opt/pano-forge/bin/panoctl"
+citadel {
+    binary-path "/opt/pano-forge/bin/citadel"
 }
 ```
 
 **App State:**
 ```rust
-app.panoctl_binary_path = Some("/opt/pano-forge/bin/panoctl".to_string());
+app.citadel_binary_path = Some("/opt/pano-forge/bin/citadel".to_string());
 ```
 
 ---
@@ -207,13 +207,13 @@ Command Handler
   ↓ (dispatch)
 spawn_validate(repo_path, binary_path, sender)
   ↓ (background thread)
-panoctl validate PANOPTICUM.kdl
+citadel validate CITADEL.kdl
   ↓ (exit code + stderr)
-PanoEvent::ValidationComplete { success, message }
+CitadelEvent::ValidationComplete { success, message }
   ↓ (mpsc channel)
 Main Loop Event Polling
   ↓
-app.pano_status = Success/Error
+app.citadel_status = Success/Error
   ↓
 Status Bar Update
 ```
@@ -225,22 +225,22 @@ User: :pano plan devnet
   ↓
 Command Handler
   ↓ (set state)
-app.show_pano_log = true
-app.pano_output.clear()
+app.show_citadel_log = true
+app.citadel_output.clear()
   ↓ (dispatch)
 spawn_plan(repo_path, env, binary_path, sender)
   ↓ (background thread)
-panoctl plan --env devnet
+citadel plan --env devnet
   ↓ (stdout line-by-line)
-PanoEvent::Status(OutputLine("..."))
+CitadelEvent::Status(OutputLine("..."))
   ↓ (mpsc channel)
 Main Loop Event Polling
   ↓
-app.pano_output.push(line)
+app.citadel_output.push(line)
   ↓
 Modal Renders Live Output
   ↓ (on completion)
-PanoEvent::PlanComplete { success, output }
+CitadelEvent::PlanComplete { success, output }
   ↓
 Status Bar: "✓ Plan completed successfully"
 ```
@@ -249,7 +249,7 @@ Status Bar: "✓ Plan completed successfully"
 
 ## Non-Blocking Guarantee
 
-**Critical Design Principle:** All `panoctl` subprocess calls are **non-blocking**.
+**Critical Design Principle:** All `citadel` subprocess calls are **non-blocking**.
 
 ### Why This Matters
 
@@ -282,12 +282,12 @@ User presses :pano plan
 **Pattern:**
 ```rust
 // ❌ WRONG: Blocks TUI
-let output = Command::new("panoctl").output()?;
+let output = Command::new("citadel").output()?;
 
 // ✅ CORRECT: Non-blocking
 std::thread::spawn(move || {
-    let output = Command::new("panoctl").output();
-    sender.send(PanoEvent::PlanComplete { ... });
+    let output = Command::new("citadel").output();
+    sender.send(CitadelEvent::PlanComplete { ... });
 });
 ```
 
@@ -295,11 +295,11 @@ std::thread::spawn(move || {
 ```rust
 loop {
     // Poll for async results (non-blocking)
-    if let Some(rx) = app.pano_event_rx.take() {
+    if let Some(rx) = app.citadel_event_rx.take() {
         while let Ok(event) = rx.try_recv() {
             // Update app state
         }
-        app.pano_event_rx = Some(rx);
+        app.citadel_event_rx = Some(rx);
     }
     
     // Render TUI
@@ -314,13 +314,13 @@ loop {
 
 ---
 
-## Testing Without `panoctl`
+## Testing Without `citadel`
 
-Since `panoctl` is pre-alpha, you can test the integration with a mock binary:
+Since `citadel` is pre-alpha, you can test the integration with a mock binary:
 
 ### Create Mock Binary
 
-**`/usr/local/bin/panoctl`:**
+**`/usr/local/bin/citadel`:**
 ```bash
 #!/bin/bash
 case "$1" in
@@ -346,13 +346,13 @@ esac
 ```
 
 ```bash
-chmod +x /usr/local/bin/panoctl
+chmod +x /usr/local/bin/citadel
 ```
 
 ### Test Flow
 
 ```bash
-cd /path/to/panopticum/repo
+cd /path/to/citadel/repo
 prog
 
 # In TUI:
@@ -371,7 +371,7 @@ prog
 **Deferred Features:**
 
 1. **Pre-Commit Guillotine**
-   - Auto-validate on `PANOPTICUM.kdl` staged changes
+   - Auto-validate on `CITADEL.kdl` staged changes
    - Block commit if policy violations detected
    - Visual feedback in TUI
 
@@ -407,38 +407,38 @@ cargo build --release
 ./target/release/prog
 ```
 
-### "panoctl binary not found in PATH"
+### "citadel binary not found in PATH"
 
-**Cause:** `panoctl` not installed or not in `PATH`.
+**Cause:** `citadel` not installed or not in `PATH`.
 
 **Fix:**
 ```bash
-# Check if panoctl exists
-which panoctl
+# Check if citadel exists
+which citadel
 
 # If not, either:
-# 1. Install panoctl (when available)
-# 2. Create mock binary (see "Testing Without panoctl")
+# 1. Install citadel (when available)
+# 2. Create mock binary (see "Testing Without citadel")
 # 3. Configure custom path in .project/config.kdl
 ```
 
-### "Not a Panopticum repo"
+### "Not a Citadel repo"
 
-**Cause:** No `PANOPTICUM.kdl` found in current directory or parent directories.
+**Cause:** No `CITADEL.kdl` found in current directory or parent directories.
 
 **Fix:**
 ```bash
 # Verify file exists
-ls -la PANOPTICUM.kdl
+ls -la CITADEL.kdl
 
 # If in subdirectory, cd to repo root
-cd /path/to/repo/with/PANOPTICUM.kdl
+cd /path/to/repo/with/CITADEL.kdl
 prog
 ```
 
 ### Modal doesn't open for `:pano plan`
 
-**Cause:** `app.show_pano_log` not being set.
+**Cause:** `app.show_citadel_log` not being set.
 
 **Fix:** Rebuild binary (see "Unknown command: pano" above).
 
@@ -447,24 +447,24 @@ prog
 ## Code Reference
 
 **Key Files:**
-- `src/panopticum/mod.rs` - Core async module
-- `src/tui/widget_pano_log.rs` - Modal log viewer
+- `src/citadel/mod.rs` - Core async module
+- `src/tui/widget_citadel_log.rs` - Modal log viewer
 - `src/command.rs` - Command palette integration
 - `src/tui/input.rs` - Keyboard handling
 - `src/main.rs` - Event polling loop
 
 **Key Functions:**
-- `panopticum::spawn_validate()` - Background validation
-- `panopticum::spawn_plan()` - Background plan with streaming
-- `panopticum::is_panopticum_repo()` - Detection logic
-- `widget_pano_log::render()` - Modal rendering
+- `citadel::spawn_validate()` - Background validation
+- `citadel::spawn_plan()` - Background plan with streaming
+- `citadel::is_citadel_repo()` - Detection logic
+- `widget_citadel_log::render()` - Modal rendering
 
 **Key State:**
-- `app.is_panopticum_repo: bool` - Detection flag
-- `app.pano_status: PanoStatus` - Current operation status
-- `app.pano_output: Vec<String>` - Streaming output buffer
-- `app.show_pano_log: bool` - Modal visibility
-- `app.pano_event_rx: Receiver<PanoEvent>` - Async event channel
+- `app.is_citadel_repo: bool` - Detection flag
+- `app.citadel_status: CitadelStatus` - Current operation status
+- `app.citadel_output: Vec<String>` - Streaming output buffer
+- `app.show_citadel_log: bool` - Modal visibility
+- `app.citadel_event_rx: Receiver<CitadelEvent>` - Async event channel
 
 ---
 

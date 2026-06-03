@@ -5,7 +5,7 @@
 use crate::git::RepoInfo;
 use crate::issue::{Issue, Status};
 use crate::mr::MergeRequest;
-use crate::panopticum::{PanoEvent, PanoStatus};
+use crate::citadel::{CitadelEvent, CitadelStatus};
 use crate::plugins::PluginManager;
 use crate::sync::SyncProvider;
 use crate::tui::style::ThemeEngine;
@@ -230,30 +230,30 @@ pub struct App {
     /// Blame State
     pub blame_state: Option<crate::tui::widget_blame::BlameState>,
 
-    // ─── Panopticum Integration ───────────────────────────────────────────
+    // ─── Citadel Integration ───────────────────────────────────────────
     /// Repository root path
     pub repo_path: PathBuf,
 
-    /// Whether this is a Panopticum-enabled repo (PANOPTICUM.kdl exists)
-    pub is_panopticum_repo: bool,
+    /// Whether this is a Citadel-enabled repo (CITADEL.kdl exists)
+    pub is_citadel_repo: bool,
 
-    /// Custom path to panoctl binary (None = use PATH)
-    pub panoctl_binary_path: Option<String>,
+    /// Custom path to citadel binary (None = use PATH)
+    pub citadel_binary_path: Option<String>,
 
-    /// Current panopticum operation status
-    pub pano_status: PanoStatus,
+    /// Current citadel operation status
+    pub citadel_status: CitadelStatus,
 
-    /// Output buffer for panopticum operations (for console view)
-    pub pano_output: Vec<String>,
+    /// Output buffer for citadel operations (for console view)
+    pub citadel_output: Vec<String>,
 
-    /// Channel sender for panopticum events (cloned to spawn functions)
-    pub pano_event_tx: Option<Sender<PanoEvent>>,
+    /// Channel sender for citadel events (cloned to spawn functions)
+    pub citadel_event_tx: Option<Sender<CitadelEvent>>,
 
-    /// Channel receiver for panopticum events (polled in main loop)
-    pub pano_event_rx: Option<Receiver<PanoEvent>>,
+    /// Channel receiver for citadel events (polled in main loop)
+    pub citadel_event_rx: Option<Receiver<CitadelEvent>>,
 
-    /// Show panopticum log viewer modal
-    pub show_pano_log: bool,
+    /// Show citadel log viewer modal
+    pub show_citadel_log: bool,
 
     // ─── Virtual Branches Integration ────────────────────────────────────────
     /// Virtual branch manager
@@ -362,15 +362,15 @@ impl App {
             fuzzy_searcher: crate::fuzzy::FuzzySearcher::new(),
             fuzzy_query: String::new(),
             fuzzy_selected: 0,
-            // Panopticum
+            // Citadel
             repo_path: PathBuf::new(),
-            is_panopticum_repo: false,
-            panoctl_binary_path: None,
-            pano_status: PanoStatus::Idle,
-            pano_output: Vec::new(),
-            pano_event_tx: None,
-            pano_event_rx: None,
-            show_pano_log: false,
+            is_citadel_repo: false,
+            citadel_binary_path: None,
+            citadel_status: CitadelStatus::Idle,
+            citadel_output: Vec::new(),
+            citadel_event_tx: None,
+            citadel_event_rx: None,
+            show_citadel_log: false,
             blame_state: None,
             // Virtual Branches
             vbranch_manager: None,

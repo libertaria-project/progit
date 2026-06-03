@@ -29,7 +29,7 @@ pub mod widget_kanban;
 pub mod widget_lanes;
 pub mod widget_mr_create;
 pub mod widget_mr_list;
-pub mod widget_pano_log;
+pub mod widget_citadel_log;
 pub mod widget_plugins;
 mod widget_project;
 pub mod widget_review;
@@ -465,8 +465,8 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     }
 
     // Overlays (render last so they appear on top)
-    if app.show_pano_log {
-        widget_pano_log::render(frame, app);
+    if app.show_citadel_log {
+        widget_citadel_log::render(frame, app);
     }
 
     // Plugin manager modal

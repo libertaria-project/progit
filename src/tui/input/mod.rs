@@ -232,9 +232,9 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
         return KeyAction::Refresh;
     }
 
-    // Panopticum log viewer
-    if app.show_pano_log && key.code == KeyCode::Esc {
-        app.show_pano_log = false;
+    // Citadel log viewer
+    if app.show_citadel_log && key.code == KeyCode::Esc {
+        app.show_citadel_log = false;
         return KeyAction::Refresh;
     }
 
