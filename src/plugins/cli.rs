@@ -21,16 +21,16 @@ use super::registry::{PluginRegistry, PluginSource};
 use crate::storage::config;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PluginInstallScope {
-    Project,
+pub(crate) enum PluginInstallScope {
     User,
+    Project,
 }
 
 impl PluginInstallScope {
     fn label(&self) -> &'static str {
         match self {
-            Self::Project => "project",
             Self::User => "user",
+            Self::Project => "project",
         }
     }
 }
@@ -44,12 +44,35 @@ struct DiscoveredPlugin {
 
 fn plugin_dirs(project_root: &Path) -> Vec<(PathBuf, PluginInstallScope)> {
     vec![
-        (project_root.join("plugins"), PluginInstallScope::Project),
         (
             project_root.join(".progit").join("plugins"),
             PluginInstallScope::User,
         ),
+        (project_root.join("plugins"), PluginInstallScope::Project),
     ]
+}
+
+fn plugin_dir_for_scope(project_root: &Path, scope: PluginInstallScope) -> PathBuf {
+    match scope {
+        PluginInstallScope::User => project_root.join(".progit").join("plugins"),
+        PluginInstallScope::Project => project_root.join("plugins"),
+    }
+}
+
+fn plugin_candidate_paths(dir: &Path, name: &str) -> Vec<PathBuf> {
+    vec![dir.join(format!("{}.lua", name)), dir.join(name)]
+}
+
+fn has_plugin_candidate(dir: &Path, name: &str) -> bool {
+    plugin_candidate_paths(dir, name)
+        .iter()
+        .any(|path| path.exists())
+}
+
+fn plugin_install_scope_for_name(project_root: &Path, name: &str) -> Option<PluginInstallScope> {
+    plugin_dirs(project_root)
+        .into_iter()
+        .find_map(|(dir, scope)| has_plugin_candidate(&dir, name).then_some(scope))
 }
 
 fn plugin_from_file_entry(
@@ -133,19 +156,15 @@ fn plugin_dirs_exist(project_root: &Path) -> bool {
 }
 
 fn remove_plugin_candidates(project_root: &Path, name: &str) -> Vec<PathBuf> {
-    plugin_dirs(project_root)
-        .into_iter()
-        .flat_map(|(plugin_dir, _)| {
-            let lua_path = plugin_dir.join(format!("{}.lua", name));
-            let dir_path = plugin_dir.join(name);
-
-            std::iter::once(lua_path)
-                .chain(std::iter::once(dir_path))
-                .filter(|path| path.exists())
-                .collect::<Vec<_>>()
-                .into_iter()
-        })
-        .collect()
+    let mut candidates = Vec::new();
+    for (plugin_dir, _) in plugin_dirs(project_root) {
+        for path in plugin_candidate_paths(&plugin_dir, name) {
+            if path.exists() {
+                candidates.push(path);
+            }
+        }
+    }
+    candidates
 }
 
 /// Convert a TUI `:plugin ...` command into a `prog plugin ...` process.
@@ -180,13 +199,13 @@ fn load_command_manager(
         config: Default::default(),
     };
 
-    let plugin_dir = project_root.join("plugins");
-    manager.load_command_plugins_from_dir(&plugin_dir, &context, command);
-
-    let user_plugins = project_root.join(".progit").join("plugins");
+    let user_plugins = plugin_dir_for_scope(project_root, PluginInstallScope::User);
     if user_plugins.exists() {
         manager.load_command_plugins_from_dir(&user_plugins, &context, command);
     }
+
+    let project_plugin_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project);
+    manager.load_command_plugins_from_dir(&project_plugin_dir, &context, command);
 
     Ok(manager)
 }
@@ -272,6 +291,7 @@ pub fn list(project_root: &Path) -> Result<()> {
     if !plugin_dirs_exist(project_root) {
         println!("{} No plugins installed.", "📦".yellow());
         println!("   Install plugins with: prog plugin install <name>");
+        println!("   (installs into .progit/plugins/ by default)");
         return Ok(());
     }
 
@@ -301,13 +321,14 @@ pub fn list(project_root: &Path) -> Result<()> {
 }
 
 /// Install a plugin
-pub fn install(
+pub(crate) fn install(
     project_root: &Path,
     name: &str,
     version: Option<&str>,
     git_url: Option<&str>,
+    scope: PluginInstallScope,
 ) -> Result<()> {
-    let plugin_dir = project_root.join("plugins");
+    let plugin_dir = plugin_dir_for_scope(project_root, scope);
     std::fs::create_dir_all(&plugin_dir)?;
 
     let source = if let Some(url) = git_url {
@@ -456,8 +477,16 @@ pub fn update(project_root: &Path, name: Option<&str>) -> Result<()> {
                     manifest.version.green()
                 );
                 // Re-install with new version
+                let scope = plugin_install_scope_for_name(project_root, plugin_name)
+                    .unwrap_or(PluginInstallScope::User);
                 remove(project_root, plugin_name)?;
-                install(project_root, plugin_name, Some(&manifest.version), None)?;
+                install(
+                    project_root,
+                    plugin_name,
+                    Some(&manifest.version),
+                    None,
+                    scope,
+                )?;
                 updated += 1;
             } else {
                 println!(
@@ -569,7 +598,7 @@ pub fn new_plugin(project_root: &Path, name: &str, author: Option<&str>) -> Resu
         );
     }
 
-    let target_dir = project_root.join("plugins").join(name);
+    let target_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project).join(name);
     if target_dir.exists() {
         anyhow::bail!("plugins/{} already exists", name);
     }
@@ -610,7 +639,7 @@ pub fn new_plugin(project_root: &Path, name: &str, author: Option<&str>) -> Resu
     );
     println!();
     println!("  Next steps:");
-    println!("    1. Edit plugins/{}/main.lua", name);
+    println!("    1. Edit plugins/{}/main.lua (project plugins)", name);
     println!(
         "    2. Edit plugins/{}/.progit-plugin.json (capabilities, hooks)",
         name
@@ -701,6 +730,36 @@ mod tests {
             .find(|plugin| plugin.name == "user-plugin")
             .unwrap_or_else(|| panic!("missing user plugin"));
         assert_eq!(user.scope, PluginInstallScope::User);
+    }
+
+    #[test]
+    fn plugin_scope_paths_are_stable() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_root = temp.path();
+
+        let user_dir = plugin_dir_for_scope(project_root, PluginInstallScope::User);
+        let project_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project);
+
+        assert_eq!(user_dir, project_root.join(".progit").join("plugins"));
+        assert_eq!(project_dir, project_root.join("plugins"));
+    }
+
+    #[test]
+    fn plugin_install_scope_prefers_user_when_both_install_locations_match() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_root = temp.path();
+
+        let user_dir = plugin_dir_for_scope(project_root, PluginInstallScope::User);
+        let project_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project);
+        fs::create_dir_all(&user_dir).unwrap();
+        fs::create_dir_all(&project_dir).unwrap();
+
+        fs::write(user_dir.join("shared.lua"), "return {}").unwrap();
+        fs::write(project_dir.join("shared.lua"), "return {}").unwrap();
+
+        let scope = plugin_install_scope_for_name(project_root, "shared")
+            .unwrap_or_else(|| panic!("expected a scope"));
+        assert_eq!(scope, PluginInstallScope::User);
     }
 
     #[test]

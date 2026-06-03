@@ -24,18 +24,28 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
             plugin_cli::list(&project_root)?;
         }
 
-        PluginAction::Install { name, version, git } => {
+        PluginAction::Install {
+            name,
+            version,
+            git,
+            project,
+        } => {
             use crate::plugins::cli as plugin_cli;
 
             let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let scope = if project {
+                crate::plugins::cli::PluginInstallScope::Project
+            } else {
+                crate::plugins::cli::PluginInstallScope::User
+            };
 
             // Use the registry system from plugins::cli
             if git {
                 // Git URL installation
-                plugin_cli::install(&project_root, &name, version.as_deref(), Some(&name))?;
+                plugin_cli::install(&project_root, &name, version.as_deref(), Some(&name), scope)?;
             } else {
                 // Try registry first
-                match plugin_cli::install(&project_root, &name, version.as_deref(), None) {
+                match plugin_cli::install(&project_root, &name, version.as_deref(), None, scope) {
                     Ok(()) => {}
                     Err(_) => {
                         // Fall back to local file installation
@@ -52,10 +62,10 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
                             .with_context(|| format!("Failed to load plugin from {}", name))?;
                         let meta = plugin.metadata();
 
-                        // Create plugins directory if needed
+                        // Create legacy install directory if needed
                         std::fs::create_dir_all(&local_plugins)?;
 
-                        // Copy to plugins directory
+                        // Copy to .progit/plugins
                         let dest = local_plugins.join(format!("{}.lua", meta.name));
                         std::fs::copy(&source_path, &dest)
                             .with_context(|| "Failed to copy plugin")?;

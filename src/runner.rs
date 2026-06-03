@@ -122,7 +122,8 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
     app.repo_info = detect_repo(&cwd)?;
 
     // ─── Plugin Loading ────────────────────────────────────────────────────────
-    // Load plugins from plugins/ (repo) and .progit/plugins/ (user-installed)
+    // Load plugins from repo plugins/ (legacy project-scoped) and
+    // .progit/plugins/ (default user-installed).
     {
         use progit_plugin_sdk::prelude::PluginContext;
 
@@ -135,7 +136,7 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
 
         let mut plugin_manager = crate::plugins::PluginManager::new(&project_root);
 
-        // Load from repo plugins/ directory
+        // Load project-scoped plugins (legacy path)
         match plugin_manager.load_all(&context) {
             Ok(count) if count > 0 => {
                 log::info!("🔌 Loaded {} repo plugin(s)", count);

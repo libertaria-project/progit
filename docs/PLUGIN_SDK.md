@@ -93,7 +93,7 @@ return plugin
 ### 2. Install Plugin
 
 ```bash
-# Copy to plugins directory
+# Copy plugin into ProGit plugin folder
 mkdir -p ~/.progit/plugins/
 cp my-plugin.lua ~/.progit/plugins/
 

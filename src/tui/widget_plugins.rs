@@ -162,7 +162,7 @@ pub fn render(frame: &mut Frame, app: &App) {
             ]));
             lines.push(Line::from(""));
             lines.push(Line::from(vec![Span::styled(
-                "Plugins can be installed in plugins/ and .progit/plugins/ as .lua files or directories.",
+                "Plugins install to ~/.progit/plugins by default. Use --project for project-local plugins.",
                 colors.dim(),
             )]));
         }

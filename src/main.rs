@@ -148,6 +148,9 @@ pub(crate) enum PluginAction {
         /// Install from git URL directly
         #[arg(long)]
         git: bool,
+        /// Install into the current project under plugins/ (legacy behavior)
+        #[arg(long)]
+        project: bool,
     },
     /// Remove an installed plugin
     Remove {
