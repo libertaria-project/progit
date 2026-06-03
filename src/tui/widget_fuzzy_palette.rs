@@ -37,7 +37,7 @@ pub fn render(frame: &mut Frame, app: &App, colors: &ThemeColors) -> Rect {
 
     // Render input box
     let input_text = if app.fuzzy_query.is_empty() {
-        "Type to search issues, project views, plugins, commands, files, commits..."
+        "Type to search issues (cross-repo), project views, plugins, commands, files, commits..."
     } else {
         &app.fuzzy_query
     };

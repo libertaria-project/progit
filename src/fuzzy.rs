@@ -36,6 +36,8 @@ pub enum FuzzyItem {
         id: String,
         title: String,
         status: String,
+        /// Source repository name (None = current repo)
+        repo: Option<String>,
     },
     /// Command match
     Command {
@@ -44,12 +46,19 @@ pub enum FuzzyItem {
         action: String,
     },
     /// File match
-    File { path: String, modified: bool },
+    File {
+        path: String,
+        modified: bool,
+        /// Source repository name (None = current repo)
+        repo: Option<String>,
+    },
     /// Commit match
     Commit {
         hash: String,
         message: String,
         author: String,
+        /// Source repository name (None = current repo)
+        repo: Option<String>,
     },
 }
 
@@ -57,19 +66,24 @@ impl FuzzyItem {
     /// Get display text for this item
     pub fn display_text(&self) -> String {
         match self {
-            FuzzyItem::Issue { id, title, .. } => format!("#{} {}", &id[..8.min(id.len())], title),
+            FuzzyItem::Issue { id, title, repo, .. } => {
+                let prefix = repo.as_ref().map(|r| format!("[{r}] ")).unwrap_or_default();
+                format!("{}#{} {}", prefix, &id[..8.min(id.len())], title)
+            }
             FuzzyItem::Command {
                 name, description, ..
             } => format!("{}: {}", name, description),
-            FuzzyItem::File { path, modified } => {
+            FuzzyItem::File { path, modified, repo } => {
+                let prefix = repo.as_ref().map(|r| format!("[{r}] ")).unwrap_or_default();
                 if *modified {
-                    format!("* {}", path)
+                    format!("{}* {}", prefix, path)
                 } else {
-                    path.clone()
+                    format!("{}{}", prefix, path)
                 }
             }
-            FuzzyItem::Commit { hash, message, .. } => {
-                format!("{} {}", &hash[..7.min(hash.len())], message)
+            FuzzyItem::Commit { hash, message, repo, .. } => {
+                let prefix = repo.as_ref().map(|r| format!("[{r}] ")).unwrap_or_default();
+                format!("{}{} {}", prefix, &hash[..7.min(hash.len())], message)
             }
         }
     }
@@ -77,8 +91,20 @@ impl FuzzyItem {
     /// Get secondary text (subtitle) for this item
     pub fn secondary_text(&self) -> Option<String> {
         match self {
-            FuzzyItem::Issue { status, .. } => Some(status.clone()),
-            FuzzyItem::Commit { author, .. } => Some(author.clone()),
+            FuzzyItem::Issue { status, repo, .. } => {
+                if let Some(r) = repo {
+                    Some(format!("{} in {}", status, r))
+                } else {
+                    Some(status.clone())
+                }
+            }
+            FuzzyItem::Commit { author, repo, .. } => {
+                if let Some(r) = repo {
+                    Some(format!("{} in {}", author, r))
+                } else {
+                    Some(author.clone())
+                }
+            }
             _ => None,
         }
     }
@@ -96,7 +122,7 @@ impl FuzzyItem {
 
 /// Fuzzy search engine
 pub struct FuzzySearcher {
-    /// Cached issue matches
+    /// Cached issue matches (current repo)
     issues: Vec<FuzzyItem>,
     /// Cached command matches
     commands: Vec<FuzzyItem>,
@@ -104,6 +130,8 @@ pub struct FuzzySearcher {
     files: Vec<FuzzyItem>,
     /// Cached commit matches
     commits: Vec<FuzzyItem>,
+    /// Cached issue matches from nearby repos
+    cross_repo_issues: Vec<FuzzyItem>,
 }
 
 impl FuzzySearcher {
@@ -114,7 +142,73 @@ impl FuzzySearcher {
             commands: Self::build_command_list(),
             files: Vec::new(),
             commits: Vec::new(),
+            cross_repo_issues: Vec::new(),
         }
+    }
+
+    /// Scan parent directories for other git repos and load their issues.
+    /// Designed to be fast: max depth 2, max 20 repos, cached after first call.
+    pub fn scan_cross_repo_issues(&mut self, base_dir: &std::path::Path, current_repo_name: &str) {
+        let mut found = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        // Walk up to 2 levels of parents from base_dir
+        for depth in 0..=2 {
+            let base = if depth == 0 {
+                base_dir.to_path_buf()
+            } else {
+                base_dir.ancestors().nth(depth).unwrap_or(base_dir).to_path_buf()
+            };
+
+            if let Ok(entries) = std::fs::read_dir(&base) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if !path.is_dir() {
+                        continue;
+                    }
+                    // Skip current repo
+                    let repo_name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    if repo_name == current_repo_name {
+                        continue;
+                    }
+                    // Skip non-git directories
+                    if !path.join(".git").exists() {
+                        continue;
+                    }
+                    if !seen.insert(path.clone()) {
+                        continue;
+                    }
+
+                    // Try to load issues from .project/issues.json
+                    let issues_path = path.join(".project").join("issues.json");
+                    if let Ok(content) = std::fs::read_to_string(&issues_path) {
+                        if let Ok(issues) = serde_json::from_str::<Vec<Issue>>(&content) {
+                            for issue in issues {
+                                found.push(FuzzyItem::Issue {
+                                    id: issue.id,
+                                    title: issue.title,
+                                    status: issue.status.as_str().to_string(),
+                                    repo: Some(repo_name.to_string()),
+                                });
+                            }
+                        }
+                    }
+
+                    if found.len() >= 500 {
+                        break; // Cap total cross-repo issues
+                    }
+                }
+            }
+
+            if found.len() >= 500 {
+                break;
+            }
+        }
+
+        self.cross_repo_issues = found;
     }
 
     /// Update issue cache
@@ -125,6 +219,7 @@ impl FuzzySearcher {
                 id: issue.id.clone(),
                 title: issue.title.clone(),
                 status: issue.status.as_str().to_string(),
+                repo: None,
             })
             .collect();
     }
@@ -133,7 +228,7 @@ impl FuzzySearcher {
     pub fn update_files(&mut self, files: Vec<(String, bool)>) {
         self.files = files
             .into_iter()
-            .map(|(path, modified)| FuzzyItem::File { path, modified })
+            .map(|(path, modified)| FuzzyItem::File { path, modified, repo: None })
             .collect();
     }
 
@@ -145,6 +240,7 @@ impl FuzzySearcher {
                 hash,
                 message,
                 author,
+                repo: None,
             })
             .collect();
     }
@@ -340,6 +436,13 @@ impl FuzzySearcher {
 
         // Search commits
         for item in &self.commits {
+            if let Some(m) = Self::fuzzy_match(query, item) {
+                matches.push(m);
+            }
+        }
+
+        // Search cross-repo issues
+        for item in &self.cross_repo_issues {
             if let Some(m) = Self::fuzzy_match(query, item) {
                 matches.push(m);
             }

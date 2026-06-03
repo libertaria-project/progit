@@ -157,6 +157,17 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
         app.fuzzy_searcher.update_plugin_commands(&project_root);
     }
 
+    // ─── Cross-Repo Fuzzy Scan ────────────────────────────────────────────────
+    {
+        let current_repo_name = project_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        let base_dir = project_root.parent().unwrap_or_else(|| std::path::Path::new("."));
+        app.fuzzy_searcher
+            .scan_cross_repo_issues(base_dir, current_repo_name);
+    }
+
     // ─── Panopticum Integration ───────────────────────────────────────────────
     app.repo_path = project_root.clone();
     app.is_panopticum_repo = crate::panopticum::is_panopticum_repo(&project_root);

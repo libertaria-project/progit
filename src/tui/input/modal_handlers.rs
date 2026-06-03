@@ -604,7 +604,25 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
             if let Some(result) = results.get(app.fuzzy_selected) {
                 use crate::fuzzy::FuzzyItem;
                 match &result.item {
-                    FuzzyItem::Issue { id, .. } => {
+                    FuzzyItem::Issue { id, repo, .. } => {
+                        let current_repo = app
+                            .repo_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("");
+                        if let Some(repo_name) = repo {
+                            if repo_name != current_repo {
+                                // Cross-repo issue: show read-only preview
+                                if let Some(preview) =
+                                    build_cross_repo_preview(&app.repo_path, repo_name, id)
+                                {
+                                    app.command_output = Some(preview);
+                                    app.command_output_scroll = 0;
+                                }
+                                app.input_mode = InputMode::Normal;
+                                return KeyAction::Refresh;
+                            }
+                        }
                         app.open_detail(id);
                         app.input_mode = InputMode::Normal;
                     }
@@ -1124,6 +1142,67 @@ pub(super) fn handle_detail_edit_key(app: &mut App, key: KeyEvent) -> KeyAction 
         }
         _ => KeyAction::None,
     }
+}
+
+/// Build a read-only preview of an issue from another repo
+fn build_cross_repo_preview(
+    current_repo_path: &std::path::Path,
+    repo_name: &str,
+    issue_id: &str,
+) -> Option<crate::tui::app::CommandOutput> {
+    // Search for the repo by walking up to 2 levels of parents
+    let mut repo_path = None;
+    for depth in 0..=2 {
+        let base = if depth == 0 {
+            current_repo_path.parent()?.to_path_buf()
+        } else {
+            current_repo_path
+                .ancestors()
+                .nth(depth)
+                .map(|p| p.to_path_buf())?
+        };
+        let candidate = base.join(repo_name);
+        if candidate.is_dir() && candidate.join(".git").exists() {
+            repo_path = Some(candidate);
+            break;
+        }
+    }
+    let repo_path = repo_path?;
+
+    let issues_path = repo_path.join(".project").join("issues.json");
+    let content = std::fs::read_to_string(&issues_path).ok()?;
+    let issues: Vec<crate::issue::Issue> = serde_json::from_str(&content).ok()?;
+    let issue = issues.iter().find(|i| i.id == issue_id)?;
+
+    let tags = if issue.tags.is_empty() {
+        "-".to_string()
+    } else {
+        issue.tags.join(", ")
+    };
+    let description = if issue.description.is_empty() {
+        "(no description)"
+    } else {
+        &issue.description
+    };
+    let body = format!(
+        "📁 Repository: {}\n🆔 ID: {}\n📌 Status: {}\n🏷️  Tags: {}\n👤 Assignee: {}\n\n{}\n\n[Read-only preview — switch to {} to edit]",
+        repo_name,
+        issue.id,
+        issue.status.as_str(),
+        tags,
+        issue.assignee.as_deref().unwrap_or("-"),
+        description,
+        repo_name
+    );
+
+    Some(crate::tui::app::CommandOutput {
+        command: format!("cross-repo preview: {}/{}", repo_name, issue_id),
+        status: "preview".to_string(),
+        stdout: body,
+        stderr: String::new(),
+        success: true,
+        title: Some(format!("📁 {} — {}", repo_name, issue.title)),
+    })
 }
 
 /// Handle keys in settings pane
