@@ -96,6 +96,7 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                                 stdout: String::from_utf8_lossy(&output.stdout).to_string(),
                                 stderr: String::from_utf8_lossy(&output.stderr).to_string(),
                                 success,
+                                title: None,
                             }
                         }
                         Err(e) => crate::tui::app::CommandOutput {
@@ -104,6 +105,7 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             stdout: String::new(),
                             stderr: String::new(),
                             success: false,
+                            title: None,
                         },
                     };
 
@@ -152,6 +154,7 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                                     error.unwrap_or_default()
                                 },
                                 success: result.success,
+                                title: None,
                             }
                         }
                         Ok(None) => {
@@ -184,6 +187,7 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                                         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
                                         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
                                         success,
+                                title: None,
                                     }
                                 }
                                 Err(err) => crate::tui::app::CommandOutput {
@@ -195,6 +199,7 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                                     stdout: String::new(),
                                     stderr: String::new(),
                                     success: false,
+                                    title: None,
                                 },
                             }
                         }
@@ -204,6 +209,7 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                             stdout: String::new(),
                             stderr: String::new(),
                             success: false,
+                            title: None,
                         },
                     };
 

@@ -252,23 +252,42 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
                         // app.set_status(format!("🤖 Typing... {}", token)); // Too noisy
                     }
                     AgentEvent::Completed(id, response) => {
-                        app.set_status("🤖 Agent finished! Applying changes...");
+                        use crate::tui::app::AgentMode;
+                        match app.agent_mode {
+                            AgentMode::Review => {
+                                app.command_output = Some(crate::tui::app::CommandOutput {
+                                    command: "AI Diff Review".to_string(),
+                                    status: "Completed".to_string(),
+                                    stdout: response,
+                                    stderr: String::new(),
+                                    success: true,
+                                    title: Some(" 🤖 AI Diff Review ".to_string()),
+                                });
+                                app.command_output_scroll = 0;
+                                app.input_mode = crate::tui::app::InputMode::CommandOutput;
+                                app.agent_mode = AgentMode::Patch; // Reset
+                                app.set_status("🤖 Review complete — Press Enter to close");
+                            }
+                            AgentMode::Patch => {
+                                app.set_status("🤖 Agent finished! Applying changes...");
 
-                        if let Some(manager) = &mut app.vbranch_manager {
-                            use crate::agent::ops::apply_agent_patch;
-                            match apply_agent_patch(manager, &id, &response) {
-                                Ok(count) => {
-                                    app.set_status(format!(
-                                        "✅ Agent applied {} new hunk(s)",
-                                        count
-                                    ));
-                                }
-                                Err(e) => {
-                                    log::error!("Agent apply error: {}", e);
-                                    app.set_status(format!(
-                                        "❌ Failed to apply agent patch: {}",
-                                        e
-                                    ));
+                                if let Some(manager) = &mut app.vbranch_manager {
+                                    use crate::agent::ops::apply_agent_patch;
+                                    match apply_agent_patch(manager, &id, &response) {
+                                        Ok(count) => {
+                                            app.set_status(format!(
+                                                "✅ Agent applied {} new hunk(s)",
+                                                count
+                                            ));
+                                        }
+                                        Err(e) => {
+                                            log::error!("Agent apply error: {}", e);
+                                            app.set_status(format!(
+                                                "❌ Failed to apply agent patch: {}",
+                                                e
+                                            ));
+                                        }
+                                    }
                                 }
                             }
                         }

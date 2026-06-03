@@ -33,6 +33,7 @@ pub fn render(frame: &mut Frame, app: &App) {
         ])
         .split(area);
 
+    let title = output.title.as_deref().unwrap_or(" Command Output ");
     let header = Paragraph::new(vec![
         Line::from(vec![
             Span::styled("Command: ", colors.dim()),
@@ -52,7 +53,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     ])
     .block(
         Block::default()
-            .title(" Command Output ")
+            .title(title)
             .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
             .border_type(BorderType::Rounded)
             .border_style(border_style),

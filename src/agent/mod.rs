@@ -38,12 +38,17 @@ pub struct AgentRequest {
 impl Default for AgentRequest {
     fn default() -> Self {
         Self {
-            model: "deepseek-coder".to_string(),
+            model: default_model(),
             prompt: "".to_string(),
             system_prompt: None,
             temperature: 0.7,
         }
     }
+}
+
+/// Read the preferred model from `$OLLAMA_MODEL` or fall back to `deepseek-coder`.
+pub fn default_model() -> String {
+    std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "deepseek-coder".to_string())
 }
 
 /// Trait for LLM backends

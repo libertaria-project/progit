@@ -63,6 +63,14 @@ pub struct AuthNotice {
     pub message: String,
 }
 
+/// How the TUI should treat an agent response when it completes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AgentMode {
+    #[default]
+    Patch,  // Apply response as a git patch (existing behaviour)
+    Review, // Display response as read-only review text
+}
+
 /// Captured output from a TUI command invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandOutput {
@@ -71,6 +79,8 @@ pub struct CommandOutput {
     pub stdout: String,
     pub stderr: String,
     pub success: bool,
+    /// Optional override for the modal title (e.g. "🤖 AI Diff Review")
+    pub title: Option<String>,
 }
 
 /// Mouse drag state
@@ -131,6 +141,9 @@ pub struct App {
 
     /// Time when status message was set (for auto-clear)
     pub status_message_time: Option<std::time::Instant>,
+
+    /// Current agent execution mode (determines how the response is handled)
+    pub agent_mode: AgentMode,
 
     /// Authentication notice raised by non-interactive sync providers
     pub auth_notice: Option<AuthNotice>,
@@ -366,6 +379,7 @@ impl App {
             // Agent
             agent_event_tx: None,
             agent_event_rx: None,
+            agent_mode: AgentMode::default(),
             show_conflicts: false,
             show_agent_menu: false,
             agent_menu_selected: 0,

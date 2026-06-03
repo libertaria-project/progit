@@ -274,6 +274,11 @@ pub(super) fn handle_diff_key(app: &mut App, key: KeyEvent) -> KeyAction {
             app.edit_buffer.clear();
             KeyAction::Refresh
         }
+        // AI Diff Review (offline Ollama)
+        KeyCode::Char('a') => {
+            crate::tui::agent_executor::execute_diff_review(app);
+            KeyAction::Refresh
+        }
         _ => KeyAction::None,
     }
 }
