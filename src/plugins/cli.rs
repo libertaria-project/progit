@@ -217,30 +217,52 @@ fn print_command_result(command: &str, result: CommandResult) -> Result<()> {
 /// Returns `Ok(false)` when no installed plugin owns the command. If a plugin
 /// owns the command and fails, this returns an error instead of falling back to
 /// a built-in implementation.
-pub fn try_run_command(project_root: &Path, command: &str, args: &[String]) -> Result<bool> {
+pub fn try_run_command_capture(
+    project_root: &Path,
+    command: &str,
+    args: &[String],
+) -> Result<Option<CommandResult>> {
     if !plugin_dirs_exist(project_root) {
-        return Ok(false);
+        return Ok(None);
     }
 
     let mut manager = load_command_manager(project_root, command)?;
     let Some(result) = manager.dispatch_command(command, args) else {
-        return Ok(false);
+        return Ok(None);
     };
 
-    print_command_result(command, result)?;
-    Ok(true)
+    Ok(Some(result))
+}
+
+pub fn try_run_command(project_root: &Path, command: &str, args: &[String]) -> Result<bool> {
+    Ok(try_run_command_capture(project_root, command, args)?.is_some())
+}
+
+/// Run an installed plugin command and return the execution result.
+///
+/// This keeps plugin output available to callers that need structured data
+/// (like TUI command output modal), while preserving the existing CLI
+/// behavior that prints to stdout.
+pub fn run_command_capture(
+    project_root: &Path,
+    command: &str,
+    args: &[String],
+) -> Result<CommandResult> {
+    match try_run_command_capture(project_root, command, args)? {
+        Some(result) => Ok(result),
+        None => anyhow::bail!(
+            "No installed plugin handled command '{}'. Try: prog plugin list",
+            command
+        ),
+    }
 }
 
 /// Run an installed plugin command and fail if no plugin handles it.
 pub fn run_command(project_root: &Path, command: &str, args: &[String]) -> Result<()> {
-    if try_run_command(project_root, command, args)? {
-        return Ok(());
-    }
+    let result = run_command_capture(project_root, command, args)?;
+    print_command_result(command, result)?;
 
-    anyhow::bail!(
-        "No installed plugin handled command '{}'. Try: prog plugin list",
-        command
-    )
+    Ok(())
 }
 
 /// List installed plugins

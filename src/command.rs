@@ -10,6 +10,7 @@ pub enum CommandAction {
     Error(String),
     SuspendAndRun(Vec<String>),
     RunAndShowOutput(Vec<String>),
+    RunPluginCommand { command: String, args: Vec<String> },
 }
 
 pub fn execute(app: &mut App, input: &str) -> CommandAction {
@@ -187,10 +188,15 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
             Ok(args) => CommandAction::RunAndShowOutput(args),
             Err(e) => CommandAction::Error(e.to_string()),
         },
-        "plugin" => match crate::plugins::cli::tui_command_args(&parts[1..]) {
-            Ok(args) => CommandAction::RunAndShowOutput(args),
-            Err(e) => CommandAction::Error(e.to_string()),
-        },
+        "plugin" => {
+            if parts.len() < 2 {
+                CommandAction::Error("Usage: :plugin <command> [args...]".to_string())
+            } else {
+                let command = parts[1].to_string();
+                let args = parts[2..].iter().map(|s| (*s).to_string()).collect();
+                CommandAction::RunPluginCommand { command, args }
+            }
+        }
         "review" => {
             // Enter code review mode
             if parts.len() < 2 {

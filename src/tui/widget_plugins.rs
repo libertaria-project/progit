@@ -162,7 +162,7 @@ pub fn render(frame: &mut Frame, app: &App) {
             ]));
             lines.push(Line::from(""));
             lines.push(Line::from(vec![Span::styled(
-                "Plugins live in .project/plugins/ as .lua files or directories.",
+                "Plugins can be installed in plugins/ and .progit/plugins/ as .lua files or directories.",
                 colors.dim(),
             )]));
         }
