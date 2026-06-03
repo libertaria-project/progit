@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: LCL-1.0
 // Copyright (c) 2025 Markus Maiwald
 
 //! Ollama Client

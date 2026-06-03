@@ -470,4 +470,4 @@ prog
 
 ## License
 
-Same as ProGit: EUPL-1.2
+Same as ProGit: LCL-1.0

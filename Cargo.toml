@@ -61,7 +61,7 @@ crystals-dilithium = "=2.0.0"
 # Marketplace (Hinge)
 rand = "0.8"
 
-# Plugin SDK (Apache 2.0 - separate license)
+# Plugin SDK (LSL-1.0 - separate license)
 progit-plugin-sdk = "0.2.1"
 tempfile = "3.23.0"
 mlua = { version = "0.11.5", features = ["luajit", "vendored", "send"] }

@@ -44,7 +44,7 @@ use crate::storage::paths;
 /// ProGit - Lean Git Issue Tracker
 #[derive(Parser)]
 #[command(name = "prog")]
-#[command(version)]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), "\nLicense: LCL-1.0 (The Libertaria Commonwealth License v1.0)"))]
 #[command(about = "Terminal cockpit for developers, sync bridge to the cloud", long_about = None)]
 struct Cli {
     #[command(subcommand)]

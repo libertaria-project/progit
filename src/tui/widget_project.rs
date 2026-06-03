@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: EUPL-1.2
+// SPDX-License-Identifier: LCL-1.0
 // Copyright (c) 2026 Markus Maiwald
 
 //! Read-only project wiki and issue overlays.

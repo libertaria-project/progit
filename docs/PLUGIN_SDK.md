@@ -1,6 +1,6 @@
 # ProGit Plugin SDK
 
-**License:** Apache-2.0 (allows proprietary plugins)
+**License:** LSL-1.0 (Libertaria Sovereign License — allows proprietary plugins)
 
 ## Overview
 
@@ -60,7 +60,7 @@ plugin.metadata = {
     version = "1.0.0",
     description = "My awesome plugin",
     author = "Your Name",
-    license = "Apache-2.0"
+    license = "LSL-1.0"
 }
 
 function plugin:on_load()
@@ -122,7 +122,7 @@ plugin.metadata = {
     version = "1.0.0",        -- Semantic version
     description = "...",      -- Short description
     author = "Your Name",     -- Author
-    license = "Apache-2.0"    -- License (can be proprietary)
+    license = "LSL-1.0"    -- License (can be proprietary, but attribution required)
 }
 ```
 
@@ -299,7 +299,7 @@ return plugin
 2. **Handle errors gracefully** - Return descriptive error messages
 3. **Document configuration** - Provide examples
 4. **Test thoroughly** - Use ProGit's test mode
-5. **License appropriately** - Apache-2.0 or MIT recommended for community plugins
+5. **License appropriately** - LSL-1.0, Apache-2.0, or MIT recommended for community plugins
 
 ## Publishing Plugins
 
@@ -368,7 +368,7 @@ fs.write_file("~/.progit/output.txt", "content")
 
 ## License
 
-Plugin SDK: **Apache-2.0** (allows commercial plugins)  
-Core ProGit: **EUPL-1.2** (copyleft)
+Plugin SDK: **LSL-1.0** (allows commercial plugins)  
+Core ProGit: **LCL-1.0** (copyleft)
 
-You can write proprietary plugins - the Apache-2.0 SDK license permits this.
+You can write proprietary plugins - the LSL-1.0 SDK license permits this.

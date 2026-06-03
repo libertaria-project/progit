@@ -80,7 +80,7 @@ progit/
 ├── src/
 │   ├── main.rs              # Entry point
 │   ├── lib.rs               # Library exports
-│   ├── tui/                 # Terminal UI (EUPL-1.2)
+│   ├── tui/                 # Terminal UI (LCL-1.0)
 │   │   ├── app.rs           # Application state
 │   │   ├── input.rs         # Keyboard/mouse handling
 │   │   ├── widget_*.rs      # UI components
@@ -89,7 +89,7 @@ progit/
 │   ├── agent/               # AI integration
 │   │   ├── context.rs       # Context gathering
 │   │   └── ollama.rs        # Ollama client
-│   ├── plugins/             # Plugin system (Apache-2.0)
+│   ├── plugins/             # Plugin system (LSL-1.0)
 │   │   ├── sdk.rs           # Plugin SDK traits
 │   │   └── lua_engine.rs    # LuaJIT runtime (WIP)
 │   ├── storage/             # Data persistence

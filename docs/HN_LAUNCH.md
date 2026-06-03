@@ -16,7 +16,7 @@ ProGit lets you work on multiple features simultaneously without traditional Git
 
 **Binary size:** 5MB (vs GitButler's ~200MB)  
 **Cold start:** <100ms  
-**License:** EUPL-1.2 (core) + Apache-2.0 (plugins)
+**License:** LCL-1.0 (core) + LSL-1.0 (plugins)
 
 ## Why I built this
 
@@ -65,14 +65,14 @@ Select action:
 - Non-blocking execution (background threads)
 
 **Plugin System:**
-- Apache 2.0 licensed SDK (allows commercial plugins)
+- LSL-1.0 licensed SDK (allows commercial plugins)
 - LuaJIT runtime (~2MB binary impact)
 - Event system (IssueCreated, CommitCreated, etc.)
 - Example plugin: auto-tagger (keywords → tags)
 
 **Architecture:**
 ```
-TUI (EUPL) → Plugin SDK (Apache) → Data (JSON in repo)
+TUI (LCL-1.0) → Plugin SDK (LSL-1.0) → Data (JSON in repo)
 ```
 
 This license firewall lets the core stay copyleft while allowing proprietary plugins.
@@ -84,7 +84,7 @@ This license firewall lets the core stay copyleft while allowing proprietary plu
 - <100ms vs ~2s cold start
 - ✅ AI built-in (GitButler: no)
 - ✅ Plugin system (GitButler: no)
-- EUPL vs Proprietary
+- LCL-1.0 vs Proprietary
 
 **vs GitHub CLI:**
 - ✅ Virtual branches (gh: no)
@@ -132,7 +132,7 @@ GitHub: [github.com/yourusername/progit](https://github.com/yourusername/progit)
 **Why "ProGit"?**  
 Professional Git. Programmable Git. Progressive Git. Take your pick.
 
-**Why EUPL?**  
+**Why LCL-1.0?**  
 Strong copyleft (like AGPL) but EU-friendly and compatible with GPL.
 
 **Why LuaJIT for plugins?**  
@@ -145,8 +145,8 @@ Similar power-user focus, but:
 - ✅ Standalone binary (Magit: requires Emacs)
 
 **Monetization plan?**  
-- Core: Free forever (EUPL)
-- Plugins: Apache 2.0 (commercial OK)
+- Core: Free forever (LCL-1.0)
+- Plugins: LSL-1.0 (commercial OK)
 - Future: Cloud sync SaaS, Enterprise support
 
 ---
