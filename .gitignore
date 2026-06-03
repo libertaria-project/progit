@@ -71,7 +71,7 @@ node_modules/
 .progit/
 .project/config.kdl
 # Legacy repo-local plugin directory (defaults are now .progit/plugins/)
-plugins/
+/plugins/
 
 
 # Agent / AI operational dirs
