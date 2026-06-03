@@ -20,6 +20,7 @@ AUR_REPO_DIR="${AUR_REPO_DIR:-$HOME/.cache/progit-aur/progit-bin}"
 AUR_REPO_BRANCH="${AUR_REPO_BRANCH:-master}"
 SKIP_AUR_UPDATE="${SKIP_AUR_UPDATE:-false}"
 AUR_UPDATE_STRICT="${AUR_UPDATE_STRICT:-false}"
+AUR_ONLY_TAGGED_RELEASE="${AUR_ONLY_TAGGED_RELEASE:-true}"
 
 # Path helpers
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,6 +52,11 @@ is_true() {
             return 1
             ;;
     esac
+}
+
+is_tagged_release() {
+    local tag="$1"
+    git describe --tags --exact-match "$tag" >/dev/null 2>&1
 }
 
 update_aur_package() {
@@ -256,18 +262,24 @@ git push origin "${INTEGRATION_BRANCH}"
 git push origin "${RELEASE_BRANCH}"
 git push origin "v${VERSION}"
 
+# Only publish to AUR for actual tagged releases unless explicitly overridden.
+if is_true "$AUR_ONLY_TAGGED_RELEASE" && ! is_tagged_release "v${VERSION}"; then
+    echo -e "${YELLOW}⏭️  Skipping AUR publish because HEAD does not point at v${VERSION} tag."
+    echo -e "   Set AUR_ONLY_TAGGED_RELEASE=false to force update on non-tagged runs.${NC}"
+else
+    echo -e "${BLUE}📦 Syncing progit-bin AUR package...${NC}"
+    if ! update_aur_package; then
+        echo -e "${RED}❌ Release script cannot continue because AUR publish failed.${NC}"
+        exit 1
+    fi
+fi
+
 # Return to main
 echo -e "${BLUE}📝 Returning to ${INTEGRATION_BRANCH} branch...${NC}"
 git checkout "${INTEGRATION_BRANCH}"
 
 echo -e "${BLUE}🔗 Linking release binary to ~/bin/prog...${NC}"
 bash ./scripts/link-user-bin.sh target/release/prog
-
-echo -e "${BLUE}📦 Syncing progit-bin AUR package...${NC}"
-if ! update_aur_package; then
-    echo -e "${RED}❌ Release script cannot continue because AUR publish failed.${NC}"
-    exit 1
-fi
 
 echo ""
 echo -e "${GREEN}🎉 Release v${VERSION} completed successfully!${NC}"

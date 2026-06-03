@@ -53,7 +53,9 @@ sovereign hosting ships as the separate `progit-forged` sidecar daemon.
    It also updates the `progit-bin` AUR package from `aur/PKGBUILD` by default.
    Requires Arch `makepkg` and writable SSH access to:
    `ssh://aur@aur.archlinux.org/progit-bin.git`.
+   By default, AUR sync only runs for a tagged release commit (`AUR_ONLY_TAGGED_RELEASE=true`).
    - `SKIP_AUR_UPDATE=true` to skip the package publish.
+   - `AUR_ONLY_TAGGED_RELEASE=false` to allow non-tagged runs to publish.
    - `AUR_REPO_DIR` to override local clone location.
    - `AUR_UPDATE_STRICT=true` to fail the release if AUR push fails.
 3. The push of a `v*` tag triggers `.forgejo/workflows/release.yml`, which:
