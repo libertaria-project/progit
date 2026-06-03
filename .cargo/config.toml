@@ -1,0 +1,4 @@
+[patch.crates-io]
+progit-plugin-sdk = { path = "../progit-plugin-sdk" }
+progit-forge-client = { path = "../progit-forge-client" }
+progit-forged = { path = "../progit-forged" }
