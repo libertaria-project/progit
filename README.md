@@ -113,7 +113,7 @@ prog plugin sober-raccoon route list
 
 ---
 
-## What’s new in 0.8.x
+## What's new in 0.8.x
 
 - Plugin commands are now command-chain-native via manifest `contributions`.
 - Sober gates are callable from ProGit for deterministic, safer release checks.

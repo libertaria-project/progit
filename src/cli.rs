@@ -20,35 +20,23 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
     match action {
         PluginAction::List => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::list(&project_root)?;
         }
 
         PluginAction::Install { name, version, git } => {
             use crate::plugins::cli as plugin_cli;
 
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
             // Use the registry system from plugins::cli
             if git {
                 // Git URL installation
-                plugin_cli::install(
-                    &project_root,
-                    &name,
-                    version.as_deref(),
-                    Some(&name),
-                )?;
+                plugin_cli::install(&project_root, &name, version.as_deref(), Some(&name))?;
             } else {
                 // Try registry first
-                match plugin_cli::install(
-                    &project_root,
-                    &name,
-                    version.as_deref(),
-                    None,
-                ) {
-                    Ok(()) => {},
+                match plugin_cli::install(&project_root, &name, version.as_deref(), None) {
+                    Ok(()) => {}
                     Err(_) => {
                         // Fall back to local file installation
                         let source_path = PathBuf::from(&name);
@@ -72,7 +60,12 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
                         std::fs::copy(&source_path, &dest)
                             .with_context(|| "Failed to copy plugin")?;
 
-                        println!("{} Installed {} v{}", "✓".green(), meta.name.green(), meta.version);
+                        println!(
+                            "{} Installed {} v{}",
+                            "✓".green(),
+                            meta.name.green(),
+                            meta.version
+                        );
                         println!("  Location: {}", dest.display());
                     }
                 }
@@ -81,36 +74,33 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
 
         PluginAction::Remove { name } => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::remove(&project_root, &name)?;
         }
 
         PluginAction::Update { name } => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::update(&project_root, name.as_deref())?;
         }
 
         PluginAction::Search { query } => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::search(&project_root, &query)?;
         }
 
         PluginAction::Info { name } => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::info(&project_root, &name)?;
         }
 
-        PluginAction::Index { action: index_action } => {
+        PluginAction::Index {
+            action: index_action,
+        } => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             match index_action {
                 IndexAction::Update => {
                     plugin_cli::index_update(&project_root)?;
@@ -120,8 +110,7 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
 
         PluginAction::New { name, author } => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::new_plugin(&project_root, &name, author.as_deref())?;
         }
         PluginAction::Verify { name } => {
@@ -129,8 +118,7 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
         }
         PluginAction::Run { command, args } => {
             use crate::plugins::cli as plugin_cli;
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::run_command(&project_root, &command, &args)?;
         }
         PluginAction::External(tokens) => {
@@ -138,8 +126,7 @@ pub(crate) fn handle_plugin_command(action: PluginAction) -> Result<()> {
             let Some((command, args)) = tokens.split_first() else {
                 return Err(anyhow!("Usage: prog plugin <command> [args...]"));
             };
-            let project_root = std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."));
+            let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             plugin_cli::run_command(&project_root, command, args)?;
         }
     }
@@ -194,10 +181,22 @@ pub(crate) fn handle_hooks_command(action: HooksAction, repo_root: &Path) -> Res
                         println!("  {} Installed {}", "✓".green(), hook.filename());
                     }
                     println!();
-                    println!("{} Hooks will auto-update issues based on commit messages:", "ℹ️".cyan());
-                    println!("  {} closes #123, fixes #123, resolves #123 → marks Done", "•".dimmed());
-                    println!("  {} refs #123, see #123, re #123 → marks In Progress", "•".dimmed());
-                    println!("  {} #123 (bare reference) → no status change", "•".dimmed());
+                    println!(
+                        "{} Hooks will auto-update issues based on commit messages:",
+                        "ℹ️".cyan()
+                    );
+                    println!(
+                        "  {} closes #123, fixes #123, resolves #123 → marks Done",
+                        "•".dimmed()
+                    );
+                    println!(
+                        "  {} refs #123, see #123, re #123 → marks In Progress",
+                        "•".dimmed()
+                    );
+                    println!(
+                        "  {} #123 (bare reference) → no status change",
+                        "•".dimmed()
+                    );
                 }
                 Err(e) => {
                     return Err(anyhow!("Failed to install hooks: {}", e));
@@ -261,10 +260,16 @@ pub(crate) fn handle_hooks_command(action: HooksAction, repo_root: &Path) -> Res
                         }
                     }
                 } else {
-                    println!("{} Usage: prog hooks validate commit-msg \"closes #123\"", "ℹ️".yellow());
+                    println!(
+                        "{} Usage: prog hooks validate commit-msg \"closes #123\"",
+                        "ℹ️".yellow()
+                    );
                 }
             } else if hook_type == "branch" {
-                println!("{} Branch validation - use git-hooks plugin for full validation", "ℹ️".cyan());
+                println!(
+                    "{} Branch validation - use git-hooks plugin for full validation",
+                    "ℹ️".cyan()
+                );
             } else {
                 println!("{} Unknown hook type: {}", "⚠️".yellow(), hook_type);
                 println!("Valid types: commit-msg, branch");

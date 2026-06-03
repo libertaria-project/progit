@@ -435,10 +435,20 @@ pub fn render_diff(
             if !hunk.collapsed {
                 for line in &hunk.lines {
                     let is_selected = current_line_idx == state.cursor_y;
-                    let left_spans = highlight_for(plugin_manager.as_deref_mut(), language, &line.left);
-                    let right_spans = highlight_for(plugin_manager.as_deref_mut(), language, &line.right);
-                    left_lines.push(render_diff_line(&line.left, is_selected, left_spans.as_deref()));
-                    right_lines.push(render_diff_line(&line.right, is_selected, right_spans.as_deref()));
+                    let left_spans =
+                        highlight_for(plugin_manager.as_deref_mut(), language, &line.left);
+                    let right_spans =
+                        highlight_for(plugin_manager.as_deref_mut(), language, &line.right);
+                    left_lines.push(render_diff_line(
+                        &line.left,
+                        is_selected,
+                        left_spans.as_deref(),
+                    ));
+                    right_lines.push(render_diff_line(
+                        &line.right,
+                        is_selected,
+                        right_spans.as_deref(),
+                    ));
                     current_line_idx += 1;
                 }
             }
@@ -471,7 +481,8 @@ fn highlight_for(
 ) -> Option<Vec<progit_plugin_sdk::render::TokenSpan>> {
     let line = line.as_ref()?;
     let pm = pm?;
-    pm.highlight_cached(language, &line.content).map(|r| r.spans)
+    pm.highlight_cached(language, &line.content)
+        .map(|r| r.spans)
 }
 
 fn render_diff_line(
@@ -489,7 +500,11 @@ fn render_diff_line(
                 DiffLineType::Delete => Some(Color::Rgb(50, 0, 0)),
                 _ => None,
             };
-            let selection_bg = if selected { Some(Color::Rgb(60, 60, 60)) } else { None };
+            let selection_bg = if selected {
+                Some(Color::Rgb(60, 60, 60))
+            } else {
+                None
+            };
 
             let line_num = match l.line_number {
                 Some(n) => format!("{:4} ", n),
@@ -500,7 +515,10 @@ fn render_diff_line(
             match (spans, &l.line_type) {
                 // Hunk headers stay cyan and never get plugin highlighting.
                 (_, DiffLineType::HunkHeader) => {
-                    out.push(Span::styled(l.content.clone(), Style::default().fg(Color::Cyan)));
+                    out.push(Span::styled(
+                        l.content.clone(),
+                        Style::default().fg(Color::Cyan),
+                    ));
                 }
                 (Some(spans), _) if !spans.is_empty() => {
                     for span in spans {

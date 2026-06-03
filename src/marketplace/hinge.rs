@@ -14,9 +14,9 @@
 //! - `Strict`: Requires one valid signature from a trusted key
 //! - `Consensus { n, m }`: Requires N of M signatures from trusted keys
 
+use crate::marketplace::crypto;
 use crate::marketplace::keyring::Keyring;
 use crate::marketplace::manifest::PluginManifest;
-use crate::marketplace::crypto;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -82,9 +82,13 @@ impl Verifier {
     }
 
     /// Create a verifier with a custom keyring location
-    pub fn with_keyring(path: &Path, policy: TrustPolicy) -> std::result::Result<Self, MarketplaceError> {
+    pub fn with_keyring(
+        path: &Path,
+        policy: TrustPolicy,
+    ) -> std::result::Result<Self, MarketplaceError> {
         Ok(Self {
-            keyring: Keyring::load_from(path).map_err(|e| MarketplaceError::Keyring(e.to_string()))?,
+            keyring: Keyring::load_from(path)
+                .map_err(|e| MarketplaceError::Keyring(e.to_string()))?,
             policy,
         })
     }
@@ -103,7 +107,10 @@ impl Verifier {
         };
 
         if sig.algorithm != "dilithium3" && sig.algorithm != "dilithium3-test" {
-            errors.push(format!("Unsupported signature algorithm: {}", sig.algorithm));
+            errors.push(format!(
+                "Unsupported signature algorithm: {}",
+                sig.algorithm
+            ));
             return VerificationResult::failure(errors);
         }
 
@@ -143,7 +150,7 @@ impl Verifier {
 
         VerificationResult::success(keyid, self.policy)
     }
-    
+
     /// Verify a raw JSON manifest directly (for legacy plugins)
     pub fn verify_json(&self, json_str: &str) -> VerificationResult {
         let mut errors = Vec::new();
@@ -166,13 +173,16 @@ impl Verifier {
             }
         };
 
-        let algorithm = sig_obj.get("algorithm")
+        let algorithm = sig_obj
+            .get("algorithm")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        let keyid = sig_obj.get("keyid")
+        let keyid = sig_obj
+            .get("keyid")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        let signature = sig_obj.get("signature")
+        let signature = sig_obj
+            .get("signature")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
@@ -202,12 +212,22 @@ impl Verifier {
         // Create canonical JSON for signing (same as signing tool)
         let name = json.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let version = json.get("version").and_then(|v| v.as_str()).unwrap_or("");
-        let description = json.get("description").and_then(|v| v.as_str()).unwrap_or("");
+        let description = json
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let author = json.get("author").and_then(|v| v.as_str()).unwrap_or("");
         let license = json.get("license").and_then(|v| v.as_str()).unwrap_or("");
-        let plugin_type = json.get("plugin_type").and_then(|v| v.as_str()).unwrap_or("utility");
-        let runtime = json.get("runtime").and_then(|v| v.as_str()).unwrap_or("lua");
-        let source_url = json.get("source_url")
+        let plugin_type = json
+            .get("plugin_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("utility");
+        let runtime = json
+            .get("runtime")
+            .and_then(|v| v.as_str())
+            .unwrap_or("lua");
+        let source_url = json
+            .get("source_url")
             .or_else(|| json.get("sourceUrl"))
             .and_then(|v| v.as_str())
             .unwrap_or("");
@@ -225,27 +245,27 @@ impl Verifier {
         canonical_map.insert("pluginType".to_string(), serde_json::json!(plugin_type));
         canonical_map.insert("runtime".to_string(), serde_json::json!(runtime));
         canonical_map.insert("sourceUrl".to_string(), serde_json::json!(source_url));
-        
+
         let mut publisher = Map::new();
         publisher.insert("keyid".to_string(), serde_json::json!("unsigned"));
         publisher.insert("name".to_string(), serde_json::json!(author));
         canonical_map.insert("publisher".to_string(), serde_json::json!(publisher));
-        
+
         let mut artifact = Map::new();
         artifact.insert("type".to_string(), serde_json::json!(runtime));
         artifact.insert("checksum".to_string(), serde_json::json!("unsigned"));
         artifact.insert("url".to_string(), serde_json::json!(""));
         canonical_map.insert("artifact".to_string(), serde_json::json!(artifact));
-        
+
         let mut caps = Map::new();
         caps.insert("network".to_string(), serde_json::json!([]));
         caps.insert("filesystem".to_string(), serde_json::json!("readOnly"));
         caps.insert("env".to_string(), serde_json::json!([]));
         canonical_map.insert("capabilities".to_string(), serde_json::json!(caps));
-        
+
         canonical_map.insert("keywords".to_string(), serde_json::json!([]));
         canonical_map.insert("homepage".to_string(), serde_json::json!(null));
-        
+
         let canonical = serde_json::Value::Object(canonical_map);
 
         let message = serde_json::to_vec(&canonical).expect("Failed to serialize canonical JSON");
@@ -267,16 +287,24 @@ impl Verifier {
 
     /// Add a key to the trust store
     pub fn trust_key(&mut self, keyid: &str) -> std::result::Result<(), MarketplaceError> {
-        self.keyring.add_trusted(keyid).map_err(|e| MarketplaceError::Keyring(e.to_string()))?;
-        self.keyring.save().map_err(|e| MarketplaceError::Keyring(e.to_string()))
+        self.keyring
+            .add_trusted(keyid)
+            .map_err(|e| MarketplaceError::Keyring(e.to_string()))?;
+        self.keyring
+            .save()
+            .map_err(|e| MarketplaceError::Keyring(e.to_string()))
     }
 
     /// Remove a key from the trust store
     pub fn untrust_key(&mut self, keyid: &str) -> std::result::Result<(), MarketplaceError> {
-        self.keyring.remove_trusted(keyid).map_err(|e| MarketplaceError::Keyring(e.to_string()))?;
-        self.keyring.save().map_err(|e| MarketplaceError::Keyring(e.to_string()))
+        self.keyring
+            .remove_trusted(keyid)
+            .map_err(|e| MarketplaceError::Keyring(e.to_string()))?;
+        self.keyring
+            .save()
+            .map_err(|e| MarketplaceError::Keyring(e.to_string()))
     }
-    
+
     /// Get the keyring
     pub fn get_keyring(&self) -> &Keyring {
         &self.keyring
@@ -314,33 +342,39 @@ pub fn blake3_checksum(data: &[u8]) -> String {
 /// Decode base64 string
 fn base64_decode(input: &str) -> std::result::Result<Vec<u8>, MarketplaceError> {
     // Simple base64 decoder
-    const BASE64_TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    
+    const BASE64_TABLE: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
     let input = input.trim();
     let mut result = Vec::with_capacity(input.len() * 3 / 4);
-    
+
     let mut buffer: u32 = 0;
     let mut bits_collected = 0;
-    
+
     for c in input.bytes() {
         if c == b'=' || c == b'\n' || c == b'\r' || c == b' ' {
             continue;
         }
-        
+
         let value = match BASE64_TABLE.iter().position(|&x| x == c) {
             Some(v) => v as u32,
-            None => return Err(MarketplaceError::Signature(format!("Invalid base64 character: {}", c as char))),
+            None => {
+                return Err(MarketplaceError::Signature(format!(
+                    "Invalid base64 character: {}",
+                    c as char
+                )))
+            }
         };
-        
+
         buffer = (buffer << 6) | value;
         bits_collected += 6;
-        
+
         if bits_collected >= 8 {
             bits_collected -= 8;
             result.push((buffer >> bits_collected) as u8);
         }
     }
-    
+
     Ok(result)
 }
 
@@ -386,7 +420,7 @@ mod tests {
         let policy = TrustPolicy::default();
         assert!(matches!(policy, TrustPolicy::Strict));
     }
-    
+
     #[test]
     fn test_base64_decode() {
         // "SGVsbG8=" is "Hello" in base64

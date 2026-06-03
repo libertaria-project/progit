@@ -32,8 +32,8 @@ pub(crate) fn find_project_root() -> Result<PathBuf> {
 
 /// Initialize the workspace (.project and .progit dirs)
 /// Initialize the workspace (.project and .progit dirs)
-    #[allow(dead_code)]
-    pub(crate) fn initialize_workspace(root: &Path) -> Result<()> {
+#[allow(dead_code)]
+pub(crate) fn initialize_workspace(root: &Path) -> Result<()> {
     let project_dir = root.join(storage::paths::PROJECT_DIR);
     let local_dir = root.join(storage::paths::LOCAL_DIR);
 
@@ -138,8 +138,8 @@ theme "nord"
     Ok(())
 }
 
-    #[allow(dead_code)]
-    pub(crate) fn auto_configure(sync_config: &mut storage::config::SyncConfig, cwd: &std::path::Path) {
+#[allow(dead_code)]
+pub(crate) fn auto_configure(sync_config: &mut storage::config::SyncConfig, cwd: &std::path::Path) {
     if let Ok(Some(remote_url)) = crate::git::get_remote_url(cwd, "origin") {
         // Only trigger change detection if we can successfully parse the remote URL
         if let Some((base, _, _)) = crate::git::parse_git_url(&remote_url) {
@@ -197,8 +197,8 @@ theme "nord"
 }
 
 /// Save all issues (for drag-drop operations)
-    #[allow(dead_code)]
-    pub(crate) fn save_all_issues(
+#[allow(dead_code)]
+pub(crate) fn save_all_issues(
     issues: &[crate::issue::Issue],
     kdl_dir: &std::path::Path,
     cache_path: &std::path::Path,

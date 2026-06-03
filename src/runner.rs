@@ -240,34 +240,40 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
                 use crate::agent::AgentEvent;
                 match event {
                     AgentEvent::Started(id) => {
-                         // Update session status to Thinking
-                         // This would ideally map id back to a virtual branch
-                         // For now we just show a status
-                         app.set_status(format!("🤖 Agent started (Session {})", &id[..8]));
+                        // Update session status to Thinking
+                        // This would ideally map id back to a virtual branch
+                        // For now we just show a status
+                        app.set_status(format!("🤖 Agent started (Session {})", &id[..8]));
                     }
                     AgentEvent::Token(_id, _token) => {
-                         // Streaming token - in future we append to a buffer
-                         // For now, simple indicator
-                         // app.set_status(format!("🤖 Typing... {}", token)); // Too noisy
+                        // Streaming token - in future we append to a buffer
+                        // For now, simple indicator
+                        // app.set_status(format!("🤖 Typing... {}", token)); // Too noisy
                     }
                     AgentEvent::Completed(id, response) => {
-                         app.set_status("🤖 Agent finished! Applying changes...");
+                        app.set_status("🤖 Agent finished! Applying changes...");
 
-                         if let Some(manager) = &mut app.vbranch_manager {
-                             use crate::agent::ops::apply_agent_patch;
-                             match apply_agent_patch(manager, &id, &response) {
-                                 Ok(count) => {
-                                     app.set_status(format!("✅ Agent applied {} new hunk(s)", count));
-                                 }
-                                 Err(e) => {
-                                     log::error!("Agent apply error: {}", e);
-                                     app.set_status(format!("❌ Failed to apply agent patch: {}", e));
-                                 }
-                             }
-                         }
+                        if let Some(manager) = &mut app.vbranch_manager {
+                            use crate::agent::ops::apply_agent_patch;
+                            match apply_agent_patch(manager, &id, &response) {
+                                Ok(count) => {
+                                    app.set_status(format!(
+                                        "✅ Agent applied {} new hunk(s)",
+                                        count
+                                    ));
+                                }
+                                Err(e) => {
+                                    log::error!("Agent apply error: {}", e);
+                                    app.set_status(format!(
+                                        "❌ Failed to apply agent patch: {}",
+                                        e
+                                    ));
+                                }
+                            }
+                        }
                     }
                     AgentEvent::Error(_id, err) => {
-                         app.set_status(format!("⚠️ Agent error: {}", err));
+                        app.set_status(format!("⚠️ Agent error: {}", err));
                     }
                 }
             }
@@ -327,7 +333,9 @@ pub(crate) fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) 
                     let issue_id = match app.view_mode {
                         crate::tui::ViewMode::Dashboard => None,
                         crate::tui::ViewMode::List => app.selected_issue().map(|i| i.id.clone()),
-                        crate::tui::ViewMode::Kanban => app.kanban_selected_issue().map(|i| i.id.clone()),
+                        crate::tui::ViewMode::Kanban => {
+                            app.kanban_selected_issue().map(|i| i.id.clone())
+                        }
                         crate::tui::ViewMode::Diff => None,
                         crate::tui::ViewMode::MRList => None,
                         crate::tui::ViewMode::Blame => None,

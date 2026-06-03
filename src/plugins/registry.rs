@@ -70,8 +70,9 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
             // Skip symlinks for safety – don't want to clone repo escapes.
             continue;
         } else {
-            std::fs::copy(&from, &to)
-                .with_context(|| format!("Failed to copy {} -> {}", from.display(), to.display()))?;
+            std::fs::copy(&from, &to).with_context(|| {
+                format!("Failed to copy {} -> {}", from.display(), to.display())
+            })?;
         }
     }
     Ok(())
@@ -122,7 +123,12 @@ impl PluginSource {
     /// Install the plugin to the given directory
     pub fn install(&self, plugin_dir: &Path) -> Result<PathBuf> {
         match self {
-            PluginSource::Registry { name, version, url, source_path } => {
+            PluginSource::Registry {
+                name,
+                version,
+                url,
+                source_path,
+            } => {
                 let target_dir = plugin_dir.join(name);
 
                 // Remove existing if present
@@ -138,8 +144,13 @@ impl PluginSource {
                 let tag = format!("v{}", version);
                 let first_attempt = Command::new("git")
                     .args([
-                        "clone", "--depth", "1", "--branch", &tag,
-                        url, tmp_path.to_str().context("Non-UTF8 tmp path")?,
+                        "clone",
+                        "--depth",
+                        "1",
+                        "--branch",
+                        &tag,
+                        url,
+                        tmp_path.to_str().context("Non-UTF8 tmp path")?,
                     ])
                     .stderr(std::process::Stdio::null())
                     .status()
@@ -152,8 +163,11 @@ impl PluginSource {
                     }
                     let status = Command::new("git")
                         .args([
-                            "clone", "--depth", "1",
-                            url, tmp_path.to_str().context("Non-UTF8 tmp path")?,
+                            "clone",
+                            "--depth",
+                            "1",
+                            url,
+                            tmp_path.to_str().context("Non-UTF8 tmp path")?,
                         ])
                         .status()
                         .context("Failed to run git clone")?;
@@ -249,9 +263,7 @@ impl PluginRegistry {
     /// 2. Config-provided registry_url (.project/config.kdl)
     /// 3. Default registry URL (https://git.sovereign-society.org/ProGit/progit-market.git)
     pub fn new(project_root: &Path, config_registry_url: Option<String>) -> Result<Self> {
-        let index_path = project_root
-            .join(".progit")
-            .join("plugin-index");
+        let index_path = project_root.join(".progit").join("plugin-index");
 
         // Determine registry URL with fallback chain (removed git origin auto-detection)
         let registry_url = std::env::var("PROGIT_PLUGIN_REGISTRY")
@@ -289,8 +301,12 @@ impl PluginRegistry {
                 .context("Failed to run git pull")?;
 
             if !status.success() {
-                std::fs::remove_dir_all(&self.index_path)
-                    .with_context(|| format!("Failed to remove stale plugin index {}", self.index_path.display()))?;
+                std::fs::remove_dir_all(&self.index_path).with_context(|| {
+                    format!(
+                        "Failed to remove stale plugin index {}",
+                        self.index_path.display()
+                    )
+                })?;
                 self.clone_index()?;
             }
         } else {
@@ -307,7 +323,9 @@ impl PluginRegistry {
                 "--depth",
                 "1",
                 &self.registry_url,
-                self.index_path.to_str().context("Non-UTF8 plugin index path")?,
+                self.index_path
+                    .to_str()
+                    .context("Non-UTF8 plugin index path")?,
             ])
             .status()
             .context("Failed to clone plugin index")?;
@@ -340,7 +358,10 @@ impl PluginRegistry {
             .status()
             .context("Failed to update plugin registry remote")?;
         if !status.success() {
-            anyhow::bail!("Failed to update plugin registry remote to {}", self.registry_url);
+            anyhow::bail!(
+                "Failed to update plugin registry remote to {}",
+                self.registry_url
+            );
         }
 
         Ok(())
@@ -457,7 +478,10 @@ impl PluginRegistry {
     }
 
     /// Helper to load manifests recursively into a map
-    fn load_manifests_recursive(dir: &Path, manifests: &mut HashMap<String, PluginManifest>) -> Result<()> {
+    fn load_manifests_recursive(
+        dir: &Path,
+        manifests: &mut HashMap<String, PluginManifest>,
+    ) -> Result<()> {
         if !dir.exists() {
             return Ok(());
         }
@@ -484,11 +508,13 @@ impl PluginRegistry {
     pub fn search(&self, query: &str) -> Result<Vec<PluginManifest>> {
         let query_lower = query.to_lowercase();
 
-        let results: Vec<_> = self.manifests.values()
+        let results: Vec<_> = self
+            .manifests
+            .values()
             .filter(|m| {
-                m.name.to_lowercase().contains(&query_lower) ||
-                m.description.to_lowercase().contains(&query_lower) ||
-                m.plugin_type.to_lowercase().contains(&query_lower)
+                m.name.to_lowercase().contains(&query_lower)
+                    || m.description.to_lowercase().contains(&query_lower)
+                    || m.plugin_type.to_lowercase().contains(&query_lower)
             })
             .cloned()
             .collect();
@@ -513,8 +539,14 @@ mod tests {
 
         assert_eq!(manifest.name, "sober-raccoon");
         assert_eq!(manifest.runtime, "lua");
-        assert_eq!(manifest.source_url, "https://git.sovereign-society.org/ProGit/progit.git");
-        assert_eq!(manifest.source_path.as_deref(), Some("plugins/sober-raccoon"));
+        assert_eq!(
+            manifest.source_url,
+            "https://git.sovereign-society.org/ProGit/progit.git"
+        );
+        assert_eq!(
+            manifest.source_path.as_deref(),
+            Some("plugins/sober-raccoon")
+        );
         assert_eq!(manifest.sdk_version, ">=0.3");
 
         Ok(())

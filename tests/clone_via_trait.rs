@@ -47,8 +47,7 @@ async fn clone_from_daemon_to_local_backend() {
     let daemon = ForgedBackend::connect(url.clone()).await.unwrap();
     daemon.create_repo("source-repo").await.unwrap();
 
-    let (pack, blob_oid) =
-        progit_forged::pack::build_pack_with_blob(b"clone-via-trait demo");
+    let (pack, blob_oid) = progit_forged::pack::build_pack_with_blob(b"clone-via-trait demo");
     let outcome = daemon
         .push(
             "source-repo",
@@ -68,14 +67,19 @@ async fn clone_from_daemon_to_local_backend() {
     let local_root = tempfile::TempDir::new().unwrap();
     let local = LocalGitBackend::new(local_root.path()).unwrap();
 
-    let result = clone_repo(&daemon, "source-repo", &local, "cloned").await.unwrap();
+    let result = clone_repo(&daemon, "source-repo", &local, "cloned")
+        .await
+        .unwrap();
     assert_eq!(result.refs_total, 1, "expected one ref on source");
     assert_eq!(result.refs_accepted, 1, "expected one accepted ref on dest");
     assert_eq!(result.refs_rejected, 0);
     assert!(result.pack_bytes >= 32, "expected pack bytes streamed");
 
     // ---- 3. Verify the local backend now contains the cloned data.
-    let local_refs = local.list_refs("cloned", Some("refs/heads/")).await.unwrap();
+    let local_refs = local
+        .list_refs("cloned", Some("refs/heads/"))
+        .await
+        .unwrap();
     assert_eq!(local_refs.len(), 1, "local has exactly one head");
     assert_eq!(local_refs[0].name, "refs/heads/main");
     assert_eq!(
@@ -106,7 +110,9 @@ async fn clone_from_daemon_to_local_backend() {
     //         enforce this uniformly (the daemon via sled, LocalGitBackend
     //         via the explicit pre-check in apply_ref_update). The second
     //         clone's outcome reports the existing refs as rejected.
-    let second = clone_repo(&daemon, "source-repo", &local, "cloned").await.unwrap();
+    let second = clone_repo(&daemon, "source-repo", &local, "cloned")
+        .await
+        .unwrap();
     assert_eq!(second.refs_total, 1);
     assert_eq!(
         second.refs_rejected, 1,

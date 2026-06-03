@@ -137,7 +137,8 @@ mod tests {
             let tree_oid = index.write_tree().unwrap();
             let tree = repo.find_tree(tree_oid).unwrap();
             let sig = Signature::now("test", "test@example.com").unwrap();
-            repo.commit(Some("HEAD"), &sig, &sig, "test", &tree, &[]).unwrap()
+            repo.commit(Some("HEAD"), &sig, &sig, "test", &tree, &[])
+                .unwrap()
         };
 
         (tmp, repo, commit_oid.to_string())
@@ -185,8 +186,16 @@ mod tests {
     #[test]
     fn rejects_unknown_commit() {
         let (_tmp, repo, _sha) = make_test_repo("src/main.rs", "x\n");
-        let err = resolve(&repo, "src/main.rs", 1, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-            .unwrap_err();
-        assert!(matches!(err, PositionError::CommitMissing(_)), "got {err:?}");
+        let err = resolve(
+            &repo,
+            "src/main.rs",
+            1,
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, PositionError::CommitMissing(_)),
+            "got {err:?}"
+        );
     }
 }

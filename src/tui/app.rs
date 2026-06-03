@@ -437,7 +437,10 @@ impl App {
             return;
         };
 
-        log::debug!("Querying pipeline status for {} MRs via plugins", self.mr_list.len());
+        log::debug!(
+            "Querying pipeline status for {} MRs via plugins",
+            self.mr_list.len()
+        );
 
         // Query each MR
         for mr in self.mr_list.iter_mut() {
@@ -461,7 +464,8 @@ impl App {
                     // Take first valid response
                     for response in responses {
                         if let Some(status_obj) = response.as_object() {
-                            if let Some(status) = status_obj.get("status").and_then(|v| v.as_str()) {
+                            if let Some(status) = status_obj.get("status").and_then(|v| v.as_str())
+                            {
                                 log::debug!("MR !{}: pipeline status = {}", remote_id, status);
                                 mr.pipeline_status = Some(status.to_string());
                                 break;
@@ -470,7 +474,11 @@ impl App {
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to query pipeline status for MR !{}: {}", remote_id, e);
+                    log::warn!(
+                        "Failed to query pipeline status for MR !{}: {}",
+                        remote_id,
+                        e
+                    );
                 }
             }
         }

@@ -732,10 +732,7 @@ impl SyncProvider for GitLabProvider {
             .ok_or_else(|| anyhow!("diff_refs.head_sha missing"))?
             .to_string();
 
-        let discussions_url = self.api_url(&format!(
-            "merge_requests/{}/discussions",
-            mr_remote_id
-        ));
+        let discussions_url = self.api_url(&format!("merge_requests/{}/discussions", mr_remote_id));
 
         let mut filled = 0usize;
         for &idx in &pending_indices {
@@ -743,8 +740,7 @@ impl SyncProvider for GitLabProvider {
             // Anchor verification — the user's commit_sha may be older
             // than diff_refs.head_sha, but we still want to verify the
             // line existed at the user's anchor. Skip + warn on failure.
-            if let Err(e) = position::resolve(&repo, &c.file_path, c.line_number, &c.commit_sha)
-            {
+            if let Err(e) = position::resolve(&repo, &c.file_path, c.line_number, &c.commit_sha) {
                 log::warn!(
                     "skipping review comment {} on {}:{} — {}",
                     c.id,
@@ -805,16 +801,10 @@ impl SyncProvider for GitLabProvider {
                 .and_then(|n| n.get("id"))
                 .and_then(|v| v.as_i64())
                 .map(|n| n.to_string())
-                .or_else(|| {
-                    json.get("id")
-                        .and_then(|v| v.as_str())
-                        .map(str::to_string)
-                });
+                .or_else(|| json.get("id").and_then(|v| v.as_str()).map(str::to_string));
 
             if let Some(rid) = note_id {
-                comments[idx]
-                    .external_ids
-                    .insert(PROVIDER.to_string(), rid);
+                comments[idx].external_ids.insert(PROVIDER.to_string(), rid);
                 filled += 1;
             } else {
                 log::warn!(
@@ -852,7 +842,10 @@ mod tests {
 
         assert!(provider.cached_token().unwrap().is_none());
         provider.remember_token("token-123").unwrap();
-        assert_eq!(provider.cached_token().unwrap().as_deref(), Some("token-123"));
+        assert_eq!(
+            provider.cached_token().unwrap().as_deref(),
+            Some("token-123")
+        );
         provider.clear_cached_token();
         assert!(provider.cached_token().unwrap().is_none());
     }

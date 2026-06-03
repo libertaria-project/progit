@@ -10,8 +10,8 @@ mod view_handlers;
 use modal_handlers::*;
 use view_handlers::*;
 
-use super::app::{App, InputMode, ViewMode};
 use super::agent_executor::execute_agent_action;
+use super::app::{App, InputMode, ViewMode};
 use super::widget_kanban::{column_at_point, column_status, point_in_rect};
 use super::UIAreas;
 use crate::issue::Status;
@@ -261,10 +261,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> KeyAction {
     // Plugin manager modal
     if app.show_plugins {
         match key.code {
-            KeyCode::Esc
-            | KeyCode::Char('P')
-            | KeyCode::Char('Q')
-            | KeyCode::Char('q') => {
+            KeyCode::Esc | KeyCode::Char('P') | KeyCode::Char('Q') | KeyCode::Char('q') => {
                 app.show_plugins = false;
                 return KeyAction::Refresh;
             }

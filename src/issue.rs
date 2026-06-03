@@ -12,8 +12,8 @@ pub use model::{Effort, Issue, Status};
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::operations::cycle_status;
+    use super::*;
 
     #[test]
     fn test_public_api() {

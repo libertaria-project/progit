@@ -332,7 +332,8 @@ pub(super) fn handle_vbranch_create_key(app: &mut App, key: KeyEvent) -> KeyActi
                 app.edit_buffer.clear();
 
                 // Get HEAD commit for base
-                let base_commit = app.repo_info
+                let base_commit = app
+                    .repo_info
                     .as_ref()
                     .and_then(|r| {
                         use git2::Repository;

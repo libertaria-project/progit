@@ -59,34 +59,40 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) -> LaneAreas {
 
     // Calculate column widths - split evenly
     let lane_count = branches.len();
-    
+
     // Detect conflicts
-    let conflicts = app.vbranch_manager.as_ref()
+    let conflicts = app
+        .vbranch_manager
+        .as_ref()
         .map(|m| m.detect_conflicts())
         .unwrap_or_default();
-    
+
     // Create columns for each branch
-    let mut constraints = branches.iter()
+    let mut constraints = branches
+        .iter()
         .map(|_| Constraint::Percentage((95 / lane_count.max(1)) as u16))
         .collect::<Vec<_>>();
-    
+
     // Add rightmost spacer
     constraints.push(Constraint::Percentage(5));
-    
+
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(constraints)
         .split(area);
-    
+
     lane_areas.lanes = columns.iter().cloned().collect();
 
     // Render each lane
     for (idx, branch) in branches.iter().enumerate() {
         let is_selected = idx == app.vbranch_selected;
         let col_area = columns[idx];
-        
+
         // Check if this branch has conflicts
-        let has_conflicts = conflicts.get(&branch.id).map(|c| !c.is_empty()).unwrap_or(false);
+        let has_conflicts = conflicts
+            .get(&branch.id)
+            .map(|c| !c.is_empty())
+            .unwrap_or(false);
         render_lane(
             frame,
             col_area,
@@ -213,7 +219,15 @@ fn render_lane(
         .split(area);
 
     // Render header
-    render_lane_header(frame, chunks[0], branch, colors, engine, is_selected, has_conflicts);
+    render_lane_header(
+        frame,
+        chunks[0],
+        branch,
+        colors,
+        engine,
+        is_selected,
+        has_conflicts,
+    );
 
     // Render unstaged hunks
     render_hunk_list(

@@ -43,7 +43,11 @@ pub fn render(frame: &mut Frame, app: &App) {
             let quarantined: HashMap<&str, &str> = pm.quarantined_plugins().collect();
 
             let header_text = if quarantined.is_empty() {
-                format!("{} plugin{} loaded", count, if count == 1 { "" } else { "s" })
+                format!(
+                    "{} plugin{} loaded",
+                    count,
+                    if count == 1 { "" } else { "s" }
+                )
             } else {
                 format!(
                     "{} plugin{} loaded · {} quarantined",
@@ -70,7 +74,11 @@ pub fn render(frame: &mut Frame, app: &App) {
                 } else {
                     colors.accent().add_modifier(Modifier::BOLD)
                 };
-                let row_style = if is_selected { colors.selected() } else { colors.normal() };
+                let row_style = if is_selected {
+                    colors.selected()
+                } else {
+                    colors.normal()
+                };
 
                 let mut row = vec![Span::styled(cursor, colors.accent())];
                 if is_quarantined {

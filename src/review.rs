@@ -120,8 +120,7 @@ impl ReviewStorage {
     /// Initialize storage directory
     pub fn init(&self) -> Result<()> {
         if !self.reviews_dir.exists() {
-            fs::create_dir_all(&self.reviews_dir)
-                .context("Failed to create reviews directory")?;
+            fs::create_dir_all(&self.reviews_dir).context("Failed to create reviews directory")?;
         }
         Ok(())
     }
@@ -131,8 +130,7 @@ impl ReviewStorage {
         self.init()?;
 
         let file_path = self.reviews_dir.join(format!("{}.json", review.id));
-        let json = serde_json::to_string_pretty(review)
-            .context("Failed to serialize review")?;
+        let json = serde_json::to_string_pretty(review).context("Failed to serialize review")?;
 
         fs::write(&file_path, json)
             .with_context(|| format!("Failed to write review: {}", file_path.display()))?;
@@ -146,8 +144,7 @@ impl ReviewStorage {
         let json = fs::read_to_string(&file_path)
             .with_context(|| format!("Failed to read review: {}", file_path.display()))?;
 
-        let review: Review = serde_json::from_str(&json)
-            .context("Failed to deserialize review")?;
+        let review: Review = serde_json::from_str(&json).context("Failed to deserialize review")?;
 
         Ok(review)
     }
@@ -165,11 +162,9 @@ impl ReviewStorage {
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                if let Ok(review) = self.load(
-                    path.file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("")
-                ) {
+                if let Ok(review) =
+                    self.load(path.file_stem().and_then(|s| s.to_str()).unwrap_or(""))
+                {
                     reviews.push(review);
                 }
             }
@@ -201,11 +196,7 @@ impl ReviewStorage {
     }
 
     /// Add a comment to a review
-    pub fn add_comment(
-        &self,
-        review_id: &str,
-        comment: ReviewComment,
-    ) -> Result<()> {
+    pub fn add_comment(&self, review_id: &str, comment: ReviewComment) -> Result<()> {
         let mut review = self.load(review_id)?;
         review.comments.push(comment);
         review.updated_at = chrono::Utc::now().to_rfc3339();

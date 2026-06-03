@@ -2,6 +2,7 @@
 //!
 //! This module re-exports the core functionality of ProGit.
 
+pub mod agent;
 pub mod command;
 pub mod diff;
 pub mod fuzzy;
@@ -23,5 +24,4 @@ pub mod storage;
 pub mod sync;
 pub mod tui;
 pub mod virtual_branch;
-pub mod agent;
 pub mod workspace;

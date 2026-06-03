@@ -2,11 +2,11 @@
 // Copyright (c) 2025 Markus Maiwald
 
 //! Ollama Client
-//! 
+//!
 //! Connects to a local Ollama instance (default: http://localhost:11434).
 
 use super::{AgentClient, AgentEvent, AgentRequest};
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::sync::mpsc::Sender;
@@ -62,7 +62,7 @@ impl AgentClient for OllamaClient {
         session_id: String,
     ) -> Result<()> {
         let url = format!("{}/api/generate", self.base_url);
-        
+
         let body = OllamaGenerateRequest {
             model: req.model,
             prompt: req.prompt,
@@ -81,7 +81,8 @@ impl AgentClient for OllamaClient {
             .timeout(Duration::from_secs(120)) // Long timeout for LLM
             .build()?;
 
-        let res = client.post(&url)
+        let res = client
+            .post(&url)
             .json(&body)
             .send()
             .context("Failed to connect to Ollama")?;

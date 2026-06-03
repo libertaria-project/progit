@@ -49,8 +49,7 @@ impl Lockfile {
 
     /// Load lockfile from path
     pub fn load(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .context("Failed to read lockfile")?;
+        let content = std::fs::read_to_string(path).context("Failed to read lockfile")?;
 
         // Try JSON first (simpler)
         if let Ok(lockfile) = serde_json::from_str::<Lockfile>(&content) {
@@ -90,7 +89,8 @@ impl Lockfile {
                 let source = caps.get(3).map(|m| m.as_str()).unwrap_or_default();
                 let commit = caps.get(4).map(|m| m.as_str().to_string());
                 let sha256 = caps.get(5).map(|m| m.as_str().to_string());
-                let installed = caps.get(6)
+                let installed = caps
+                    .get(6)
                     .and_then(|m| DateTime::parse_from_rfc3339(m.as_str()).ok())
                     .map(|dt| dt.with_timezone(&Utc))
                     .unwrap_or_else(Utc::now);
@@ -137,7 +137,10 @@ impl Lockfile {
             if let Some(sha256) = &info.sha256 {
                 output.push_str(&format!("        sha256 \"{}\"\n", sha256));
             }
-            output.push_str(&format!("        installed \"{}\"\n", info.installed.to_rfc3339()));
+            output.push_str(&format!(
+                "        installed \"{}\"\n",
+                info.installed.to_rfc3339()
+            ));
             output.push_str("    }\n");
         }
 
@@ -156,9 +159,7 @@ impl Lockfile {
     /// Add a plugin to the lockfile
     pub fn add_plugin(&mut self, name: &str, source: &PluginSource) -> Result<()> {
         let (version, source_url, commit) = match source {
-            PluginSource::Registry { version, url, .. } => {
-                (version.clone(), url.clone(), None)
-            }
+            PluginSource::Registry { version, url, .. } => (version.clone(), url.clone(), None),
             PluginSource::Git { url, reference } => {
                 let version = reference.clone().unwrap_or_else(|| "main".to_string());
                 // Get actual commit SHA

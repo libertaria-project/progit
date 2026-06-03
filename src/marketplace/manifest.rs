@@ -17,45 +17,45 @@ use serde::{Deserialize, Serialize};
 pub struct PluginManifest {
     /// Schema version for future compatibility
     pub schema_version: u32,
-    
+
     /// Plugin identity
     pub name: String,
     pub version: String,
     pub description: String,
-    
+
     /// Author information
     pub author: String,
-    
+
     /// License (SPDX format)
     pub license: String,
-    
+
     /// Plugin category
     #[serde(rename = "pluginType")]
     pub plugin_type: PluginType,
-    
+
     /// Runtime (lua or wasm)
     pub runtime: Runtime,
-    
+
     /// Source URL for the plugin repository
     #[serde(rename = "sourceUrl")]
     pub source_url: String,
-    
+
     /// Publisher identity (Hinge-compatible)
     pub publisher: Publisher,
-    
+
     /// Artifact information
     pub artifact: Artifact,
-    
+
     /// Declared capabilities
     pub capabilities: Capabilities,
-    
+
     /// Cryptographic signature
     pub signature: Option<Signature>,
-    
+
     /// Optional metadata
     #[serde(default)]
     pub keywords: Vec<String>,
-    
+
     /// Optional homepage
     #[serde(default)]
     pub homepage: Option<String>,
@@ -102,10 +102,10 @@ impl PluginManifest {
 pub struct Publisher {
     /// KeyID (first 16 hex of blake3(public_key))
     pub keyid: String,
-    
+
     /// Publisher name
     pub name: String,
-    
+
     /// Optional DID for decentralized identity
     #[serde(default)]
     pub did: Option<String>,
@@ -116,13 +116,13 @@ pub struct Publisher {
 pub struct Artifact {
     /// Runtime type
     pub r#type: Runtime,
-    
+
     /// BLAKE3 checksum
     pub checksum: String,
-    
+
     /// URL to download the artifact
     pub url: String,
-    
+
     /// Optional file size
     #[serde(default)]
     pub size: Option<u64>,
@@ -134,11 +134,11 @@ pub struct Capabilities {
     /// Allowed network destinations
     #[serde(default)]
     pub network: Vec<String>,
-    
+
     /// Filesystem access level
     #[serde(default)]
     pub filesystem: FilesystemAccess,
-    
+
     /// Required environment variables (empty = none)
     #[serde(default)]
     pub env: Vec<String>,
@@ -179,10 +179,10 @@ impl Default for FilesystemAccess {
 pub struct Signature {
     /// Signature algorithm
     pub algorithm: String,
-    
+
     /// KeyID of the signing key
     pub keyid: String,
-    
+
     /// Base64-encoded signature
     pub signature: String,
 }
@@ -279,7 +279,9 @@ impl TryFrom<LegacyPluginManifest> for PluginManifest {
             },
             source_url: legacy.source_url.unwrap_or_default(),
             publisher: Publisher {
-                keyid: legacy.signature.as_ref()
+                keyid: legacy
+                    .signature
+                    .as_ref()
                     .map(|s| s.keyid.clone())
                     .unwrap_or_else(|| "unsigned".to_string()),
                 name: author_name,
@@ -368,7 +370,7 @@ mod tests {
 
         let canonical = manifest.canonical_json();
         let parsed: serde_json::Value = serde_json::from_slice(&canonical).unwrap();
-        
+
         // Should not contain signature
         assert!(!parsed.as_object().unwrap().contains_key("signature"));
     }

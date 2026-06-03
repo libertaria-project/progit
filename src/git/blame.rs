@@ -86,7 +86,8 @@ fn parse_blame_porcelain(output: &str) -> Result<Vec<BlameLine>> {
         // Check if this is a commit hash header line first
         // Format: 40-byte-sha1 <orig_line> <final_line> [<num_lines>]
         let cols: Vec<&str> = line.split_whitespace().collect();
-        if cols.len() >= 3 && cols[0].len() == 40 && cols[0].chars().all(|c| c.is_ascii_hexdigit()) {
+        if cols.len() >= 3 && cols[0].len() == 40 && cols[0].chars().all(|c| c.is_ascii_hexdigit())
+        {
             current_commit_hash = cols[0].to_string();
             current_orig_line = cols[1].parse().unwrap_or(0);
             current_final_line = cols[2].parse().unwrap_or(0);

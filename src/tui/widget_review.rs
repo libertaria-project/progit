@@ -107,7 +107,11 @@ impl ReviewState {
             id: format!("comment-{}", uuid::Uuid::new_v4()),
             file_path: self.current_file.clone(),
             line_number: self.selected_line,
-            commit_sha: self.review.as_ref().map(|r| r.commit_sha.clone()).unwrap_or_default(),
+            commit_sha: self
+                .review
+                .as_ref()
+                .map(|r| r.commit_sha.clone())
+                .unwrap_or_default(),
             text,
             author,
             created_at: chrono::Utc::now().to_rfc3339(),
@@ -160,15 +164,16 @@ fn parse_diff(diff_text: &str) -> Vec<DiffLine> {
     for line in diff_text.lines() {
         line_number += 1;
 
-        let line_type = if line.starts_with("+++") || line.starts_with("---") || line.starts_with("@@") {
-            DiffLineType::Header
-        } else if line.starts_with('+') {
-            DiffLineType::Added
-        } else if line.starts_with('-') {
-            DiffLineType::Removed
-        } else {
-            DiffLineType::Context
-        };
+        let line_type =
+            if line.starts_with("+++") || line.starts_with("---") || line.starts_with("@@") {
+                DiffLineType::Header
+            } else if line.starts_with('+') {
+                DiffLineType::Added
+            } else if line.starts_with('-') {
+                DiffLineType::Removed
+            } else {
+                DiffLineType::Context
+            };
 
         lines.push(DiffLine {
             line_number,
@@ -223,7 +228,9 @@ fn render_diff_view(frame: &mut Frame, app: &App, state: &ReviewState, area: Rec
             let has_comments = state
                 .comments_by_line
                 .get(&state.current_file)
-                .and_then(|lines: &HashMap<usize, Vec<ReviewComment>>| lines.get(&diff_line.line_number))
+                .and_then(|lines: &HashMap<usize, Vec<ReviewComment>>| {
+                    lines.get(&diff_line.line_number)
+                })
                 .map(|comments: &Vec<ReviewComment>| !comments.is_empty())
                 .unwrap_or(false);
 
@@ -289,9 +296,7 @@ fn render_diff_view(frame: &mut Frame, app: &App, state: &ReviewState, area: Rec
 fn render_comments_sidebar(frame: &mut Frame, app: &App, state: &ReviewState, area: Rect) {
     let colors = app.theme.colors();
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title("Comments");
+    let block = Block::default().borders(Borders::ALL).title("Comments");
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -307,7 +312,12 @@ fn render_comments_sidebar(frame: &mut Frame, app: &App, state: &ReviewState, ar
 
         for comment in comments {
             lines.push(Line::from(vec![
-                Span::styled(&comment.author, Style::default().fg(colors.accent).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    &comment.author,
+                    Style::default()
+                        .fg(colors.accent)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" • "),
                 Span::styled(
                     &comment.created_at[..10], // Just the date

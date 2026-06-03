@@ -173,9 +173,7 @@ impl PluginManager {
         }));
 
         let plugin: Box<dyn Plugin> = match load_result {
-            Ok(Ok(lp)) => {
-                Box::new(lp)
-            }
+            Ok(Ok(lp)) => Box::new(lp),
             Ok(Err(e)) => {
                 anyhow::bail!("Failed to load Lua plugin from {:?}: {}", path, e);
             }
@@ -401,20 +399,19 @@ impl PluginManager {
         event: &crate::plugins::PluginEvent,
     ) -> Result<Vec<serde_json::Value>> {
         let mut responses = Vec::new();
-        let event_json =
-            serde_json::to_value(event).context("Failed to serialize plugin event")?;
+        let event_json = serde_json::to_value(event).context("Failed to serialize plugin event")?;
 
-        let mut outcomes: Vec<(String, std::result::Result<Option<serde_json::Value>, String>)> =
-            Vec::with_capacity(self.plugins.len());
+        let mut outcomes: Vec<(
+            String,
+            std::result::Result<Option<serde_json::Value>, String>,
+        )> = Vec::with_capacity(self.plugins.len());
 
         for plugin in &mut self.plugins {
             let name = plugin.metadata().name.clone();
             if self.quarantined.contains_key(&name) {
                 continue;
             }
-            let res = plugin
-                .on_event(&event_json)
-                .map_err(|e| e.to_string());
+            let res = plugin.on_event(&event_json).map_err(|e| e.to_string());
             outcomes.push((name, res));
         }
 
@@ -510,11 +507,7 @@ impl PluginManager {
     /// Plugins return `Some(result)` if they handle the command, `None` otherwise.
     /// The first plugin that handles the command "wins" - subsequent plugins are
     /// not consulted. This allows one plugin to own a command namespace.
-    pub fn dispatch_command(
-        &mut self,
-        command: &str,
-        args: &[String],
-    ) -> Option<CommandResult> {
+    pub fn dispatch_command(&mut self, command: &str, args: &[String]) -> Option<CommandResult> {
         let hook = PluginHook::OnCommand(command.to_string());
         let data = serde_json::json!({
             "command": command,
@@ -551,9 +544,18 @@ impl PluginManager {
                     self.error_counts.remove(&name);
                     return Some(CommandResult {
                         plugin: name,
-                        success: response.get("success").and_then(|v| v.as_bool()).unwrap_or(true),
-                        output: response.get("output").and_then(|v| v.as_str()).map(String::from),
-                        error: response.get("error").and_then(|v| v.as_str()).map(String::from),
+                        success: response
+                            .get("success")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(true),
+                        output: response
+                            .get("output")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
+                        error: response
+                            .get("error")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
                         data: response,
                     });
                 }
@@ -764,7 +766,8 @@ end
         };
         let mut manager = PluginManager::new(repo);
 
-        let loaded = manager.load_command_plugins_from_dir(&repo.join("plugins"), &context, "hooks");
+        let loaded =
+            manager.load_command_plugins_from_dir(&repo.join("plugins"), &context, "hooks");
         let plugins = manager.loaded_plugins();
 
         assert!(loaded > 0);

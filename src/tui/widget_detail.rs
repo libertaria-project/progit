@@ -156,14 +156,7 @@ pub fn render(
 
     // Description field - render as markdown when not editing
     if edit_field == EditField::Description {
-        render_multiline_field(
-            frame,
-            chunks[1],
-            "Description",
-            edit_buffer,
-            true,
-            colors,
-        );
+        render_multiline_field(frame, chunks[1], "Description", edit_buffer, true, colors);
     } else {
         render_markdown_field(
             frame,

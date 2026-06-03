@@ -31,8 +31,7 @@ use async_trait::async_trait;
 // Re-export the trait + types so callers say `progit::git::backend::GitBackend`
 // rather than reaching into progit-forge-client.
 pub use progit_forge_client::backend::{
-    BackendError, BackendResult, EphemeralBranch, GitBackend, PushOutcome,
-    RefEntry, RefUpdate,
+    BackendError, BackendResult, EphemeralBranch, GitBackend, PushOutcome, RefEntry, RefUpdate,
 };
 pub use progit_forge_client::ForgedBackend;
 
@@ -84,7 +83,9 @@ impl LocalGitBackend {
             return Err(BackendError::InvalidInput("repo name is empty".into()));
         }
         if name.len() > 200 {
-            return Err(BackendError::InvalidInput("repo name exceeds 200 bytes".into()));
+            return Err(BackendError::InvalidInput(
+                "repo name exceeds 200 bytes".into(),
+            ));
         }
         if name.starts_with('.') || name.starts_with('/') || name.starts_with('-') {
             return Err(BackendError::InvalidInput(format!(
@@ -137,20 +138,15 @@ impl GitBackend for LocalGitBackend {
         Ok(())
     }
 
-    async fn list_refs(
-        &self,
-        repo: &str,
-        prefix: Option<&str>,
-    ) -> BackendResult<Vec<RefEntry>> {
+    async fn list_refs(&self, repo: &str, prefix: Option<&str>) -> BackendResult<Vec<RefEntry>> {
         Self::validate_repo_name(repo)?;
         let dir = self.repo_dir(repo);
         if !dir.exists() {
             return Err(BackendError::RepoNotFound(repo.into()));
         }
 
-        let r = gix::open(&dir).map_err(|e| {
-            BackendError::Internal(format!("gix open {}: {e}", dir.display()))
-        })?;
+        let r = gix::open(&dir)
+            .map_err(|e| BackendError::Internal(format!("gix open {}: {e}", dir.display())))?;
         let refs = r
             .references()
             .map_err(|e| BackendError::Internal(format!("gix references: {e}")))?;
@@ -160,9 +156,7 @@ impl GitBackend for LocalGitBackend {
 
         let mut out = Vec::new();
         for r in all {
-            let r = r.map_err(|e| {
-                BackendError::Internal(format!("gix reference iter: {e}"))
-            })?;
+            let r = r.map_err(|e| BackendError::Internal(format!("gix reference iter: {e}")))?;
             let name = r.name().as_bstr().to_string();
             if let Some(p) = prefix {
                 if !name.starts_with(p) {
@@ -196,9 +190,8 @@ impl GitBackend for LocalGitBackend {
             return Err(BackendError::RepoNotFound(repo.into()));
         }
         let pack_dir = self.pack_dir(repo);
-        std::fs::create_dir_all(&pack_dir).map_err(|e| {
-            BackendError::Io(format!("mkdir {}: {e}", pack_dir.display()))
-        })?;
+        std::fs::create_dir_all(&pack_dir)
+            .map_err(|e| BackendError::Io(format!("mkdir {}: {e}", pack_dir.display())))?;
 
         // ---- 1. Ingest the pack via gix-pack Bundle::write_to_directory.
         // Same pipeline as the daemon — header + entries + index.
@@ -207,9 +200,8 @@ impl GitBackend for LocalGitBackend {
         }
 
         // ---- 2. Open the repo for ref operations.
-        let repository = gix::open(&dir).map_err(|e| {
-            BackendError::Internal(format!("gix open {}: {e}", dir.display()))
-        })?;
+        let repository = gix::open(&dir)
+            .map_err(|e| BackendError::Internal(format!("gix open {}: {e}", dir.display())))?;
 
         let mut accepted = Vec::with_capacity(updates.len());
         let mut rejected = Vec::new();
@@ -241,11 +233,7 @@ impl GitBackend for LocalGitBackend {
         })
     }
 
-    async fn fetch(
-        &self,
-        repo: &str,
-        wants: Vec<String>,
-    ) -> BackendResult<Vec<u8>> {
+    async fn fetch(&self, repo: &str, wants: Vec<String>) -> BackendResult<Vec<u8>> {
         Self::validate_repo_name(repo)?;
         let dir = self.repo_dir(repo);
         if !dir.exists() {
@@ -270,9 +258,8 @@ impl GitBackend for LocalGitBackend {
         let packs = list_packs(&pack_dir)?;
         match packs.len() {
             0 => Ok(empty_pack_bytes()),
-            1 => std::fs::read(&packs[0]).map_err(|e| {
-                BackendError::Io(format!("read pack {}: {e}", packs[0].display()))
-            }),
+            1 => std::fs::read(&packs[0])
+                .map_err(|e| BackendError::Io(format!("read pack {}: {e}", packs[0].display()))),
             n => Err(BackendError::Unsupported(format!(
                 "fetch from local repo with {n} packs — multi-pack repacking lands in v0.1.3.1"
             ))),
@@ -336,10 +323,7 @@ fn ingest_pack(pack_dir: &Path, bytes: &[u8]) -> BackendResult<()> {
 /// - CAS pre-image mismatch (`BackendError::CasFailed`)
 /// - target OID not reachable in the repo's object DB (`BackendError::InvalidInput`)
 /// - malformed inputs (`BackendError::InvalidInput`)
-fn apply_ref_update(
-    repo: &gix::Repository,
-    upd: &RefUpdate,
-) -> BackendResult<()> {
+fn apply_ref_update(repo: &gix::Repository, upd: &RefUpdate) -> BackendResult<()> {
     use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
 
     // ---- Parse + validate the ref name once.
@@ -403,9 +387,11 @@ fn apply_ref_update(
             .map_err(|e| BackendError::InvalidInput(format!("new_oid: {e}")))?;
         // OID-existence check: the target must be reachable. gix's
         // `try_find_header` looks across packs and loose objects.
-        if repo.try_find_header(id).map_err(|e| {
-            BackendError::Internal(format!("oid lookup: {e}"))
-        })?.is_none() {
+        if repo
+            .try_find_header(id)
+            .map_err(|e| BackendError::Internal(format!("oid lookup: {e}")))?
+            .is_none()
+        {
             return Err(BackendError::InvalidInput(format!(
                 "ref target oid not in repo: {}",
                 upd.new_oid
@@ -488,8 +474,8 @@ fn oid_in_any_idx(pack_dir: &Path, oid_hex: &str) -> BackendResult<bool> {
         Ok(id) => id,
         Err(_) => return Ok(false),
     };
-    for entry in std::fs::read_dir(pack_dir)
-        .map_err(|e| BackendError::Io(format!("readdir: {e}")))?
+    for entry in
+        std::fs::read_dir(pack_dir).map_err(|e| BackendError::Io(format!("readdir: {e}")))?
     {
         let entry = entry.map_err(|e| BackendError::Io(format!("readdir entry: {e}")))?;
         let path = entry.path();
@@ -579,10 +565,20 @@ mod tests {
     #[tokio::test]
     async fn validates_repo_name() {
         let (_tmp, backend) = fresh();
-        for bad in ["..", "../escape", "a/../b", "with\0null", "", ".hidden", "-leading"] {
+        for bad in [
+            "..",
+            "../escape",
+            "a/../b",
+            "with\0null",
+            "",
+            ".hidden",
+            "-leading",
+        ] {
             let err = backend.create_repo(bad).await.unwrap_err();
-            assert!(matches!(err, BackendError::InvalidInput(_)),
-                "expected InvalidInput for {bad:?}, got {err:?}");
+            assert!(
+                matches!(err, BackendError::InvalidInput(_)),
+                "expected InvalidInput for {bad:?}, got {err:?}"
+            );
         }
     }
 
@@ -610,10 +606,7 @@ mod tests {
     async fn fetch_unknown_oid_is_invalid_input() {
         let (_tmp, backend) = fresh();
         backend.create_repo("u").await.unwrap();
-        let err = backend
-            .fetch("u", vec!["a".repeat(40)])
-            .await
-            .unwrap_err();
+        let err = backend.fetch("u", vec!["a".repeat(40)]).await.unwrap_err();
         assert!(matches!(err, BackendError::InvalidInput(_)));
     }
 
@@ -651,10 +644,7 @@ mod tests {
         assert_eq!(outcome.accepted.len(), 1);
 
         // list_refs sees the new ref.
-        let refs = backend
-            .list_refs("rt", Some("refs/heads/"))
-            .await
-            .unwrap();
+        let refs = backend.list_refs("rt", Some("refs/heads/")).await.unwrap();
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0].name, "refs/heads/main");
         assert_eq!(refs[0].oid, oid);

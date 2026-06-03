@@ -8,8 +8,8 @@
 //! - Git bar at top, status bar at bottom
 //! - Main content area contains the active view window
 
-pub mod app;
 pub mod agent_executor;
+pub mod app;
 pub mod input;
 pub mod markdown;
 pub mod style;
