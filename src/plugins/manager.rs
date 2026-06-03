@@ -104,9 +104,8 @@ impl PluginManager {
 
     /// Load only plugins that may handle a command namespace.
     ///
-    /// If a plugin manifest declares `commands`, this filters by that list. If
-    /// it declares only the legacy `hooks = ["on_command"]`, the plugin is
-    /// loaded and can decide by returning `handled = false`.
+    /// Command ownership is declared by `.progit-plugin.json`
+    /// `contributions.commands`. Legacy root-level `commands` is ignored.
     pub fn load_command_plugins_from_dir(
         &mut self,
         dir: &Path,
@@ -588,43 +587,16 @@ fn command_manifest_allows(entry: &Path, command: &str) -> bool {
         }
 
         let Ok(raw) = std::fs::read_to_string(&candidate) else {
-            return true;
+            return false;
         };
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
-            return true;
+        let Ok(manifest) = PluginContributionManifest::from_json(&raw) else {
+            return false;
         };
 
-        if let Some(commands) = value.get("commands").and_then(|v| v.as_array()) {
-            return commands
-                .iter()
-                .any(|item| command_entry_matches(item, command));
-        }
-
-        return value
-            .get("hooks")
-            .and_then(|v| v.as_array())
-            .map(|hooks| hooks.iter().any(|h| h.as_str() == Some("on_command")))
-            .unwrap_or(false);
+        return manifest.contributions.command(command).is_some();
     }
 
-    true
-}
-
-fn command_entry_matches(item: &serde_json::Value, command: &str) -> bool {
-    if item.as_str() == Some(command) {
-        return true;
-    }
-
-    item.as_object().is_some_and(|object| {
-        object
-            .get("name")
-            .and_then(|v| v.as_str())
-            .is_some_and(|name| name == command)
-            || object
-                .get("alias")
-                .and_then(|v| v.as_str())
-                .is_some_and(|alias| alias == command)
-    })
+    false
 }
 
 /// Result of a plugin command execution

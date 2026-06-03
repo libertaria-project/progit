@@ -13,6 +13,7 @@
 
 use crate::issue::Issue;
 // No ordering needed
+use progit_plugin_sdk::contributions::PluginContributionManifest;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -262,44 +263,45 @@ impl FuzzySearcher {
                 let Ok(raw) = std::fs::read_to_string(&manifest_path) else {
                     continue;
                 };
-                let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&raw) else {
+                let Ok(manifest) = PluginContributionManifest::from_json(&raw) else {
                     continue;
                 };
 
-                let plugin_name = manifest
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string)
-                    .unwrap_or_else(|| entry.file_name().to_string_lossy().to_string());
-                let plugin_description = manifest
-                    .get("description")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Installed plugin command")
-                    .to_string();
-
-                let Some(commands) = manifest.get("commands").and_then(|v| v.as_array()) else {
-                    continue;
+                let plugin_name = if manifest.name.is_empty() {
+                    entry.file_name().to_string_lossy().to_string()
+                } else {
+                    manifest.name
+                };
+                let plugin_description = if manifest.description.is_empty() {
+                    "Installed plugin command".to_string()
+                } else {
+                    manifest.description
                 };
 
-                for command in commands {
-                    let Some(command_name) = plugin_command_name(command) else {
+                for command in manifest.contributions.commands {
+                    if !command.palette {
                         continue;
                     };
-                    if !seen.insert(command_name.clone()) {
-                        continue;
+
+                    let command_description = if command.description.is_empty() {
+                        plugin_description.clone()
+                    } else {
+                        command.description.clone()
+                    };
+
+                    let command_names = std::iter::once(command.name.as_str())
+                        .chain(command.aliases.iter().map(String::as_str));
+                    for command_name in command_names {
+                        if !seen.insert(command_name.to_string()) {
+                            continue;
+                        }
+
+                        items.push(FuzzyItem::Command {
+                            name: format!("Plugin: {command_name}"),
+                            description: format!("{plugin_name}: {command_description}"),
+                            action: format!("plugin_command:{command_name}"),
+                        });
                     }
-
-                    let command_description = command
-                        .get("description")
-                        .and_then(|v| v.as_str())
-                        .map(str::to_string)
-                        .unwrap_or_else(|| plugin_description.clone());
-
-                    items.push(FuzzyItem::Command {
-                        name: format!("Plugin: {command_name}"),
-                        description: format!("{plugin_name}: {command_description}"),
-                        action: format!("plugin_command:{command_name}"),
-                    });
                 }
             }
         }
@@ -415,15 +417,6 @@ impl FuzzySearcher {
     }
 }
 
-fn plugin_command_name(command: &serde_json::Value) -> Option<String> {
-    command.as_str().map(str::to_string).or_else(|| {
-        command
-            .get("name")
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-    })
-}
-
 impl Default for FuzzySearcher {
     fn default() -> Self {
         Self::new()
@@ -509,7 +502,20 @@ mod tests {
             r#"{
                 "name": "sober-raccoon",
                 "description": "Premium Sober governance cockpit",
-                "commands": ["sober", {"name": "sober-raccoon", "description": "Open Sober cockpit"}]
+                "contributions": {
+                    "commands": [
+                        {
+                            "name": "sober",
+                            "description": "Run Sober",
+                            "args": "passthrough"
+                        },
+                        {
+                            "name": "sober-raccoon",
+                            "description": "Open Sober cockpit",
+                            "args": "fixed"
+                        }
+                    ]
+                }
             }"#,
         )
         .unwrap();

@@ -10,10 +10,32 @@
   "hooks": [
     "on_command"
   ],
-  "commands": [
-    "sober",
-    "sober-raccoon"
-  ],
+  "contributions": {
+    "commands": [
+      {
+        "name": "sober",
+        "title": "Sober",
+        "description": "Run any Sober CLI command through the host bridge",
+        "entrypoint": "on_command",
+        "args": "passthrough",
+        "palette": true,
+        "tui": {
+          "show_output": "modal"
+        }
+      },
+      {
+        "name": "sober-raccoon",
+        "title": "Sober Raccoon",
+        "description": "Open the premium Sober cockpit commands",
+        "entrypoint": "on_command",
+        "args": "fixed",
+        "palette": true,
+        "tui": {
+          "show_output": "modal"
+        }
+      }
+    ]
+  },
   "events": [
     "Custom:sober-raccoon",
     "Custom:sober-raccoon.query"

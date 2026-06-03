@@ -27,61 +27,35 @@
   },
   "entry": "main.lua",
   "capabilities": {
-    "filesystem": {
-      "read": [
-        "${repo}/**",
-        "${git}/**"
-      ],
-      "write": [
-        "${git}/hooks/*"
-      ]
-    },
-    "process": {
-      "spawn": true,
-      "commands": [
-        "git"
-      ]
-    },
-    "network": {
-      "enabled": false
-    }
+    "network": false,
+    "network_allow": [],
+    "storage": true,
+    "env": false,
+    "memory_mb": 32,
+    "max_instructions": 5000000,
+    "http_timeout_secs": 5
   },
   "hooks": [
     "on_command"
   ],
-  "commands": [
-    {
-      "name": "hooks",
-      "description": "Manage git hooks",
-      "subcommands": [
-        {
-          "name": "install",
-          "description": "Install git hooks"
-        },
-        {
-          "name": "uninstall",
-          "description": "Remove installed hooks"
-        },
-        {
-          "name": "status",
-          "description": "Show hook installation status"
-        },
-        {
-          "name": "validate",
-          "description": "Validate commit messages or branch names"
-        },
-        {
-          "name": "list",
-          "description": "List available hook types"
+  "contributions": {
+    "commands": [
+      {
+        "name": "hooks",
+        "title": "Git Hooks",
+        "description": "Manage git hooks",
+        "entrypoint": "on_command",
+        "args": "fixed",
+        "aliases": [
+          "hook"
+        ],
+        "palette": true,
+        "tui": {
+          "show_output": "modal"
         }
-      ]
-    },
-    {
-      "name": "hook",
-      "description": "Alias for hooks command",
-      "alias": "hooks"
-    }
-  ],
+      }
+    ]
+  },
   "config": {
     "schema": {
       "enabled": {
