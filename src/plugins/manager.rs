@@ -104,9 +104,8 @@ impl PluginManager {
 
     /// Load only plugins that may handle a command namespace.
     ///
-    /// If a plugin manifest declares `commands`, this filters by that list. If
-    /// it declares only the legacy `hooks = ["on_command"]`, the plugin is
-    /// loaded and can decide by returning `handled = false`.
+    /// Command ownership is declared by `.progit-plugin.json`
+    /// `contributions.commands`. Legacy root-level `commands` is ignored.
     pub fn load_command_plugins_from_dir(
         &mut self,
         dir: &Path,
@@ -174,9 +173,7 @@ impl PluginManager {
         }));
 
         let plugin: Box<dyn Plugin> = match load_result {
-            Ok(Ok(lp)) => {
-                Box::new(lp)
-            }
+            Ok(Ok(lp)) => Box::new(lp),
             Ok(Err(e)) => {
                 anyhow::bail!("Failed to load Lua plugin from {:?}: {}", path, e);
             }
@@ -402,20 +399,19 @@ impl PluginManager {
         event: &crate::plugins::PluginEvent,
     ) -> Result<Vec<serde_json::Value>> {
         let mut responses = Vec::new();
-        let event_json =
-            serde_json::to_value(event).context("Failed to serialize plugin event")?;
+        let event_json = serde_json::to_value(event).context("Failed to serialize plugin event")?;
 
-        let mut outcomes: Vec<(String, std::result::Result<Option<serde_json::Value>, String>)> =
-            Vec::with_capacity(self.plugins.len());
+        let mut outcomes: Vec<(
+            String,
+            std::result::Result<Option<serde_json::Value>, String>,
+        )> = Vec::with_capacity(self.plugins.len());
 
         for plugin in &mut self.plugins {
             let name = plugin.metadata().name.clone();
             if self.quarantined.contains_key(&name) {
                 continue;
             }
-            let res = plugin
-                .on_event(&event_json)
-                .map_err(|e| e.to_string());
+            let res = plugin.on_event(&event_json).map_err(|e| e.to_string());
             outcomes.push((name, res));
         }
 
@@ -511,11 +507,7 @@ impl PluginManager {
     /// Plugins return `Some(result)` if they handle the command, `None` otherwise.
     /// The first plugin that handles the command "wins" - subsequent plugins are
     /// not consulted. This allows one plugin to own a command namespace.
-    pub fn dispatch_command(
-        &mut self,
-        command: &str,
-        args: &[String],
-    ) -> Option<CommandResult> {
+    pub fn dispatch_command(&mut self, command: &str, args: &[String]) -> Option<CommandResult> {
         let hook = PluginHook::OnCommand(command.to_string());
         let data = serde_json::json!({
             "command": command,
@@ -552,9 +544,18 @@ impl PluginManager {
                     self.error_counts.remove(&name);
                     return Some(CommandResult {
                         plugin: name,
-                        success: response.get("success").and_then(|v| v.as_bool()).unwrap_or(true),
-                        output: response.get("output").and_then(|v| v.as_str()).map(String::from),
-                        error: response.get("error").and_then(|v| v.as_str()).map(String::from),
+                        success: response
+                            .get("success")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(true),
+                        output: response
+                            .get("output")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
+                        error: response
+                            .get("error")
+                            .and_then(|v| v.as_str())
+                            .map(String::from),
                         data: response,
                     });
                 }
@@ -588,43 +589,16 @@ fn command_manifest_allows(entry: &Path, command: &str) -> bool {
         }
 
         let Ok(raw) = std::fs::read_to_string(&candidate) else {
-            return true;
+            return false;
         };
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
-            return true;
+        let Ok(manifest) = PluginContributionManifest::from_json(&raw) else {
+            return false;
         };
 
-        if let Some(commands) = value.get("commands").and_then(|v| v.as_array()) {
-            return commands
-                .iter()
-                .any(|item| command_entry_matches(item, command));
-        }
-
-        return value
-            .get("hooks")
-            .and_then(|v| v.as_array())
-            .map(|hooks| hooks.iter().any(|h| h.as_str() == Some("on_command")))
-            .unwrap_or(false);
+        return manifest.contributions.command(command).is_some();
     }
 
-    true
-}
-
-fn command_entry_matches(item: &serde_json::Value, command: &str) -> bool {
-    if item.as_str() == Some(command) {
-        return true;
-    }
-
-    item.as_object().is_some_and(|object| {
-        object
-            .get("name")
-            .and_then(|v| v.as_str())
-            .is_some_and(|name| name == command)
-            || object
-                .get("alias")
-                .and_then(|v| v.as_str())
-                .is_some_and(|alias| alias == command)
-    })
+    false
 }
 
 /// Result of a plugin command execution
@@ -699,6 +673,29 @@ mod tests {
     }
 
     #[test]
+    fn sober_raccoon_lists_command_routes() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let plugin_dir = repo.join("plugins").join("sober-raccoon");
+        let context = PluginContext {
+            repo_path: repo.to_string_lossy().to_string(),
+            user: None,
+            env: Default::default(),
+            config: Default::default(),
+        };
+        let mut manager = PluginManager::new(repo);
+
+        manager.load_from_dir(&plugin_dir, &context);
+        let result = manager
+            .dispatch_command("sober-raccoon", &["route".to_string(), "list".to_string()])
+            .expect("sober-raccoon should handle route list");
+
+        assert!(result.success);
+        let output = result.output.expect("route list should return output");
+        assert!(output.contains("Sober Raccoon routes"));
+        assert!(output.contains("prog plugin sober <args...>"));
+    }
+
+    #[test]
     fn dispatch_command_skips_unhandled_responses() {
         let dir = tempfile::tempdir().unwrap();
         let first = dir.path().join("first.lua");
@@ -769,7 +766,8 @@ end
         };
         let mut manager = PluginManager::new(repo);
 
-        let loaded = manager.load_command_plugins_from_dir(&repo.join("plugins"), &context, "hooks");
+        let loaded =
+            manager.load_command_plugins_from_dir(&repo.join("plugins"), &context, "hooks");
         let plugins = manager.loaded_plugins();
 
         assert!(loaded > 0);

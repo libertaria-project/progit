@@ -9,6 +9,8 @@ pub enum CommandAction {
     Status(String),
     Error(String),
     SuspendAndRun(Vec<String>),
+    RunAndShowOutput(Vec<String>),
+    RunPluginCommand { command: String, args: Vec<String> },
 }
 
 pub fn execute(app: &mut App, input: &str) -> CommandAction {
@@ -183,19 +185,29 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
             }
         }
         "sober" => match crate::sober::tui_command_args(&parts[1..]) {
-            Ok(args) => CommandAction::SuspendAndRun(args),
+            Ok(args) => CommandAction::RunAndShowOutput(args),
             Err(e) => CommandAction::Error(e.to_string()),
         },
+        "plugin" => {
+            if parts.len() < 2 {
+                CommandAction::Error("Usage: :plugin <command> [args...]".to_string())
+            } else {
+                let command = parts[1].to_string();
+                let args = parts[2..].iter().map(|s| (*s).to_string()).collect();
+                CommandAction::RunPluginCommand { command, args }
+            }
+        }
         "review" => {
             // Enter code review mode
             if parts.len() < 2 {
-                return CommandAction::Error(
-                    "Usage: :review <file> [commit-sha]".to_string(),
-                );
+                return CommandAction::Error("Usage: :review <file> [commit-sha]".to_string());
             }
 
             let file_path = parts[1].to_string();
-            let commit_sha = parts.get(2).map(|s| s.to_string()).unwrap_or_else(|| "HEAD".to_string());
+            let commit_sha = parts
+                .get(2)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "HEAD".to_string());
 
             // Get diff for the file
             let diff_cmd = std::process::Command::new("git")
@@ -208,9 +220,10 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                     let diff_text = String::from_utf8_lossy(&output.stdout).to_string();
 
                     if diff_text.is_empty() {
-                        return CommandAction::Error(
-                            format!("No changes found in {} at {}", file_path, commit_sha)
-                        );
+                        return CommandAction::Error(format!(
+                            "No changes found in {} at {}",
+                            file_path, commit_sha
+                        ));
                     }
 
                     // Create review state
@@ -223,16 +236,57 @@ pub fn execute(app: &mut App, input: &str) -> CommandAction {
                     app.review_state = Some(review_state);
                     app.view_mode = ViewMode::Review;
 
-                    CommandAction::Status(
-                        format!("📝 Reviewing {} @ {}", file_path, &commit_sha[..8])
-                    )
+                    CommandAction::Status(format!(
+                        "📝 Reviewing {} @ {}",
+                        file_path,
+                        &commit_sha[..8]
+                    ))
                 }
-                Ok(output) => CommandAction::Error(
-                    format!("Git diff failed: {}", String::from_utf8_lossy(&output.stderr))
-                ),
+                Ok(output) => CommandAction::Error(format!(
+                    "Git diff failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                )),
                 Err(e) => CommandAction::Error(format!("Failed to run git diff: {}", e)),
             }
         }
         _ => CommandAction::Error(format!("Unknown command: {}", parts[0])),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{execute, CommandAction};
+    use crate::tui::app::App;
+
+    #[test]
+    fn plugin_command_parsing_requires_namespace() {
+        let mut app = App::new();
+        let action = execute(&mut app, "plugin");
+
+        assert!(matches!(
+            action,
+            CommandAction::Error(msg) if msg == "Usage: :plugin <command> [args...]"
+        ));
+    }
+
+    #[test]
+    fn plugin_command_parsing_routes_to_plugin_namespace() {
+        let mut app = App::new();
+        let action = execute(&mut app, "plugin sober preflight --base HEAD");
+
+        match action {
+            CommandAction::RunPluginCommand { command, args } => {
+                assert_eq!(command, "sober");
+                assert_eq!(
+                    args,
+                    vec![
+                        "preflight".to_string(),
+                        "--base".to_string(),
+                        "HEAD".to_string()
+                    ]
+                );
+            }
+            other => panic!("Expected RunPluginCommand, got: {other:?}"),
+        }
     }
 }

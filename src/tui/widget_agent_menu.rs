@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Markus Maiwald
 
 //! Agent Menu Widget
-//! 
+//!
 //! [ARCH] Modal menu for selecting AI agent actions on virtual branches.
 //! Provides curated prompts for common development tasks.
 
@@ -151,31 +151,32 @@ impl AgentAction {
 /// Render the agent menu modal
 pub fn render(frame: &mut Frame, app: &App, selected: usize) {
     let colors = app.theme.colors();
-    
+
     // Create centered modal (60% width, 70% height)
     let area = centered_rect(60, 70, frame.area());
-    
+
     // Clear background
     let block = Block::default()
         .title(" 🤖 AI Agent Actions ")
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .border_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .style(Style::default().bg(Color::Black));
-    
+
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    
+
     // Split: actions list (60%) | description (40%)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(60),
-            Constraint::Percentage(40),
-        ])
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(inner);
-    
+
     // Render action list
     let actions = AgentAction::all();
     let items: Vec<ListItem> = actions
@@ -190,21 +191,20 @@ pub fn render(frame: &mut Frame, app: &App, selected: usize) {
             } else {
                 Style::default().fg(Color::White)
             };
-            
+
             ListItem::new(format!("{}{}", prefix, action.display_name())).style(style)
         })
         .collect();
-    
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title(" Select Action ")
-                .borders(Borders::ALL)
-                .border_style(colors.border()),
-        );
-    
+
+    let list = List::new(items).block(
+        Block::default()
+            .title(" Select Action ")
+            .borders(Borders::ALL)
+            .border_style(colors.border()),
+    );
+
     frame.render_widget(list, chunks[0]);
-    
+
     // Render description for selected action
     if let Some(action) = actions.get(selected) {
         let lines = vec![
@@ -216,13 +216,21 @@ pub fn render(frame: &mut Frame, app: &App, selected: usize) {
             Line::from(""),
             Line::from(vec![
                 Span::styled("Press ", colors.dim()),
-                Span::styled("Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Enter",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" to execute | ", colors.dim()),
-                Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Esc",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(" to cancel", colors.dim()),
             ]),
         ];
-        
+
         let para = Paragraph::new(lines)
             .block(
                 Block::default()
@@ -231,7 +239,7 @@ pub fn render(frame: &mut Frame, app: &App, selected: usize) {
                     .border_style(colors.border()),
             )
             .alignment(Alignment::Left);
-        
+
         frame.render_widget(para, chunks[1]);
     }
 }

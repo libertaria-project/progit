@@ -149,7 +149,8 @@ Maintainers promote `forge` to `main` after review and validation.
 
    - Create Forgejo release notes.
    - Build and publish binaries if needed.
-   - Update AUR package if applicable.
+   - `scripts/release.sh` now updates the `progit-bin` AUR package automatically.
+     Set `SKIP_AUR_UPDATE=true` if your environment is not AUR-capable.
 
 ### Dry run
 

@@ -8,8 +8,8 @@
 //! - Git bar at top, status bar at bottom
 //! - Main content area contains the active view window
 
-pub mod app;
 pub mod agent_executor;
+pub mod app;
 pub mod input;
 pub mod markdown;
 pub mod style;
@@ -17,6 +17,7 @@ pub mod theme;
 pub mod widget_agent_menu;
 pub mod widget_auth_notice;
 pub mod widget_blame;
+mod widget_command_output;
 pub mod widget_conflicts;
 pub mod widget_dashboard;
 mod widget_debug;
@@ -470,6 +471,10 @@ pub fn render(frame: &mut Frame, app: &mut App) -> UIAreas {
     // Plugin manager modal
     if app.show_plugins {
         widget_plugins::render(frame, app);
+    }
+
+    if app.input_mode == InputMode::CommandOutput {
+        widget_command_output::render(frame, app);
     }
 
     // Conflict resolution modal

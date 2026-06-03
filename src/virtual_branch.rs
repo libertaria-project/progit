@@ -76,13 +76,13 @@ impl HunkRef {
         if self.file_path != other.file_path {
             return false;
         }
-        
+
         // Check if line ranges overlap
         let self_start = self.new_start;
         let self_end = self.new_start + self.new_count;
         let other_start = other.new_start;
         let other_end = other.new_start + other.new_count;
-        
+
         // Ranges overlap if one starts before the other ends
         self_start < other_end && other_start < self_end
     }
@@ -449,21 +449,21 @@ impl VirtualBranchManager {
     /// This is used to capture changes applied by the agent or user.
     pub fn detect_workspace_hunks(&self) -> Result<Vec<HunkRef>> {
         use git2::{DiffOptions, Repository};
-        
+
         // Open repo
         let repo_root = self.storage_path.parent().and_then(|p| p.parent()).unwrap(); // .project/branches -> .project -> root
         let repo = Repository::open(repo_root).context("Failed to open repository")?;
-        
+
         // Diff index to workdir (unstaged changes)
         let mut opts = DiffOptions::new();
         opts.context_lines(0); // We want minimal context for precise hashing
         opts.interhunk_lines(0);
-        
+
         let diff = repo.diff_index_to_workdir(None, Some(&mut opts))?;
-        
+
         // We don't need the `print` call, it was just debugging.
         // And we don't need 'hunks' vec here since we delegate to collect_git2_hunks
-        
+
         self.collect_git2_hunks(&diff)
     }
 
@@ -471,9 +471,9 @@ impl VirtualBranchManager {
     /// Returns a map of branch_id -> Vec of conflicting branch IDs
     pub fn detect_conflicts(&self) -> HashMap<String, Vec<String>> {
         let mut conflicts: HashMap<String, Vec<String>> = HashMap::new();
-        
+
         let branches: Vec<_> = self.branches.values().collect();
-        
+
         // Compare each pair of branches
         for (i, branch_a) in branches.iter().enumerate() {
             for branch_b in branches.iter().skip(i + 1) {
@@ -482,10 +482,12 @@ impl VirtualBranchManager {
                     for hunk_b in &branch_b.owned_hunks {
                         if hunk_a.overlaps_with(hunk_b) {
                             // Record bidirectional conflict
-                            conflicts.entry(branch_a.id.clone())
+                            conflicts
+                                .entry(branch_a.id.clone())
                                 .or_insert_with(Vec::new)
                                 .push(branch_b.id.clone());
-                            conflicts.entry(branch_b.id.clone())
+                            conflicts
+                                .entry(branch_b.id.clone())
                                 .or_insert_with(Vec::new)
                                 .push(branch_a.id.clone());
                         }
@@ -493,28 +495,35 @@ impl VirtualBranchManager {
                 }
             }
         }
-        
+
         // Deduplicate conflict lists
         for conflicts_list in conflicts.values_mut() {
             conflicts_list.sort();
             conflicts_list.dedup();
         }
-        
+
         conflicts
     }
 
     fn collect_git2_hunks(&self, diff: &git2::Diff) -> Result<Vec<HunkRef>> {
         use std::cell::RefCell;
         let hunks = RefCell::new(Vec::new());
-        
+
         // We iterate file-by-file
         diff.foreach(
             &mut |_file, _progress| true,
             None,
             Some(&mut |delta, hunk| {
-                let path = delta.new_file().path().and_then(|p| p.to_str()).unwrap_or("").to_string();
-                if path.is_empty() { return true; }
-                
+                let path = delta
+                    .new_file()
+                    .path()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                if path.is_empty() {
+                    return true;
+                }
+
                 hunks.borrow_mut().push(HunkRef {
                     file_path: path,
                     hash: String::new(), // to be filled
@@ -532,15 +541,15 @@ impl VirtualBranchManager {
                 // The previous code had `detect_workspace_hunks` calling `self.collect_git2_hunks`.
                 // And `collect_git2_hunks` returned `git_hunk_collector(diff)`.
                 // So this whole body of `collect_git2_hunks` was redundant or seemingly unused/overwritten logic?
-                
+
                 // Ah, line 544 in the previous file was: `Ok(git_hunk_collector(diff)?)`
                 // So the entire logic inside `collect_git2_hunks` UP TO that point was ignored.
                 // I should just make `collect_git2_hunks` call `git_hunk_collector`.
                 true
-            })
+            }),
         )?;
-        
-        // As analyzed above, the previous implementation of this function ignored the local `hunks` vec 
+
+        // As analyzed above, the previous implementation of this function ignored the local `hunks` vec
         // and just called `git_hunk_collector`. Let's simplify.
         Ok(git_hunk_collector(diff)?)
     }
@@ -552,50 +561,58 @@ fn git_hunk_collector(diff: &git2::Diff) -> Result<Vec<HunkRef>> {
         hunk_ref: HunkRef,
         content: Vec<u8>,
     }
-    
+
     let mut buffered_hunks: Vec<BufferedHunk> = Vec::new();
-    
+
     // We need a RefCell because the closures capture mutable state
     use std::cell::RefCell;
     let hunks_cell = RefCell::new(&mut buffered_hunks);
-    
+
     diff.foreach(
         &mut |_file, _progress| true,
         None,
         Some(&mut |delta, hunk| {
-             let path = delta.new_file().path().and_then(|p| p.to_str()).unwrap_or("").to_string();
-             
-             let h = HunkRef {
-                 file_path: path,
-                 hash: String::new(), 
-                 old_start: hunk.old_start(),
-                 old_count: hunk.old_lines(),
-                 new_start: hunk.new_start(),
-                 new_count: hunk.new_lines(),
-             };
-             
-             hunks_cell.borrow_mut().push(BufferedHunk {
-                 hunk_ref: h,
-                 content: Vec::new(),
-             });
-             true
+            let path = delta
+                .new_file()
+                .path()
+                .and_then(|p| p.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            let h = HunkRef {
+                file_path: path,
+                hash: String::new(),
+                old_start: hunk.old_start(),
+                old_count: hunk.old_lines(),
+                new_start: hunk.new_start(),
+                new_count: hunk.new_lines(),
+            };
+
+            hunks_cell.borrow_mut().push(BufferedHunk {
+                hunk_ref: h,
+                content: Vec::new(),
+            });
+            true
         }),
         Some(&mut |_delta, _hunk, line| {
-             let mut hunks = hunks_cell.borrow_mut();
-             if let Some(last) = hunks.last_mut() {
-                 let content = line.content();
-                 last.content.extend_from_slice(content);
-             }
-             true
-        })
+            let mut hunks = hunks_cell.borrow_mut();
+            if let Some(last) = hunks.last_mut() {
+                let content = line.content();
+                last.content.extend_from_slice(content);
+            }
+            true
+        }),
     )?;
-    
+
     // Finalize hashes
-    let result = buffered_hunks.into_iter().map(|mut bh| {
-        bh.hunk_ref.hash = compute_hash(std::str::from_utf8(&bh.content).unwrap_or(""));
-        bh.hunk_ref
-    }).collect();
-    
+    let result = buffered_hunks
+        .into_iter()
+        .map(|mut bh| {
+            bh.hunk_ref.hash = compute_hash(std::str::from_utf8(&bh.content).unwrap_or(""));
+            bh.hunk_ref
+        })
+        .collect();
+
     Ok(result)
 }
 

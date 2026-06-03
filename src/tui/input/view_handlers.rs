@@ -484,9 +484,7 @@ pub(super) fn handle_review_key(app: &mut App, key: KeyEvent) -> KeyAction {
         // SyncProvider lifecycle inside the render loop, async progress
         // indicator) is Sprint D scope.
         KeyCode::Char('S') => {
-            app.set_status(
-                "Push review comments via CLI: `prog mr review push <mr_id>`",
-            );
+            app.set_status("Push review comments via CLI: `prog mr review push <mr_id>`");
             KeyAction::Refresh
         }
 

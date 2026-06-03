@@ -6,6 +6,7 @@
 // Unused imports and variables are NOT suppressed — those are real hygiene issues.
 #![allow(dead_code)]
 
+mod agent;
 mod cli;
 mod command;
 mod diff;
@@ -29,7 +30,6 @@ mod storage;
 mod sync;
 mod tui;
 mod virtual_branch;
-mod agent;
 mod workspace;
 
 use anyhow::{anyhow, Context, Result};
@@ -148,6 +148,9 @@ pub(crate) enum PluginAction {
         /// Install from git URL directly
         #[arg(long)]
         git: bool,
+        /// Install into the current project under plugins/ (legacy behavior)
+        #[arg(long)]
+        project: bool,
     },
     /// Remove an installed plugin
     Remove {
@@ -448,10 +451,7 @@ fn run_review_push(provider: &dyn crate::sync::SyncProvider, mr_id: u64) -> Resu
 
     let total = review.comments.len();
     if total == 0 {
-        println!(
-            "{} Latest review has no comments to push.",
-            "ℹ️".cyan()
-        );
+        println!("{} Latest review has no comments to push.", "ℹ️".cyan());
         return Ok(());
     }
 
@@ -555,7 +555,11 @@ fn run_project_wiki(project_root: &std::path::Path) -> Result<()> {
     println!("root: {}", view.root.display().to_string().cyan());
 
     for page in view.pages {
-        let required = if page.required { "required" } else { "optional" };
+        let required = if page.required {
+            "required"
+        } else {
+            "optional"
+        };
         println!();
         println!(
             "{} {} [{}] {}",
@@ -743,12 +747,9 @@ fn run_sober_action(project_root: &std::path::Path, action: SoberAction) -> Resu
             sober::run(project_root, &args)
         }
         SoberAction::Hooks { action } => match action {
-            SoberHooksAction::Status { hook, json } => run_sober_hook_action(
-                project_root,
-                "status",
-                hook,
-                json,
-            ),
+            SoberHooksAction::Status { hook, json } => {
+                run_sober_hook_action(project_root, "status", hook, json)
+            }
             SoberHooksAction::Install { hook, json } => {
                 run_sober_hook_action(project_root, "install", hook, json)
             }
@@ -878,11 +879,7 @@ fn print_validation_message(
 
 /// Handle progit:// URL scheme
 #[cfg(feature = "forge-backend")]
-fn handle_clone(
-    endpoint: &str,
-    repo: &str,
-    dest: &std::path::Path,
-) -> Result<()> {
+fn handle_clone(endpoint: &str, repo: &str, dest: &std::path::Path) -> Result<()> {
     use colored::*;
     use progit::git::backend::{ForgedBackend, LocalGitBackend};
     use progit::git::clone::clone_repo;
@@ -927,9 +924,9 @@ fn handle_clone(
 
 fn handle_deeplink(url: &str) -> Result<()> {
     use colored::*;
-    
+
     let parts: Vec<&str> = url.split('/').collect();
-    
+
     match parts[..] {
         ["install", plugin] => {
             let (name, version) = match plugin.split('@').collect::<Vec<_>>()[..] {
@@ -937,7 +934,7 @@ fn handle_deeplink(url: &str) -> Result<()> {
                 [n] => (n, None),
                 _ => (plugin, None),
             };
-            
+
             println!("{} Installing plugin '{}'", "📦".cyan(), name);
             if let Some(v) = version {
                 println!("   Version: {}", v);
@@ -945,7 +942,10 @@ fn handle_deeplink(url: &str) -> Result<()> {
             println!();
             println!("Run: {}", format!("prog plugin install {}", name).yellow());
             println!();
-            println!("Then verify: {}", format!("prog plugin verify {}", name).yellow());
+            println!(
+                "Then verify: {}",
+                format!("prog plugin verify {}", name).yellow()
+            );
         }
         ["verify", plugin] => {
             println!("{} Verifying plugin '{}'", "🔍".cyan(), plugin);
@@ -977,7 +977,7 @@ fn handle_deeplink(url: &str) -> Result<()> {
             eprintln!("   Supported: install, verify, update, uninstall, search, trust");
         }
     }
-    
+
     Ok(())
 }
 
@@ -1004,7 +1004,12 @@ fn main() -> Result<()> {
         let argv: Vec<String> = std::env::args().collect();
         if argv.len() >= 2 && argv[1] == "clone" {
             let cli = Cli::parse();
-            if let Some(Commands::Clone { endpoint, repo, dest }) = cli.command {
+            if let Some(Commands::Clone {
+                endpoint,
+                repo,
+                dest,
+            }) = cli.command
+            {
                 return handle_clone(&endpoint, &repo, &dest);
             }
         }
@@ -1504,7 +1509,11 @@ fn main() -> Result<()> {
             crate::rebase::run(&path)?;
         }
         #[cfg(feature = "forge-backend")]
-        Some(Commands::Clone { endpoint, repo, dest }) => {
+        Some(Commands::Clone {
+            endpoint,
+            repo,
+            dest,
+        }) => {
             handle_clone(&endpoint, &repo, &dest)?;
         }
         None => {

@@ -6,6 +6,47 @@
 
 ProGit's plugin system enables extending functionality with Lua scripts while keeping the binary <7MB. Plugins can respond to events, execute commands, and integrate with the workflow.
 
+## Current Integration Contract
+
+Plugins expose host-visible endpoints through `.progit-plugin.json` under `contributions`. ProGit does not read legacy root-level `commands`.
+
+```json
+{
+  "name": "example-plugin",
+  "hooks": ["on_command"],
+  "contributions": {
+    "commands": [
+      {
+        "name": "example",
+        "title": "Example",
+        "description": "Run example commands",
+        "entrypoint": "on_command",
+        "args": "passthrough",
+        "palette": true,
+        "tui": {
+          "show_output": "modal"
+        }
+      }
+    ]
+  }
+}
+```
+
+The runtime hook receives:
+
+```lua
+function on_command(data)
+    -- data.command is the contributed namespace
+    -- data.args is argv after the namespace
+    return {
+        handled = true,
+        success = true,
+        output = "done",
+        data = {}
+    }
+end
+```
+
 ## Quick Start
 
 ### 1. Create a Plugin
@@ -34,11 +75,16 @@ function plugin:on_event(event)
     return nil
 end
 
-function plugin:execute_command(command, args)
-    if command == "hello" then
-        return "Hello from " .. self.metadata.name .. "!"
+function on_command(data)
+    if data.command == "hello" then
+        return {
+            handled = true,
+            success = true,
+            output = "Hello from my-plugin!"
+        }
     end
-    return "Unknown command"
+
+    return { handled = false }
 end
 
 return plugin
@@ -47,7 +93,7 @@ return plugin
 ### 2. Install Plugin
 
 ```bash
-# Copy to plugins directory
+# Copy plugin into ProGit plugin folder
 mkdir -p ~/.progit/plugins/
 cp my-plugin.lua ~/.progit/plugins/
 
@@ -59,7 +105,7 @@ prog config plugin.my-plugin.enabled=true
 
 ```bash
 # Trigger command
-:plugin my-plugin hello
+:plugin hello
 
 # Plugin automatically receives events
 ```
@@ -120,22 +166,31 @@ end
 
 ### Commands
 
+Plugins expose command namespaces in `contributions.commands` and implement `on_command(data)`.
+
 ```lua
-function plugin:execute_command(command, args)
-    -- command = string (command name)
-    -- args = table of strings
-    
-    if command == "my-command" then
-        return "Command output"
+function on_command(data)
+    -- data.command = contributed command namespace
+    -- data.args = argv after the namespace
+
+    if data.command ~= "my-command" then
+        return { handled = false }
     end
-    
-    return "Unknown command: " .. command
+
+    return {
+        handled = true,
+        success = true,
+        output = "Command output",
+        data = {}
+    }
 end
 ```
 
-Execute via TUI:
-```
-:plugin <plugin-name> <command> [args...]
+Execute via TUI or CLI:
+
+```text
+:plugin my-command [args...]
+prog plugin my-command [args...]
 ```
 
 ## Configuration
@@ -301,8 +356,8 @@ fs.write_file("~/.progit/output.txt", "content")
 
 ### Command not found
 
-1. Verify command name in `execute_command`
-2. Check TUI command syntax: `:plugin <name> <command>`
+1. Verify the command is declared in `contributions.commands`
+2. Check TUI command syntax: `:plugin <command>`
 
 ## Support
 

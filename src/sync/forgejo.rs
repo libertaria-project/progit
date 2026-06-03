@@ -96,7 +96,9 @@ impl ForgejoProvider {
     fn base_url(&self) -> String {
         format!(
             "{}/repos/{}/{}",
-            self.api_root(), self.config.owner, self.config.repo
+            self.api_root(),
+            self.config.owner,
+            self.config.repo
         )
     }
 }
@@ -151,7 +153,10 @@ impl SyncProvider for ForgejoProvider {
                 self.clear_cached_token();
                 let _ = keyring::delete_token(&self.config.url, &self.config.owner);
             }
-            return Err(anyhow!("Forgejo authentication failed: {}", response.status()));
+            return Err(anyhow!(
+                "Forgejo authentication failed: {}",
+                response.status()
+            ));
         }
 
         log::info!("✅ Authenticated with Forgejo");
@@ -777,7 +782,10 @@ mod tests {
 
         assert!(provider.cached_token().unwrap().is_none());
         provider.remember_token("token-123").unwrap();
-        assert_eq!(provider.cached_token().unwrap().as_deref(), Some("token-123"));
+        assert_eq!(
+            provider.cached_token().unwrap().as_deref(),
+            Some("token-123")
+        );
         provider.clear_cached_token();
         assert!(provider.cached_token().unwrap().is_none());
     }

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `sober-raccoon` now treats `prog plugin sober ...` as a bounded pass-through
+  to the Sober CLI, so new Sober subcommands work without ProGit/plugin
+  hardwiring. The premium cockpit remains available as
+  `prog plugin sober-raccoon ...`.
 
 ## [0.8.2-beta] - 2026-06-02
 

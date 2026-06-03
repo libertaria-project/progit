@@ -13,12 +13,171 @@
 
 use anyhow::{Context, Result};
 use colored::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::lockfile::Lockfile;
 use super::manager::CommandResult;
 use super::registry::{PluginRegistry, PluginSource};
 use crate::storage::config;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PluginInstallScope {
+    User,
+    Project,
+}
+
+impl PluginInstallScope {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Project => "project",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct DiscoveredPlugin {
+    name: String,
+    version: String,
+    scope: PluginInstallScope,
+}
+
+fn plugin_dirs(project_root: &Path) -> Vec<(PathBuf, PluginInstallScope)> {
+    vec![
+        (
+            project_root.join(".progit").join("plugins"),
+            PluginInstallScope::User,
+        ),
+        (project_root.join("plugins"), PluginInstallScope::Project),
+    ]
+}
+
+fn plugin_dir_for_scope(project_root: &Path, scope: PluginInstallScope) -> PathBuf {
+    match scope {
+        PluginInstallScope::User => project_root.join(".progit").join("plugins"),
+        PluginInstallScope::Project => project_root.join("plugins"),
+    }
+}
+
+fn plugin_candidate_paths(dir: &Path, name: &str) -> Vec<PathBuf> {
+    vec![dir.join(format!("{}.lua", name)), dir.join(name)]
+}
+
+fn has_plugin_candidate(dir: &Path, name: &str) -> bool {
+    plugin_candidate_paths(dir, name)
+        .iter()
+        .any(|path| path.exists())
+}
+
+fn plugin_install_scope_for_name(project_root: &Path, name: &str) -> Option<PluginInstallScope> {
+    plugin_dirs(project_root)
+        .into_iter()
+        .find_map(|(dir, scope)| has_plugin_candidate(&dir, name).then_some(scope))
+}
+
+fn plugin_from_file_entry(
+    path: &Path,
+    lockfile: Option<&Lockfile>,
+    scope: PluginInstallScope,
+) -> DiscoveredPlugin {
+    let name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+    let version = lockfile
+        .and_then(|lf| lf.get_version(name))
+        .unwrap_or_else(|| "local".to_string());
+
+    DiscoveredPlugin {
+        name: name.to_string(),
+        version,
+        scope,
+    }
+}
+
+fn collect_installed_plugins(project_root: &Path) -> Result<Vec<DiscoveredPlugin>> {
+    let lockfile_path = project_root.join(".project").join("plugins.lock.kdl");
+    let lockfile = if lockfile_path.exists() {
+        Lockfile::load(&lockfile_path).ok()
+    } else {
+        None
+    };
+
+    let mut plugins = Vec::new();
+
+    for (plugin_dir, scope) in plugin_dirs(project_root) {
+        if !plugin_dir.exists() {
+            continue;
+        }
+
+        for entry in std::fs::read_dir(&plugin_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.extension().map(|e| e == "lua").unwrap_or(false) {
+                plugins.push(plugin_from_file_entry(&path, lockfile.as_ref(), scope));
+                continue;
+            }
+
+            if path.is_dir() {
+                let manifest_path = path.join(".progit-plugin.json");
+                if manifest_path.exists() {
+                    let name = path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown");
+
+                    let version = lockfile
+                        .as_ref()
+                        .and_then(|lf| lf.get_version(name))
+                        .unwrap_or_else(|| "local".to_string());
+
+                    plugins.push(DiscoveredPlugin {
+                        name: name.to_string(),
+                        version,
+                        scope,
+                    });
+                }
+            }
+        }
+    }
+
+    plugins.sort_by(|a, b| {
+        (a.scope.label(), a.name.as_str()).cmp(&(b.scope.label(), b.name.as_str()))
+    });
+
+    Ok(plugins)
+}
+
+fn plugin_dirs_exist(project_root: &Path) -> bool {
+    plugin_dirs(project_root)
+        .into_iter()
+        .any(|(path, _)| path.exists())
+}
+
+fn remove_plugin_candidates(project_root: &Path, name: &str) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    for (plugin_dir, _) in plugin_dirs(project_root) {
+        for path in plugin_candidate_paths(&plugin_dir, name) {
+            if path.exists() {
+                candidates.push(path);
+            }
+        }
+    }
+    candidates
+}
+
+/// Convert a TUI `:plugin ...` command into a `prog plugin ...` process.
+pub fn tui_command_args(parts: &[&str]) -> Result<Vec<String>> {
+    if parts.is_empty() {
+        anyhow::bail!("Usage: :plugin <command> [args...]");
+    }
+
+    let current_exe = std::env::current_exe().unwrap_or_else(|_| "prog".into());
+    let mut args = vec![current_exe.display().to_string(), "plugin".to_string()];
+    args.extend(parts.iter().map(|part| (*part).to_string()));
+    Ok(args)
+}
 
 /// Helper to create a registry with config support
 fn get_registry(project_root: &Path) -> Result<PluginRegistry> {
@@ -40,13 +199,13 @@ fn load_command_manager(
         config: Default::default(),
     };
 
-    let plugin_dir = project_root.join("plugins");
-    manager.load_command_plugins_from_dir(&plugin_dir, &context, command);
-
-    let user_plugins = project_root.join(".progit").join("plugins");
+    let user_plugins = plugin_dir_for_scope(project_root, PluginInstallScope::User);
     if user_plugins.exists() {
         manager.load_command_plugins_from_dir(&user_plugins, &context, command);
     }
+
+    let project_plugin_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project);
+    manager.load_command_plugins_from_dir(&project_plugin_dir, &context, command);
 
     Ok(manager)
 }
@@ -65,8 +224,7 @@ fn print_command_result(command: &str, result: CommandResult) -> Result<()> {
     }
 
     if !success {
-        let error = error
-            .unwrap_or_else(|| format!("plugin command '{command}' failed"));
+        let error = error.unwrap_or_else(|| format!("plugin command '{command}' failed"));
         anyhow::bail!("{}: {}", plugin, error);
     }
 
@@ -78,90 +236,78 @@ fn print_command_result(command: &str, result: CommandResult) -> Result<()> {
 /// Returns `Ok(false)` when no installed plugin owns the command. If a plugin
 /// owns the command and fails, this returns an error instead of falling back to
 /// a built-in implementation.
-pub fn try_run_command(project_root: &Path, command: &str, args: &[String]) -> Result<bool> {
-    let plugin_dir = project_root.join("plugins");
-    let user_plugin_dir = project_root.join(".progit").join("plugins");
-    if !plugin_dir.exists() && !user_plugin_dir.exists() {
-        return Ok(false);
+pub fn try_run_command_capture(
+    project_root: &Path,
+    command: &str,
+    args: &[String],
+) -> Result<Option<CommandResult>> {
+    if !plugin_dirs_exist(project_root) {
+        return Ok(None);
     }
 
     let mut manager = load_command_manager(project_root, command)?;
     let Some(result) = manager.dispatch_command(command, args) else {
-        return Ok(false);
+        return Ok(None);
     };
 
-    print_command_result(command, result)?;
-    Ok(true)
+    Ok(Some(result))
+}
+
+pub fn try_run_command(project_root: &Path, command: &str, args: &[String]) -> Result<bool> {
+    Ok(try_run_command_capture(project_root, command, args)?.is_some())
+}
+
+/// Run an installed plugin command and return the execution result.
+///
+/// This keeps plugin output available to callers that need structured data
+/// (like TUI command output modal), while preserving the existing CLI
+/// behavior that prints to stdout.
+pub fn run_command_capture(
+    project_root: &Path,
+    command: &str,
+    args: &[String],
+) -> Result<CommandResult> {
+    match try_run_command_capture(project_root, command, args)? {
+        Some(result) => Ok(result),
+        None => anyhow::bail!(
+            "No installed plugin handled command '{}'. Try: prog plugin list",
+            command
+        ),
+    }
 }
 
 /// Run an installed plugin command and fail if no plugin handles it.
 pub fn run_command(project_root: &Path, command: &str, args: &[String]) -> Result<()> {
-    if try_run_command(project_root, command, args)? {
-        return Ok(());
-    }
+    let result = run_command_capture(project_root, command, args)?;
+    print_command_result(command, result)?;
 
-    anyhow::bail!(
-        "No installed plugin handled command '{}'. Try: prog plugin list",
-        command
-    )
+    Ok(())
 }
 
 /// List installed plugins
 pub fn list(project_root: &Path) -> Result<()> {
-    let plugin_dir = project_root.join("plugins");
+    let plugins = collect_installed_plugins(project_root)?;
 
-    if !plugin_dir.exists() {
+    if !plugin_dirs_exist(project_root) {
         println!("{} No plugins installed.", "📦".yellow());
         println!("   Install plugins with: prog plugin install <name>");
+        println!("   (installs into .progit/plugins/ by default)");
         return Ok(());
     }
-
-    let mut count = 0;
-
-    // Check for lockfile
-    let lockfile_path = project_root.join(".project").join("plugins.lock.kdl");
-    let lockfile = if lockfile_path.exists() {
-        Lockfile::load(&lockfile_path).ok()
-    } else {
-        None
-    };
 
     println!("{} Installed plugins:", "📦".blue());
     println!();
 
-    for entry in std::fs::read_dir(&plugin_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        // Check for .lua files or plugin directories
-        if path.extension().map(|e| e == "lua").unwrap_or(false) {
-            let name = path.file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown");
-
-            // Get version from lockfile if available
-            let version = lockfile.as_ref()
-                .and_then(|lf| lf.get_version(name))
-                .unwrap_or_else(|| "local".to_string());
-
-            println!("   {} {} ({})", "•".green(), name, version.dimmed());
-            count += 1;
-        } else if path.is_dir() {
-            // Check for plugin manifest in directory
-            let manifest_path = path.join(".progit-plugin.json");
-            if manifest_path.exists() {
-                let name = path.file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("unknown");
-
-                let version = lockfile.as_ref()
-                    .and_then(|lf| lf.get_version(name))
-                    .unwrap_or_else(|| "local".to_string());
-
-                println!("   {} {} ({})", "•".green(), name, version.dimmed());
-                count += 1;
-            }
-        }
+    let mut count = 0;
+    for plugin in plugins {
+        println!(
+            "   {} {} ({}) [{}]",
+            "•".green(),
+            plugin.name,
+            plugin.version.dimmed(),
+            plugin.scope.label()
+        );
+        count += 1;
     }
 
     if count == 0 {
@@ -175,8 +321,14 @@ pub fn list(project_root: &Path) -> Result<()> {
 }
 
 /// Install a plugin
-pub fn install(project_root: &Path, name: &str, version: Option<&str>, git_url: Option<&str>) -> Result<()> {
-    let plugin_dir = project_root.join("plugins");
+pub(crate) fn install(
+    project_root: &Path,
+    name: &str,
+    version: Option<&str>,
+    git_url: Option<&str>,
+    scope: PluginInstallScope,
+) -> Result<()> {
+    let plugin_dir = plugin_dir_for_scope(project_root, scope);
     std::fs::create_dir_all(&plugin_dir)?;
 
     let source = if let Some(url) = git_url {
@@ -194,16 +346,27 @@ pub fn install(project_root: &Path, name: &str, version: Option<&str>, git_url: 
 
         match registry.find_plugin(name)? {
             Some(manifest) => {
-                println!("{} Found: {} v{}", "✓".green(), manifest.name, manifest.version);
+                println!(
+                    "{} Found: {} v{}",
+                    "✓".green(),
+                    manifest.name,
+                    manifest.version
+                );
                 PluginSource::Registry {
                     name: manifest.name.clone(),
-                    version: version.map(|v| v.to_string()).unwrap_or(manifest.version.clone()),
+                    version: version
+                        .map(|v| v.to_string())
+                        .unwrap_or(manifest.version.clone()),
                     url: manifest.source_url.clone(),
                     source_path: manifest.source_path.clone(),
                 }
             }
             None => {
-                anyhow::bail!("Plugin '{}' not found in registry. Try: prog plugin search {}", name, name);
+                anyhow::bail!(
+                    "Plugin '{}' not found in registry. Try: prog plugin search {}",
+                    name,
+                    name
+                );
             }
         }
     };
@@ -230,26 +393,32 @@ pub fn install(project_root: &Path, name: &str, version: Option<&str>, git_url: 
 
 /// Remove a plugin
 pub fn remove(project_root: &Path, name: &str) -> Result<()> {
-    let plugin_dir = project_root.join("plugins");
+    let mut removed_count = 0;
 
-    // Check for .lua file
-    let lua_path = plugin_dir.join(format!("{}.lua", name));
-    let dir_path = plugin_dir.join(name);
+    for path in remove_plugin_candidates(project_root, name) {
+        if path.extension().map(|ext| ext == "lua").unwrap_or(false) {
+            std::fs::remove_file(&path)?;
+            println!("{} Removed plugin file: {}", "🗑️".red(), path.display());
+        } else {
+            if path.is_dir() {
+                std::fs::remove_dir_all(&path)?;
+            } else {
+                std::fs::remove_file(&path)?;
+            }
+            println!(
+                "{} Removed plugin directory: {}",
+                "🗑️".red(),
+                path.display()
+            );
+        }
+        removed_count += 1;
+    }
 
-    let removed = if lua_path.exists() {
-        std::fs::remove_file(&lua_path)?;
-        println!("{} Removed plugin file: {}", "🗑️".red(), lua_path.display());
-        true
-    } else if dir_path.exists() && dir_path.is_dir() {
-        std::fs::remove_dir_all(&dir_path)?;
-        println!("{} Removed plugin directory: {}", "🗑️".red(), dir_path.display());
-        true
-    } else {
-        false
-    };
-
-    if !removed {
-        anyhow::bail!("Plugin '{}' not found. Use 'prog plugin list' to see installed plugins.", name);
+    if removed_count == 0 {
+        anyhow::bail!(
+            "Plugin '{}' not found. Use 'prog plugin list' to see installed plugins.",
+            name
+        );
     }
 
     // Update lockfile
@@ -276,7 +445,8 @@ pub fn update(project_root: &Path, name: Option<&str>) -> Result<()> {
 
     let lockfile = Lockfile::load(&lockfile_path)?;
     let plugins_to_update: Vec<_> = if let Some(n) = name {
-        lockfile.plugins()
+        lockfile
+            .plugins()
             .filter(|(pname, _)| *pname == n)
             .collect()
     } else {
@@ -300,13 +470,30 @@ pub fn update(project_root: &Path, name: Option<&str>) -> Result<()> {
     for (plugin_name, locked_info) in plugins_to_update {
         if let Some(manifest) = registry.find_plugin(plugin_name)? {
             if manifest.version != locked_info.version {
-                println!("   {} {} -> {}", plugin_name, locked_info.version.dimmed(), manifest.version.green());
+                println!(
+                    "   {} {} -> {}",
+                    plugin_name,
+                    locked_info.version.dimmed(),
+                    manifest.version.green()
+                );
                 // Re-install with new version
+                let scope = plugin_install_scope_for_name(project_root, plugin_name)
+                    .unwrap_or(PluginInstallScope::User);
                 remove(project_root, plugin_name)?;
-                install(project_root, plugin_name, Some(&manifest.version), None)?;
+                install(
+                    project_root,
+                    plugin_name,
+                    Some(&manifest.version),
+                    None,
+                    scope,
+                )?;
                 updated += 1;
             } else {
-                println!("   {} {} (up to date)", plugin_name, locked_info.version.dimmed());
+                println!(
+                    "   {} {} (up to date)",
+                    plugin_name,
+                    locked_info.version.dimmed()
+                );
             }
         }
     }
@@ -337,11 +524,19 @@ pub fn search(project_root: &Path, query: &str) -> Result<()> {
     println!();
 
     for manifest in results {
-        println!("   {} {} ({})", "•".green(), manifest.name.bold(), manifest.version);
+        println!(
+            "   {} {} ({})",
+            "•".green(),
+            manifest.name.bold(),
+            manifest.version
+        );
         if !manifest.description.is_empty() {
             println!("     {}", manifest.description.dimmed());
         }
-        println!("     Type: {} | Author: {}", manifest.plugin_type, manifest.author);
+        println!(
+            "     Type: {} | Author: {}",
+            manifest.plugin_type, manifest.author
+        );
         println!();
     }
 
@@ -403,7 +598,7 @@ pub fn new_plugin(project_root: &Path, name: &str, author: Option<&str>) -> Resu
         );
     }
 
-    let target_dir = project_root.join("plugins").join(name);
+    let target_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project).join(name);
     if target_dir.exists() {
         anyhow::bail!("plugins/{} already exists", name);
     }
@@ -444,8 +639,11 @@ pub fn new_plugin(project_root: &Path, name: &str, author: Option<&str>) -> Resu
     );
     println!();
     println!("  Next steps:");
-    println!("    1. Edit plugins/{}/main.lua", name);
-    println!("    2. Edit plugins/{}/.progit-plugin.json (capabilities, hooks)", name);
+    println!("    1. Edit plugins/{}/main.lua (project plugins)", name);
+    println!(
+        "    2. Edit plugins/{}/.progit-plugin.json (capabilities, hooks)",
+        name
+    );
     println!("    3. Run: prog plugin list   # confirm it loads");
     println!();
     Ok(())
@@ -453,7 +651,10 @@ pub fn new_plugin(project_root: &Path, name: &str, author: Option<&str>) -> Resu
 
 fn is_kebab_case(s: &str) -> bool {
     !s.is_empty()
-        && s.chars().next().map(|c| c.is_ascii_lowercase()).unwrap_or(false)
+        && s.chars()
+            .next()
+            .map(|c| c.is_ascii_lowercase())
+            .unwrap_or(false)
         && s.chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
@@ -472,5 +673,112 @@ fn detect_git_user_name() -> Option<String> {
         None
     } else {
         Some(trimmed.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn tui_plugin_args_wrap_current_executable() {
+        let args = tui_command_args(&["sober", "preflight", "--base", "HEAD"]).unwrap();
+
+        assert!(args.len() >= 6);
+        assert_eq!(args[1], "plugin");
+        assert_eq!(args[2..], ["sober", "preflight", "--base", "HEAD"]);
+    }
+
+    #[test]
+    fn tui_plugin_args_require_command() {
+        let err = tui_command_args(&[]).unwrap_err().to_string();
+
+        assert!(err.contains("Usage: :plugin"));
+    }
+
+    #[test]
+    fn discover_plugins_looks_in_project_and_user_plugin_dirs() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_root = temp.path();
+
+        let project_dir = project_root.join("plugins");
+        let user_dir = project_root.join(".progit").join("plugins");
+        fs::create_dir_all(&project_dir).unwrap();
+        fs::create_dir_all(&user_dir).unwrap();
+
+        fs::write(project_dir.join("project.lua"), "return {}").unwrap();
+        fs::create_dir_all(user_dir.join("user-plugin")).unwrap();
+        fs::write(
+            user_dir.join("user-plugin").join(".progit-plugin.json"),
+            "{}",
+        )
+        .unwrap();
+
+        let discovered = collect_installed_plugins(project_root).unwrap();
+
+        assert_eq!(discovered.len(), 2);
+        let project = discovered
+            .iter()
+            .find(|plugin| plugin.name == "project")
+            .unwrap_or_else(|| panic!("missing project plugin"));
+        assert_eq!(project.scope, PluginInstallScope::Project);
+        assert_eq!(project.version, "local");
+
+        let user = discovered
+            .iter()
+            .find(|plugin| plugin.name == "user-plugin")
+            .unwrap_or_else(|| panic!("missing user plugin"));
+        assert_eq!(user.scope, PluginInstallScope::User);
+    }
+
+    #[test]
+    fn plugin_scope_paths_are_stable() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_root = temp.path();
+
+        let user_dir = plugin_dir_for_scope(project_root, PluginInstallScope::User);
+        let project_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project);
+
+        assert_eq!(user_dir, project_root.join(".progit").join("plugins"));
+        assert_eq!(project_dir, project_root.join("plugins"));
+    }
+
+    #[test]
+    fn plugin_install_scope_prefers_user_when_both_install_locations_match() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_root = temp.path();
+
+        let user_dir = plugin_dir_for_scope(project_root, PluginInstallScope::User);
+        let project_dir = plugin_dir_for_scope(project_root, PluginInstallScope::Project);
+        fs::create_dir_all(&user_dir).unwrap();
+        fs::create_dir_all(&project_dir).unwrap();
+
+        fs::write(user_dir.join("shared.lua"), "return {}").unwrap();
+        fs::write(project_dir.join("shared.lua"), "return {}").unwrap();
+
+        let scope = plugin_install_scope_for_name(project_root, "shared")
+            .unwrap_or_else(|| panic!("expected a scope"));
+        assert_eq!(scope, PluginInstallScope::User);
+    }
+
+    #[test]
+    fn remove_deletes_plugin_from_all_install_locations() {
+        let temp = tempfile::tempdir().unwrap();
+        let project_root = temp.path();
+
+        let project_dir = project_root.join("plugins");
+        let user_dir = project_root.join(".progit").join("plugins");
+        fs::create_dir_all(&project_dir).unwrap();
+        fs::create_dir_all(&user_dir).unwrap();
+
+        fs::write(project_dir.join("shared.lua"), "return {}").unwrap();
+        fs::create_dir_all(user_dir.join("shared")).unwrap();
+        fs::write(user_dir.join("shared").join(".progit-plugin.json"), "{}").unwrap();
+
+        remove(project_root, "shared").unwrap();
+
+        assert!(!project_dir.join("shared.lua").exists());
+        assert!(!user_dir.join("shared").exists());
     }
 }

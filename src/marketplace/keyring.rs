@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 pub struct Keyring {
     /// Directory containing the keyring
     path: PathBuf,
-    
+
     /// Set of trusted KeyIDs
     trusted: HashSet<String>,
 }
@@ -46,7 +46,7 @@ impl Keyring {
         }
 
         let mut keyring = Self::new(path.to_path_buf());
-        
+
         // Load trust relationships
         let trust_file = path.join("keyring.kdl");
         if trust_file.exists() {
@@ -67,7 +67,7 @@ impl Keyring {
     /// Load trust relationships from KDL file
     fn load_trust_file(&mut self, path: &Path) -> Result<()> {
         let content = fs::read_to_string(path)?;
-        
+
         // Simple KDL parsing for trust entries
         // Format: trusted "<keyid>"
         for line in content.lines() {
@@ -92,7 +92,7 @@ impl Keyring {
         let mut content = String::new();
         content.push_str("# ProGit Keyring\n");
         content.push_str("# Edit manually or use: prog trust add/remove\n\n");
-        
+
         for keyid in &self.trusted {
             content.push_str(&format!("trusted \"{}\"\n", keyid));
         }
@@ -127,17 +127,17 @@ impl Keyring {
     /// Add a public key to the keyring
     pub fn add_key(&mut self, keyid: &str, public_key: &[u8]) -> Result<()> {
         fs::create_dir_all(&self.path)?;
-        
+
         let key_file = self.path.join(format!("{}.pub", keyid));
         fs::write(&key_file, public_key)?;
-        
+
         Ok(())
     }
 
     /// Get a public key by KeyID
     pub fn get_public_key(&self, keyid: &str) -> Result<Vec<u8>> {
         let key_file = self.path.join(format!("{}.pub", keyid));
-        
+
         if !key_file.exists() {
             return Err(KeyringError::KeyNotFound(keyid.to_string()));
         }
@@ -153,7 +153,7 @@ impl Keyring {
     /// List all keys in the keyring
     pub fn list_keys(&self) -> Vec<String> {
         let mut keys = Vec::new();
-        
+
         if let Ok(entries) = fs::read_dir(&self.path) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -203,9 +203,9 @@ mod tests {
     fn test_keyring_trust() {
         let tmp = TempDir::new().unwrap();
         let mut keyring = Keyring::new(tmp.path().to_path_buf());
-        
+
         keyring.add_trusted("a1b2c3d4e5f6a7b8").unwrap();
-        
+
         assert!(keyring.is_trusted("a1b2c3d4e5f6a7b8"));
         assert!(!keyring.is_trusted("0000000000000000"));
     }

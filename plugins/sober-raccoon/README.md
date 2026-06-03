@@ -2,25 +2,25 @@
 
 Premium ProGit plugin for Sober governance checks.
 
-`sober-raccoon` uses the host-provided `sober.run(action, opts)` capability. It does not spawn processes from Lua and does not receive arbitrary shell access.
+`sober-raccoon` uses the host-provided `sober.run(action, opts)` capability. It does not spawn processes from Lua and does not receive arbitrary shell access. The command path forwards argv to the host, and the host only executes the `sober` binary.
 
 ## Commands
 
-The plugin owns the `sober` command namespace under `prog plugin`:
+The plugin owns the `sober` command namespace under `prog plugin`. Anything after `sober` is forwarded to the Sober CLI:
 
 ```bash
-prog plugin sober status
-prog plugin sober doctor
 prog plugin sober preflight --base HEAD
-prog plugin sober hygiene --profile standard
-prog plugin sober hooks status
-prog plugin sober review-preview --provider kimi-coding --model kimi-k2.6
+prog plugin sober route list
+prog plugin sober report list
+prog plugin sober assist readiness --target release
+prog plugin sober --version
 ```
 
-The explicit dispatch form also works:
+The premium cockpit command remains available under `sober-raccoon`:
 
 ```bash
-prog plugin run sober status
+prog plugin sober-raccoon status
+prog plugin sober-raccoon route list
 ```
 
 ## Sober Project
@@ -48,7 +48,7 @@ Dispatch a custom plugin event:
 }
 ```
 
-Supported actions:
+Supported local event actions:
 
 - `status`
 - `doctor`
@@ -56,6 +56,7 @@ Supported actions:
 - `review-preview`
 - `hygiene`
 - `hooks`
+- `cli`
 
 ## Premium Status
 

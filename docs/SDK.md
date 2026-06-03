@@ -26,7 +26,7 @@ The SDK acts as the safe interface between the high-performance Rust core and th
 
 ## 🔌 The Plugin Life-Cycle
 
-Plugins are loaded from the `.project/plugins/` directory and react to specific lifecycle events:
+Plugins are loaded from `.progit/plugins/` by default, with optional legacy project-local loading from `plugins/` for explicitly-scoped installs.
 
 ```mermaid
 graph TD

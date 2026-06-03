@@ -47,6 +47,7 @@ pub enum InputMode {
     DetailView,          // Viewing issue details
     DetailEdit,          // Editing a field in detail view
     Command,             // Command palette (: command)
+    CommandOutput,       // Viewing captured command output
     MRCreate,            // Creating a merge request
     RepoFilter,          // Filtering by repository
     Settings,            // Settings pane
@@ -60,6 +61,16 @@ pub enum InputMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthNotice {
     pub message: String,
+}
+
+/// Captured output from a TUI command invocation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandOutput {
+    pub command: String,
+    pub status: String,
+    pub stdout: String,
+    pub stderr: String,
+    pub success: bool,
 }
 
 /// Mouse drag state
@@ -99,6 +110,12 @@ pub struct App {
 
     /// Command input buffer
     pub command_input: String,
+
+    /// Captured output from the last command run inside the TUI
+    pub command_output: Option<CommandOutput>,
+
+    /// Scroll offset for the command output modal
+    pub command_output_scroll: usize,
 
     /// Filtered issue indices
     pub filtered: Vec<usize>,
@@ -292,6 +309,8 @@ impl App {
             input_mode: InputMode::Normal,
             search_query: String::new(),
             command_input: String::new(),
+            command_output: None,
+            command_output_scroll: 0,
             filtered: Vec::new(),
             theme: Theme::default(),
             current_sprint: None,
@@ -418,7 +437,10 @@ impl App {
             return;
         };
 
-        log::debug!("Querying pipeline status for {} MRs via plugins", self.mr_list.len());
+        log::debug!(
+            "Querying pipeline status for {} MRs via plugins",
+            self.mr_list.len()
+        );
 
         // Query each MR
         for mr in self.mr_list.iter_mut() {
@@ -442,7 +464,8 @@ impl App {
                     // Take first valid response
                     for response in responses {
                         if let Some(status_obj) = response.as_object() {
-                            if let Some(status) = status_obj.get("status").and_then(|v| v.as_str()) {
+                            if let Some(status) = status_obj.get("status").and_then(|v| v.as_str())
+                            {
                                 log::debug!("MR !{}: pipeline status = {}", remote_id, status);
                                 mr.pipeline_status = Some(status.to_string());
                                 break;
@@ -451,7 +474,11 @@ impl App {
                     }
                 }
                 Err(e) => {
-                    log::warn!("Failed to query pipeline status for MR !{}: {}", remote_id, e);
+                    log::warn!(
+                        "Failed to query pipeline status for MR !{}: {}",
+                        remote_id,
+                        e
+                    );
                 }
             }
         }

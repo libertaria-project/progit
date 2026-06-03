@@ -105,7 +105,11 @@ fn parse_token_file_content(content: &str, requested_var: Option<&str>) -> Resul
         }
 
         if let Some((key, value)) = line.split_once('=') {
-            let key = key.trim().strip_prefix("export ").unwrap_or(key.trim()).trim();
+            let key = key
+                .trim()
+                .strip_prefix("export ")
+                .unwrap_or(key.trim())
+                .trim();
             if requested_var.map_or(true, |requested| key == requested) {
                 let token = normalize_token_value(value);
                 if token.is_empty() {
@@ -205,9 +209,11 @@ mod tests {
 
     #[test]
     fn parses_env_file_content_by_requested_var() {
-        let token =
-            parse_token_file_content("OTHER=nope\nFORGEJO_TOKEN=\"abc123\"\n", Some("FORGEJO_TOKEN"))
-                .unwrap();
+        let token = parse_token_file_content(
+            "OTHER=nope\nFORGEJO_TOKEN=\"abc123\"\n",
+            Some("FORGEJO_TOKEN"),
+        )
+        .unwrap();
         assert_eq!(token, "abc123");
     }
 

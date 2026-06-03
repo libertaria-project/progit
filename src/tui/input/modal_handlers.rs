@@ -3,6 +3,7 @@
 use super::super::app::{App, InputMode};
 use super::KeyAction;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::io::{self, Write};
 
 /// Handle a key event in search mode
 pub(super) fn handle_search_key(app: &mut App, key: KeyEvent) -> KeyAction {
@@ -74,37 +75,179 @@ pub(super) fn handle_command_key(app: &mut App, key: KeyEvent) -> KeyAction {
                     app.set_status(format!("Error: {}", err));
                     KeyAction::Refresh
                 }
+                CommandAction::RunAndShowOutput(args) => {
+                    let output = std::process::Command::new(&args[0])
+                        .args(&args[1..])
+                        .current_dir(&app.repo_path)
+                        .output();
+
+                    let command = args.join(" ");
+                    let command_output = match output {
+                        Ok(output) => {
+                            let success = output.status.success();
+                            let status = if success {
+                                "Command executed successfully".to_string()
+                            } else {
+                                format!("Command failed with code: {}", output.status)
+                            };
+                            crate::tui::app::CommandOutput {
+                                command,
+                                status,
+                                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                                success,
+                            }
+                        }
+                        Err(e) => crate::tui::app::CommandOutput {
+                            command,
+                            status: format!("Failed to run command: {}", e),
+                            stdout: String::new(),
+                            stderr: String::new(),
+                            success: false,
+                        },
+                    };
+
+                    app.set_status(command_output.status.clone());
+                    app.command_output = Some(command_output);
+                    app.command_output_scroll = 0;
+                    app.input_mode = InputMode::CommandOutput;
+                    KeyAction::Refresh
+                }
+                CommandAction::RunPluginCommand { command, args } => {
+                    let command_string = if args.is_empty() {
+                        format!("prog plugin {command}")
+                    } else {
+                        format!("prog plugin {} {}", command, args.join(" "))
+                    };
+
+                    let command_output = match crate::plugins::cli::try_run_command_capture(
+                        &app.repo_path,
+                        &command,
+                        &args,
+                    ) {
+                        Ok(Some(result)) => {
+                            let stdout = result.output.clone().unwrap_or_default();
+                            let error = result.error.clone();
+                            let status = if result.success {
+                                format!(
+                                    "Command '{}' handled by plugin '{}'",
+                                    command, result.plugin
+                                )
+                            } else {
+                                let error = result
+                                    .error
+                                    .as_ref()
+                                    .cloned()
+                                    .unwrap_or_else(|| "plugin command failed".to_string());
+                                format!("{}: {}", result.plugin, error)
+                            };
+
+                            crate::tui::app::CommandOutput {
+                                command: command_string,
+                                status,
+                                stdout,
+                                stderr: if result.success {
+                                    String::new()
+                                } else {
+                                    error.unwrap_or_default()
+                                },
+                                success: result.success,
+                            }
+                        }
+                        Ok(None) => {
+                            let current_exe =
+                                std::env::current_exe().unwrap_or_else(|_| "prog".into());
+                            let mut fallback_args = Vec::with_capacity(args.len() + 2);
+                            fallback_args.push(current_exe.display().to_string());
+                            fallback_args.push("plugin".to_string());
+                            fallback_args.push(command.clone());
+                            fallback_args.extend(args.iter().cloned());
+
+                            let output = std::process::Command::new(&fallback_args[0])
+                                .args(&fallback_args[1..])
+                                .current_dir(&app.repo_path)
+                                .output();
+
+                            let command = fallback_args.join(" ");
+                            match output {
+                                Ok(output) => {
+                                    let success = output.status.success();
+                                    let status = if success {
+                                        "Command executed successfully".to_string()
+                                    } else {
+                                        format!("Command failed with code: {}", output.status)
+                                    };
+
+                                    crate::tui::app::CommandOutput {
+                                        command,
+                                        status,
+                                        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                                        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                                        success,
+                                    }
+                                }
+                                Err(err) => crate::tui::app::CommandOutput {
+                                    command: command_string,
+                                    status: format!(
+                                        "Failed to run plugin command through CLI: {}",
+                                        err
+                                    ),
+                                    stdout: String::new(),
+                                    stderr: String::new(),
+                                    success: false,
+                                },
+                            }
+                        }
+                        Err(err) => crate::tui::app::CommandOutput {
+                            command: command_string,
+                            status: format!("Failed to run plugin command: {err}"),
+                            stdout: String::new(),
+                            stderr: String::new(),
+                            success: false,
+                        },
+                    };
+
+                    app.set_status(command_output.status.clone());
+                    app.command_output = Some(command_output);
+                    app.command_output_scroll = 0;
+                    app.input_mode = InputMode::CommandOutput;
+                    KeyAction::Refresh
+                }
                 CommandAction::SuspendAndRun(args) => {
                     // Suspend TUI
                     let _ = crossterm::terminal::disable_raw_mode();
                     let _ = crossterm::execute!(
-                        std::io::stdout(),
+                        io::stdout(),
                         crossterm::terminal::LeaveAlternateScreen
                     );
 
                     // Run command
                     let status = std::process::Command::new(&args[0])
                         .args(&args[1..])
+                        .current_dir(&app.repo_path)
                         .status();
+
+                    let status_msg = match status {
+                        Ok(s) if s.success() => "Command executed successfully".to_string(),
+                        Ok(s) => format!("Command failed with code: {}", s),
+                        Err(e) => format!("Failed to run command: {}", e),
+                    };
+
+                    println!();
+                    println!("[ProGit] {status_msg}");
+                    print!("[ProGit] Press Enter to return to the TUI...");
+                    let _ = io::stdout().flush();
+                    let mut pause = String::new();
+                    let _ = io::stdin().read_line(&mut pause);
 
                     // Resume TUI
                     let _ = crossterm::terminal::enable_raw_mode();
                     let _ = crossterm::execute!(
-                        std::io::stdout(),
+                        io::stdout(),
                         crossterm::terminal::EnterAlternateScreen
                     );
 
-                    match status {
-                        Ok(s) if s.success() => {
-                            app.set_status("Command executed successfully".to_string());
-                        }
-                        Ok(s) => {
-                            app.set_status(format!("Command failed with code: {}", s));
-                        }
-                        Err(e) => {
-                            app.set_status(format!("Failed to run command: {}", e));
-                        }
-                    }
+                    app.set_status(status_msg);
                     KeyAction::Refresh
                 }
             }
@@ -291,7 +434,8 @@ pub(super) fn handle_vbranch_create_key(app: &mut App, key: KeyEvent) -> KeyActi
                 app.edit_buffer.clear();
 
                 // Get HEAD commit for base
-                let base_commit = app.repo_info
+                let base_commit = app
+                    .repo_info
                     .as_ref()
                     .and_then(|r| {
                         use git2::Repository;
@@ -514,6 +658,12 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
                                 app.open_project_issues();
                                 return KeyAction::Refresh;
                             }
+                            "plugin_command" => {
+                                app.input_mode = InputMode::Command;
+                                app.command_input = "plugin ".to_string();
+                                app.set_status("Type plugin command and press Enter".to_string());
+                                return KeyAction::Refresh;
+                            }
                             "sober_doctor" => {
                                 app.input_mode = InputMode::Command;
                                 app.command_input = "sober doctor".to_string();
@@ -535,6 +685,13 @@ pub(super) fn handle_fuzzy_palette_key(app: &mut App, key: KeyEvent) -> KeyActio
                                 return KeyAction::Refresh;
                             }
                             _ => {}
+                        }
+
+                        if let Some(command) = action.strip_prefix("plugin_command:") {
+                            app.input_mode = InputMode::Command;
+                            app.command_input = format!("plugin {command} ");
+                            app.set_status(format!("Press Enter to run plugin command: {command}"));
+                            return KeyAction::Refresh;
                         }
                     }
                     FuzzyItem::File { .. } => {

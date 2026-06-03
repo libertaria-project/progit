@@ -94,11 +94,17 @@ fn test_multi_issue_create_and_delete() -> Result<()> {
 
     // Delete B
     let deleted = delete_issue(&id_b, &kdl_dir, &cache)?;
-    assert!(deleted, "delete_issue should return true for existing issue");
+    assert!(
+        deleted,
+        "delete_issue should return true for existing issue"
+    );
 
     let after = load_issues(&kdl_dir, &cache)?;
     assert_eq!(after.len(), 2);
-    assert!(!after.iter().any(|i| i.id == id_b), "Deleted issue must not appear in reload");
+    assert!(
+        !after.iter().any(|i| i.id == id_b),
+        "Deleted issue must not appear in reload"
+    );
 
     Ok(())
 }
@@ -112,7 +118,10 @@ fn test_delete_nonexistent_issue_returns_false() -> Result<()> {
     let cache = cache_path(dir.path());
 
     let deleted = delete_issue("does-not-exist", &kdl_dir, &cache)?;
-    assert!(!deleted, "Deleting non-existent issue should return false, not panic");
+    assert!(
+        !deleted,
+        "Deleting non-existent issue should return false, not panic"
+    );
 
     Ok(())
 }
@@ -132,7 +141,11 @@ fn test_kdl_to_json_sync_is_idempotent() -> Result<()> {
     let first = sync_kdl_to_json(&kdl_dir, &cache)?;
     let second = sync_kdl_to_json(&kdl_dir, &cache)?;
 
-    assert_eq!(first.len(), second.len(), "Idempotent sync should return same count");
+    assert_eq!(
+        first.len(),
+        second.len(),
+        "Idempotent sync should return same count"
+    );
     assert_eq!(first[0].id, second[0].id);
 
     Ok(())

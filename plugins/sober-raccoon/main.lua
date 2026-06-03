@@ -23,6 +23,16 @@ local config = {
     hygiene_profile = "standard",
 }
 
+local routes = {
+    { name = "prog plugin sober <args...>", description = "Run any Sober CLI command through the host bridge" },
+    { name = "prog plugin sober route list", description = "Run Sober route list" },
+    { name = "prog plugin sober report list", description = "Run Sober report list" },
+    { name = "prog plugin sober assist readiness --target release", description = "Run Sober assist readiness" },
+    { name = "prog plugin sober-raccoon status", description = "Run doctor, preflight, and hooks status summary" },
+    { name = "prog plugin sober-raccoon route list", description = "List Sober Raccoon routes" },
+    { name = "prog plugin sober-raccoon help", description = "Show command usage" },
+}
+
 local function merge_config(source)
     if not source then
         return
@@ -161,6 +171,39 @@ local function hooks(payload)
     }
 end
 
+local function cli(args)
+    local result = call_sober("cli", { args = args or {} })
+    return {
+        plugin = "sober-raccoon",
+        premium = true,
+        action = "cli",
+        ok = result.ok,
+        command = args or {},
+        result = result,
+    }
+end
+
+local function route(payload)
+    local method = payload.method or "list"
+    if method ~= "list" then
+        return {
+            plugin = "sober-raccoon",
+            premium = true,
+            action = "route",
+            ok = false,
+            error = "Unsupported route command: " .. tostring(method) .. ". Use: route list",
+        }
+    end
+
+    return {
+        plugin = "sober-raccoon",
+        premium = true,
+        action = "route list",
+        ok = true,
+        routes = routes,
+    }
+end
+
 local function action_response(action, payload)
     if action == "status" then
         return status(payload)
@@ -174,15 +217,11 @@ local function action_response(action, payload)
         return hygiene(payload)
     elseif action == "hooks" then
         return hooks(payload)
+    elseif action == "route" or action == "routes" or action == "list" then
+        return route(payload)
     end
 
-    return {
-        plugin = "sober-raccoon",
-        premium = true,
-        action = action,
-        ok = false,
-        error = "Unsupported sober-raccoon action: " .. tostring(action),
-    }
+    return cli(payload.args or {})
 end
 
 local function has_flag(args, flag)
@@ -221,7 +260,10 @@ local function command_payload(args)
     if action == "hooks" then
         payload.method = args[2] or "status"
         payload.hook = args[3]
+    elseif action == "route" then
+        payload.method = args[2] or "list"
     end
+    payload.args = args
 
     return action, payload
 end
@@ -255,20 +297,70 @@ local function response_error(response)
     return nil
 end
 
+local function command_error(response)
+    if response.action == "cli" and not response_ok(response) then
+        local data = response.result and response.result.data or {}
+        if type(data.status) == "string" and data.status ~= "" then
+            return "sober exited with " .. data.status
+        end
+        return "sober command failed"
+    end
+
+    return response_error(response)
+end
+
 local function usage()
     return table.concat({
-        "Usage: prog plugin sober <status|doctor|preflight|hygiene|review-preview|hooks> [options]",
+        "Usage:",
+        "  prog plugin sober <any sober subcommand> [args...]",
+        "  prog plugin sober-raccoon <status|route list|help>",
         "",
         "Examples:",
-        "  prog plugin sober status",
         "  prog plugin sober preflight --base HEAD",
-        "  prog plugin sober hygiene --profile standard",
-        "  prog plugin sober hooks status",
-        "  prog plugin sober review-preview --provider kimi-coding --model kimi-k2.6",
+        "  prog plugin sober route list",
+        "  prog plugin sober report list",
+        "  prog plugin sober assist readiness --target release",
+        "  prog plugin sober --version",
+        "  prog plugin sober-raccoon status",
     }, "\n")
 end
 
+local function trim_trailing_newlines(value)
+    if type(value) ~= "string" then
+        return ""
+    end
+    return string.gsub(value, "[\r\n]+$", "")
+end
+
 local function command_output(response)
+    if response.routes then
+        local lines = { "Sober Raccoon routes:" }
+        for _, route_entry in ipairs(response.routes) do
+            table.insert(lines, "  " .. route_entry.name .. " - " .. route_entry.description)
+        end
+        return table.concat(lines, "\n")
+    end
+
+    if response.action == "cli" then
+        local data = response.result and response.result.data or {}
+        local stdout = trim_trailing_newlines(data.stdout)
+        local stderr = trim_trailing_newlines(data.stderr)
+        local lines = {}
+        if stdout ~= "" then
+            table.insert(lines, stdout)
+        end
+        if stderr ~= "" then
+            if #lines > 0 then
+                table.insert(lines, "stderr:")
+            end
+            table.insert(lines, stderr)
+        end
+        if #lines == 0 then
+            table.insert(lines, "Sober command: " .. (response_ok(response) and "OK" or "FAIL"))
+        end
+        return table.concat(lines, "\n")
+    end
+
     local ok = response_ok(response)
     local lines = {
         "Sober Raccoon " .. tostring(response.action or "command") .. ": " .. (ok and "OK" or "FAIL"),
@@ -294,7 +386,7 @@ local function cli_response(response, json_mode)
         handled = true,
         success = response_ok(response),
         output = json_mode and json.encode(response) or command_output(response),
-        error = response_error(response),
+        error = command_error(response),
         data = response,
     }
 end
@@ -306,7 +398,19 @@ function on_command(data)
     end
 
     local args = data.args or {}
-    if args[1] == "help" or has_flag(args, "--help") or has_flag(args, "-h") then
+    if args[1] == "help" then
+        return {
+            handled = true,
+            success = true,
+            output = usage(),
+        }
+    end
+
+    if command == "sober" then
+        return cli_response(cli(args), false)
+    end
+
+    if has_flag(args, "--help") or has_flag(args, "-h") then
         return {
             handled = true,
             success = true,

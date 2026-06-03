@@ -2,16 +2,16 @@
 // Copyright (c) 2025 Markus Maiwald
 
 //! AI Agent Module
-//! 
+//!
 //! Handles communication with LLM providers (currently Ollama) to power
 //! virtual branch agents.
 
+pub mod context;
 pub mod ollama;
 pub mod ops;
-pub mod context;
 
-use std::sync::mpsc::Sender;
 use serde::Serialize;
+use std::sync::mpsc::Sender;
 
 /// Events sent from the Agent thread to the main TUI thread
 #[derive(Debug, Clone)]
@@ -49,5 +49,10 @@ impl Default for AgentRequest {
 /// Trait for LLM backends
 pub trait AgentClient {
     /// Send a prompt and stream the response to the sender
-    fn stream_completion(&self, req: AgentRequest, tx: Sender<AgentEvent>, session_id: String) -> anyhow::Result<()>;
+    fn stream_completion(
+        &self,
+        req: AgentRequest,
+        tx: Sender<AgentEvent>,
+        session_id: String,
+    ) -> anyhow::Result<()>;
 }

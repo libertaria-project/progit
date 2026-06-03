@@ -39,10 +39,9 @@ pub struct KeyPair {
 /// Generate a new Dilithium3 keypair
 pub fn generate_keypair() -> KeyPair {
     use crystals_dilithium::dilithium3::Keypair;
-    
-    let keypair = Keypair::generate(None)
-        .expect("Failed to generate Dilithium3 keypair");
-    
+
+    let keypair = Keypair::generate(None).expect("Failed to generate Dilithium3 keypair");
+
     KeyPair {
         public_key: keypair.public.to_bytes().to_vec(),
         secret_key: keypair.to_bytes().to_vec(),
@@ -52,9 +51,8 @@ pub fn generate_keypair() -> KeyPair {
 /// Sign data with Dilithium3
 pub fn sign(data: &[u8], secret_key: &[u8]) -> Vec<u8> {
     use crystals_dilithium::dilithium3::Keypair;
-    
-    let keypair = Keypair::from_bytes(secret_key)
-        .expect("Invalid secret key");
+
+    let keypair = Keypair::from_bytes(secret_key).expect("Invalid secret key");
     let sig = keypair.sign(data);
     sig.to_vec()
 }
@@ -62,7 +60,7 @@ pub fn sign(data: &[u8], secret_key: &[u8]) -> Vec<u8> {
 /// Verify Dilithium3 signature
 pub fn verify(public_key: &[u8], data: &[u8], signature: &[u8]) -> bool {
     use crystals_dilithium::dilithium3::PublicKey;
-    
+
     match PublicKey::from_bytes(public_key) {
         Ok(pk) => pk.verify(data, signature),
         Err(_) => false,
@@ -83,7 +81,11 @@ pub fn compute_keyid(public_key: &[u8]) -> String {
 }
 
 /// Save keypair to files
-pub fn save_keypair(keypair: &KeyPair, secret_path: &Path, public_path: &Path) -> std::io::Result<()> {
+pub fn save_keypair(
+    keypair: &KeyPair,
+    secret_path: &Path,
+    public_path: &Path,
+) -> std::io::Result<()> {
     std::fs::write(secret_path, &keypair.secret_key)?;
     std::fs::write(public_path, &keypair.public_key)?;
     Ok(())
@@ -93,13 +95,16 @@ pub fn save_keypair(keypair: &KeyPair, secret_path: &Path, public_path: &Path) -
 pub fn load_keypair(secret_path: &Path, public_path: &Path) -> std::io::Result<KeyPair> {
     let secret_key = std::fs::read(secret_path)?;
     let public_key = std::fs::read(public_path)?;
-    Ok(KeyPair { public_key, secret_key })
+    Ok(KeyPair {
+        public_key,
+        secret_key,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_blake3_checksum() {
         let data = b"hello world";
@@ -109,22 +114,22 @@ mod tests {
         // But blake3::Hasher outputs 32 bytes = 64 hex chars
         assert!(checksum.len() >= 69);
     }
-    
+
     #[test]
     fn test_keyid() {
         let key = b"test public key";
         let keyid = compute_keyid(key);
         assert_eq!(keyid.len(), 16);
     }
-    
+
     #[test]
     fn test_dilithium3_sign_verify() {
         let keypair = generate_keypair();
         let data = b"test message";
-        
+
         let signature = sign(data, &keypair.secret_key);
         assert!(verify(&keypair.public_key, data, &signature));
-        
+
         // Verify fails with wrong data
         assert!(!verify(&keypair.public_key, b"wrong data", &signature));
     }

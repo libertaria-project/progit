@@ -71,9 +71,7 @@ pub async fn clone_repo(
             // pre-existing conflicting refs.
         }
         Err(e) => {
-            return Err(anyhow::anyhow!(
-                "create_repo on dest '{dest_repo}': {e}"
-            ));
+            return Err(anyhow::anyhow!("create_repo on dest '{dest_repo}': {e}"));
         }
     }
 
@@ -117,9 +115,8 @@ mod tests {
     /// process. Models a daemon-like surface without spinning up a daemon.
     /// Stores: per-repo (Vec<RefEntry>, Option<Vec<u8>> pack).
     struct InMemoryBackend {
-        repos: tokio::sync::Mutex<
-            std::collections::HashMap<String, (Vec<RefEntry>, Option<Vec<u8>>)>,
-        >,
+        repos:
+            tokio::sync::Mutex<std::collections::HashMap<String, (Vec<RefEntry>, Option<Vec<u8>>)>>,
     }
 
     impl InMemoryBackend {
@@ -267,13 +264,7 @@ mod tests {
         // mix of concrete impls composes. Source = in-memory, dest = local-disk.
         let source = InMemoryBackend::new();
         // Seed with no pack — clone will pass None pack to dest.
-        source
-            .seed(
-                "tiny",
-                vec![],
-                None,
-            )
-            .await;
+        source.seed("tiny", vec![], None).await;
 
         let tmp = tempfile::TempDir::new().unwrap();
         let dest = LocalGitBackend::new(tmp.path()).unwrap();

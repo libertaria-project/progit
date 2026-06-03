@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "ProGit Team",
   "description": "Premium ProGit cockpit for Sober, a local-first repository governance assistant for agentic coding.",
-  "long_description": "Runs Sober doctor, preflight, hygiene, hook status, hook install, and review-preview flows through ProGit's narrow sober.run host capability. The plugin does not spawn shell commands from Lua and receives only the allowlisted Sober actions exposed by the ProGit host.",
+  "long_description": "Runs Sober CLI commands through ProGit's narrow sober.run host capability. The plugin does not spawn shell commands from Lua; the host validates argv and only executes the Sober binary.",
   "license": "LicenseRef-ProGit-Premium",
   "plugin_type": "ai",
   "runtime": "lua",
@@ -58,10 +58,32 @@
   "capabilities": [
     "sober"
   ],
-  "commands": [
-    "sober",
-    "sober-raccoon"
-  ],
+  "contributions": {
+    "commands": [
+      {
+        "name": "sober",
+        "title": "Sober",
+        "description": "Run any Sober CLI command through the host bridge",
+        "entrypoint": "on_command",
+        "args": "passthrough",
+        "palette": true,
+        "tui": {
+          "show_output": "modal"
+        }
+      },
+      {
+        "name": "sober-raccoon",
+        "title": "Sober Raccoon",
+        "description": "Open the premium Sober cockpit commands",
+        "entrypoint": "on_command",
+        "args": "fixed",
+        "palette": true,
+        "tui": {
+          "show_output": "modal"
+        }
+      }
+    ]
+  },
   "config_required": {},
   "downloads": 0,
   "rating": 0.0,
