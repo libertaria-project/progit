@@ -15,6 +15,7 @@
 
 pub mod cli;
 pub mod highlight_cache;
+pub mod jobs;
 pub mod lang_detect;
 pub mod lockfile;
 pub mod manager;
