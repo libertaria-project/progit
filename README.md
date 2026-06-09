@@ -30,28 +30,40 @@ Typical launch path: default to terminal UI (`prog`) and use CLI subcommands for
 
 ## Install
 
-### Recommended installer (Linux/macOS)
+### Recommended — one-line installer (Linux/macOS)
 
 ```bash
-curl -fsSL https://progit.dev/install.sh | sh
+curl -fsSL https://git.sovereign-society.org/ProGit/progit/raw/branch/main/scripts/install.sh | sh
 ```
 
-This installs a released binary and verifies minisign when available.
-On most systems it lands in `~/.local/bin` or `~/bin`; if needed, confirm
-that one of those paths is on your `PATH`.
+This downloads the latest signed release binary from the sovereign Forgejo,
+verifies the SHA256 checksum and minisign signature, and installs to
+`~/.local/bin/`. No dependencies beyond `curl` and common Unix utilities.
 
-### Homebrew (macOS/Linux)
+**Verification:** The checksum manifest is signed with Markus's minisign key
+(`keys/progit-minisign.pub`). The installer verifies both the binary checksum
+and the manifest signature before extracting.
+
+### crates.io
 
 ```bash
-brew install sovereign-society/tap/progit
+cargo install progit
 ```
 
-### Arch Linux (AUR)
+Falls back to building from source. Binary size may differ.
 
+### Manual — download a release
+
+Grab the signed archive from:
+`https://git.sovereign-society.org/ProGit/progit/releases/tag/v0.8.4-beta`
+
+Verify with:
 ```bash
-paru -S progit-bin
-# or
-yay -S progit-bin
+minisign -V -P "$(curl -fsSL https://git.sovereign-society.org/ProGit/progit/raw/branch/main/keys/progit-minisign.pub | tail -1)" \
+  -x SHA256SUMS.minisig -m SHA256SUMS
+sha256sum -c SHA256SUMS 2>/dev/null | grep prog
+tar -xzf prog-0.8.4-beta-x86_64-unknown-linux-gnu.tar.gz
+sudo mv prog /usr/local/bin/
 ```
 
 ### From source
