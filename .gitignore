@@ -91,3 +91,6 @@ keys/*.key
 # Release build output
 /dist/
 .sober/
+
+# Libertaria agent symlink (points outside repo)
+.agents

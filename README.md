@@ -44,6 +44,16 @@ verifies the SHA256 checksum and minisign signature, and installs to
 (`keys/progit-minisign.pub`). The installer verifies both the binary checksum
 and the manifest signature before extracting.
 
+### AUR (Arch Linux)
+
+```bash
+yay -S progit-bin
+```
+
+Pre-built binary from the sovereign Forgejo, signed and verified. Available as
+`progit-bin` in the AUR. The PKGBUILD verifies both the binary SHA256 checksum
+and the minisign signature before installing.
+
 ### crates.io
 
 ```bash
