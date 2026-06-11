@@ -54,6 +54,24 @@ Pre-built binary from the sovereign Forgejo, signed and verified. Available as
 `progit-bin` in the AUR. The PKGBUILD verifies both the binary SHA256 checksum
 and the minisign signature before installing.
 
+### Homebrew (Linux)
+
+```bash
+brew install ./contrib/homebrew/Formula/progit.rb
+```
+
+Or, once the tap repo is set up on the sovereign Forgejo:
+
+```bash
+brew tap ProGit/homebrew-progit https://git.sovereign-society.org/ProGit/homebrew-progit.git
+brew install progit
+```
+
+The Homebrew formula installs the same signed release binary as the one-line
+installer. SHA256 is verified by Homebrew on install. Currently supports
+**Linux x86_64** only — macOS and ARM Linux users should use the curl installer
+or `cargo install progit`.
+
 ### crates.io
 
 ```bash
