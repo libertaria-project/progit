@@ -28,6 +28,18 @@ Typical launch path: default to terminal UI (`prog`) and use CLI subcommands for
 
 ---
 
+## Screenshots
+
+<!-- These images are 58038 (Detail-View.webp) , 95384 (Kanban-View.webp), 161658 (List-View.webp) bytes. WebP for size efficiency. -->
+
+| List View | Kanban Board | Detail View |
+|:---------:|:------------:|:-----------:|
+| ![List View](List-View.webp) | ![Kanban Board](Kanban-View.webp) | ![Detail View](Detail-View.webp) |
+
+**Explore live:** `prog init --demo` seeds a sample project in under 10 seconds.
+
+---
+
 ## Install
 
 ### Recommended — one-line installer (Linux/macOS)
